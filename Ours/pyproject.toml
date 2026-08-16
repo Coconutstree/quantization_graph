@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ours-core"
+version = "0.1.0"
+description = "Core code for the paper's main method: RaBitQ ExRaBitQ4 Vamana (Ours-DiskANN)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Ours" }]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.7"]
+
+[tool.setuptools]
+packages = ["Ours", "Ours.experiments", "Ours.tests"]

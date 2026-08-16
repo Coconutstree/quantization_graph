@@ -1,0 +1,15 @@
+{
+  "degrees": [32, 64],
+  "R": 32,
+  "L_build": 400,
+  "alpha": 1.2,
+  "refine_passes": 1,
+  "paper_prune": 1,
+  "rerank_candidates": 100,
+  "residual_bits": 4,
+  "centroid_count": 1,
+  "l_search_max": 1000,
+  "k": 10,
+  "threads": 64,
+  "val_queries": 1000
+}

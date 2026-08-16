@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Generated logs (keep the archived method logs under Ours/logs)
+*.log
+!Ours/logs/
+!Ours/logs/**/*.log
+
+# Generated data / result artifacts
+*.fvecs
+*.ivecs
+*.bvecs
+*.npy
+*.tgz
+*.jsonl
+*.bin
+*.payload
+*.rabitq
+*.residual
+*.refine4
+*.nested4x4_low4
+*.centroids
+
+data/
+results/
