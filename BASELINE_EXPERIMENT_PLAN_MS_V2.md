@@ -1,7 +1,7 @@
 # BASELINE_EXPERIMENT_PLAN_MS_V2.md
 
 ## 目标
-在当前 `quantized_hnsw` 工程中建立三套彼此独立、可复现的公平实验：  
+在当前 `quantization_graph` 工程中建立三套彼此独立、可复现的公平实验：  
 1. PQ、SQ、SAQ、LVQ 与 Ours 的“4bit 量化方法复现”对比：固定同一批 query 与 candidate vectors，以 exact L2 为真值，比较各方法 4 bit/dim compressed distance 的距离误差、fixed-candidate Recall@10、距离计算 QPS/latency；  
 2. PQ-DiskANN、SQ-DiskANN、SAQ-DiskANN、LVQ-DiskANN 与 Ours-DiskANN 的“统一 DiskANN/Vamana 图与搜索流程”对比；  
 3. SymphonyQG、NGT-QG、OG-LVQ、Glass-NSG 与 Ours 的“端到端图索引系统”对比。  
