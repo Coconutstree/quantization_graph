@@ -22,8 +22,8 @@ dataset files are not committed (see [Datasets](#datasets)).
 │   └── 03_system_fair/           # 实验三：端到端系统公平（Ours/SymphonyQG/OG-LVQ/Glass-NSG/NGT-QG）
 ├── baselines/
 │   └── diskann/                  # DiskANN3 框架（vendored，含本地构图进度插桩）
-├── scripts/                      # 构建、复现、表格与绘图脚本
-├── data/README.md                # 数据集布局与获取说明
+├── scripts/                      # 构建、复现、数据下载、表格与绘图脚本
+├── data/                         # 转换脚本 + 数据集说明（原始数据不提交）
 ├── BASELINE_EXPERIMENT_PLAN_MS_V2.md  # 实验协议与基线锁定版本
 ├── NOTICE.md                     # 第三方组件与许可
 └── LICENSE                       # Apache-2.0
@@ -34,20 +34,26 @@ dataset files are not committed (see [Datasets](#datasets)).
 * Linux x86-64（论文测量环境：单节点、AVX-512、160 物理核、1.5 TB 内存）
 * `g++`（C++17 + OpenMP）、`cmake` ≥ 3.20、`make`
 * Rust 工具链（edition 2021），用于构建 `experiments/02_diskann_fair`
-* Python ≥ 3.10，含 `numpy`（绘图还需 `matplotlib`）
+* Python ≥ 3.10，含 `numpy`、`h5py`（下载/转换数据）、`matplotlib`（绘图）
 * Faiss（pinned commit，由 `scripts/setup_faiss.sh` 拉取并构建）
 * 实验一 SAQ 官方环境（锁定提交见 `BASELINE_EXPERIMENT_PLAN_MS_V2.md`）
 * 实验三各系统官方绑定：pyglass 2.1.0、Intel SVS、SymphonyQG、NGT（锁定提交见协议文档）
 
 ## Datasets
 
-`data/<dataset>/` 下放置三个文件：`<dataset>_base.fvecs`、
-`<dataset>_query.fvecs`、`<dataset>_groundtruth.ivecs`。三个数据集：
-dbpedia（1536-d，约 990k 底库）、gist（960-d，1M）、agnews（1024-d，
-约 769k）。查询集切分约定：前 N 条为验证集、其余为测试集（N 由
-`--val-queries` 决定；02/03 共用同一测试子集）。公开数据源示例：
-<https://www.cse.cuhk.edu.hk/systems/hash/gqr/datasets.html>，转成
-fvecs/ivecs 后放入 `data/`；`scripts/check_datasets.py` 会校验。
+三个数据集：DBpedia-1M（1536-d）、GIST-1M（960-d）、AGNews（1024-d），
+每个数据集需要 `<dataset>_base.fvecs`、`<dataset>_query.fvecs`、
+`<dataset>_groundtruth.ivecs` 三个文件。下载地址、md5、转换命令见
+[data/README.md](data/README.md)；一键执行：
+
+```bash
+bash scripts/download_data.sh
+python3 scripts/check_datasets.py --datasets dbpedia gist agnews \
+  --data-root data --out-root results
+```
+
+查询集切分约定：前 N 条为验证集、其余为测试集（`--val-queries` 决定；
+02/03 共用同一测试子集）。
 
 ## Build
 

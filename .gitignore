@@ -33,6 +33,7 @@ build/
 *.npy
 *.tgz
 *.jsonl
+*.hdf5
 *.bin
 *.payload
 *.rabitq
@@ -43,6 +44,7 @@ build/
 
 data/
 results/
+downloads/
 work/01_quantizer_fair/
 
 # Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
