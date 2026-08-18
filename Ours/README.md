@@ -20,6 +20,7 @@ same K). K>1 multi-centroid support is reserved for future work.
 
 ```text
 Ours/
+  core/hnswlib/            # vendored ExRaBitQ4 algorithm core (C++ headers)
   experiments/
     run_ours.py            # unified entry: run Ours-DiskANN for --M 32|64
   config.json              # formal configuration (R=L_build=400, ...)
@@ -50,4 +51,5 @@ python -m unittest discover -s Ours/tests
 * Ours-DiskANN binary: `experiments/02_diskann_fair/target/release/run_diskann_fair`
   (the 02 runner is reused as the method implementation; 02's own comparison
   does not list Ours).
-* Algorithm core / framework: `hnsw_rabitq/` and `baselines/diskann/`.
+* Algorithm core (vendored under `Ours/core/`): `Ours/core/hnswlib/`;
+  framework: `baselines/diskann/`.

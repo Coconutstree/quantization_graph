@@ -1,0 +1,2749 @@
+#pragma once
+
+#include "visited_list_pool.h"
+#include "hnswlib.h"
+#include <array>
+#include <atomic>
+#include <random>
+#include <stdlib.h>
+#include <assert.h>
+#include <unordered_set>
+#include <list>
+#include <memory>
+#include <functional>
+#include <limits>
+#include <cmath>
+#include <chrono>
+#include <thread>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+//hnsw索引算法本体 
+namespace hnswlib {
+//定义了两个内部类型，tablelint指的是图中节点内部编号，linklistsizeint指的是每个节点的邻居列表中链接的数量
+typedef unsigned int tableint;
+typedef unsigned int linklistsizeint;
+
+//核心类HierarchicalNSW,实现了AlgorithmInterface接口，提供了数据点插入、搜索、保存索引等方法
+template<typename dist_t>
+class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+ public:
+    static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
+    static const unsigned char DELETE_MARK = 0x01;
+    //max_elements是索引最大容量
+    size_t max_elements_{0};
+    mutable std::atomic<size_t> cur_element_count{0};  // 当前索引中元素的数量
+    size_t size_data_per_element_{0};//每个元素占用的字节数，包括数据、标签和链接列表等信息
+    size_t size_links_per_element_{0};//每个元素的链接列表占用的字节数
+    mutable std::atomic<size_t> num_deleted_{0};  // 当前索引中被标记为删除的元素数量
+    size_t M_{0};//节点的最大邻居数量
+    size_t maxM_{0};//节点的最大邻居数量的上限
+    size_t maxM0_{0};//节点在第0层的最大邻居数量，通常是maxM的两倍
+    size_t ef_construction_{0};//构图时考虑的候选节点数量
+    size_t ef_{ 0 };//查询时考虑的候选节点数量
+
+    double mult_{0.0}, revSize_{0.0};//层数的计算参数
+    int maxlevel_{0};//当前索引中节点的最大层数
+
+    std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};//访问列表池，用于搜索过程中记录访问过的节点，避免重复访问
+
+    // Locks operations with element by label value锁
+    mutable std::vector<std::mutex> label_op_locks_;
+
+    std::mutex global;
+    std::vector<std::mutex> link_list_locks_;
+
+    tableint enterpoint_node_{0};//进入点的内部编号，索引中层数最高的节点作为进入点
+
+    size_t size_links_level0_{0};//第0层每个节点链接列表占用的字节数
+    size_t offsetData_{0}, offsetLevel0_{0}, label_offset_{ 0 };//数据在内存中的偏移量，方便访问节点数据和标签等信息
+
+    char *data_level0_memory_{nullptr};//第0层节点数据的内存区域
+    char **linkLists_{nullptr};
+    std::vector<int> element_levels_;  // keeps level of each element
+
+    //距离函数相关的成员变量，data_size_是每个数据点占用的字节数，fstdistfunc_是距离函数指针，dist_func_param_是距离函数需要的额外参数的地址
+    size_t data_size_{0};
+
+    SpaceInterface<dist_t> *space_{nullptr};
+    DISTFUNC<dist_t> fstdistfunc_;
+    void *dist_func_param_{nullptr};
+
+    mutable std::mutex label_lookup_lock;  // lock for label_lookup_
+    std::unordered_map<labeltype, tableint> label_lookup_;
+
+    std::default_random_engine level_generator_;
+    std::default_random_engine update_probability_generator_;
+
+    mutable std::atomic<long> metric_distance_computations{0};
+    mutable std::atomic<long> metric_hops{0};
+    bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
+
+    GraphTurboConfig graph_turbo_config_{};
+    std::shared_ptr<const RouteCodeStorage> route_code_storage_;
+    std::vector<uint32_t> route_dims_;
+    bool graph_turbo_topology_frozen_{false};
+    const float *route_oracle_vectors_{nullptr};
+    size_t route_oracle_count_{0};
+    size_t route_oracle_dim_{0};
+    std::vector<uint8_t> paper_msb_codes_;
+    std::vector<PaperPruneFactors<dist_t>> paper_prune_factors_;
+    size_t paper_msb_stride_{0};
+
+    bool asymmetric_build_enabled_{false};
+    bool symmetric_build_prepared_enabled_{false};
+    std::function<const void *(labeltype)> asymmetric_build_raw_by_label_;
+    struct alignas(64) BuildDistanceCounterStripe {
+        std::atomic<uint64_t> asymmetric{0};
+        std::atomic<uint64_t> encoded{0};
+        std::atomic<uint64_t> symmetric_prepared{0};
+    };
+    static constexpr size_t kBuildDistanceCounterStripes = 256;
+    mutable std::array<BuildDistanceCounterStripe, kBuildDistanceCounterStripes>
+        build_distance_counter_stripes_{};
+
+    std::mutex deleted_elements_lock;  // lock for deleted_elements
+    std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
+
+//构造函数，接受一个距离空间接口对象，初始化索引结构
+    HierarchicalNSW(SpaceInterface<dist_t> *s) {
+        space_ = s;
+    }
+
+//构造函数重载，接受一个距离空间接口对象和一个索引文件位置，从文件加载索引结构
+    HierarchicalNSW(
+        SpaceInterface<dist_t> *s,
+        const std::string &location,
+        bool nmslib = false,
+        size_t max_elements = 0,
+        bool allow_replace_deleted = false)
+        : allow_replace_deleted_(allow_replace_deleted) {
+        loadIndex(location, s, max_elements);
+    }
+
+//构造函数重载，接受一个距离空间接口对象、索引最大容量、构图参数等，初始化索引结构
+    HierarchicalNSW(
+        //在hnswlib.h中定义了一个距离空间接口类SpaceInterface，
+        //参数s就是这个接口的指针,算法通过这个接口来获取数据点占用的字节数、距离函数指针和距离函数参数等信息
+        SpaceInterface<dist_t> *s,
+        size_t max_elements,
+        size_t M = 16,
+        size_t ef_construction = 200,
+        size_t random_seed = 100,
+        //allow_replace_deleted表示在插入新数据点时是否允许替换已经被标记为删除的数据点，默认值是false
+        bool allow_replace_deleted = false)
+        : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
+            link_list_locks_(max_elements),
+            element_levels_(max_elements),
+            allow_replace_deleted_(allow_replace_deleted) {
+        //       
+        max_elements_ = max_elements;
+        num_deleted_ = 0;
+        space_ = s;
+        data_size_ = s->get_data_size();
+        fstdistfunc_ = s->get_dist_func();
+        dist_func_param_ = s->get_dist_func_param();
+        //设置每个节点的最大邻居数量为10000
+        if ( M <= 10000 ) {
+            M_ = M;
+        } else {
+            HNSWERR << "warning: M parameter exceeds 10000 which may lead to adverse effects." << std::endl;
+            HNSWERR << "         Cap to 10000 will be applied for the rest of the processing." << std::endl;
+            M_ = 10000;
+        }
+        maxM_ = M_;
+        maxM0_ = M_ * 2;
+        //设置构图时考虑的候选节点数量为M的两倍，如果ef_construction参数小于这个值，则使用这个值，否则使用ef_construction参数
+        ef_construction_ = std::max(ef_construction, M_);
+        //设置查询时考虑的候选节点数量为10，如果ef参数小于这个值，则使用这个值，否则使用ef参数
+        ef_ = 10;
+
+        //层数生成器为每一个点生成一个随机层数
+        level_generator_.seed(random_seed);
+        //更新概率生成器为新插入的节点生成一个随机层数
+        update_probability_generator_.seed(random_seed + 1);
+
+        //计算第0层每个节点链表占用的字节数，等于maxM0_个内部编号占用的字节数加上一个linklistsizeint类型的字节数（用于存储链表大小）
+        size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+        //计算每个元素占用的字节数，包括第0层链表占用的字节数、数据占用的字节数和标签占用的字节数
+        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+        //计算数据在内存中的偏移量，标签在内存中的偏移量等信息，方便后续访问节点数据和标签等信息
+        offsetData_ = size_links_level0_;
+        label_offset_ = size_links_level0_ + data_size_;
+        offsetLevel0_ = 0;
+        
+        //分配第0层节点数据的内存区域，大小为索引最大容量乘以每个元素占用的字节数
+        data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
+        if (data_level0_memory_ == nullptr)
+            throw std::runtime_error("Not enough memory");
+
+        cur_element_count = 0;
+
+        visited_list_pool_ = std::unique_ptr<VisitedListPool>(new VisitedListPool(1, max_elements));
+
+        // initializations for special treatment of the first node
+        enterpoint_node_ = -1;
+        maxlevel_ = -1;
+
+        linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
+        if (linkLists_ == nullptr)
+            throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
+        size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
+        mult_ = 1 / log(1.0 * M_);
+        revSize_ = 1.0 / mult_;
+    }
+
+//析构函数，释放索引结构占用的内存资源
+    ~HierarchicalNSW() {
+        clear();
+    }
+
+    void clear() {
+        free(data_level0_memory_);
+        data_level0_memory_ = nullptr;
+        for (tableint i = 0; i < cur_element_count; i++) {
+            if (element_levels_[i] > 0)
+                free(linkLists_[i]);
+        }
+        free(linkLists_);
+        linkLists_ = nullptr;
+        cur_element_count = 0;
+        visited_list_pool_.reset(nullptr);
+    }
+
+
+    struct CompareByFirst {
+        constexpr bool operator()(std::pair<dist_t, tableint> const& a,
+            std::pair<dist_t, tableint> const& b) const noexcept {
+            return a.first < b.first;
+        }
+    };
+
+    enum class DistanceStage : uint8_t {
+        Short = 0,
+        Long = 1,
+        Residual = 2
+    };
+
+
+    void setEf(size_t ef) {
+        ef_ = ef;
+    }
+
+    static bool baselineWouldAccept(
+        dist_t full_distance,
+        dist_t saved_lower_bound,
+        size_t queue_size,
+        size_t ef) {
+        return queue_size < ef || saved_lower_bound > full_distance;
+    }
+
+    void importGraphAndCopyDataFrom(
+        const HierarchicalNSW<dist_t> &source,
+        const std::function<void(tableint source_internal_id, void *target_data)> &copy_data) {
+        if (source.cur_element_count > max_elements_) {
+            throw std::runtime_error("Target HNSW capacity is smaller than source graph");
+        }
+        if (source.maxM_ != maxM_ ||
+            source.maxM0_ != maxM0_ ||
+            source.M_ != M_ ||
+            source.size_links_level0_ != size_links_level0_ ||
+            source.size_links_per_element_ != size_links_per_element_) {
+            throw std::runtime_error("Cannot import HNSW graph with different M/link layout");
+        }
+
+        for (tableint i = 0; i < cur_element_count; ++i) {
+            if (element_levels_[i] > 0 && linkLists_[i] != nullptr) {
+                free(linkLists_[i]);
+                linkLists_[i] = nullptr;
+            }
+        }
+
+        const size_t source_count = source.cur_element_count;
+        cur_element_count = source_count;
+        maxlevel_ = source.maxlevel_;
+        enterpoint_node_ = source.enterpoint_node_;
+        ef_construction_ = source.ef_construction_;
+        ef_ = source.ef_;
+        mult_ = source.mult_;
+        revSize_ = source.revSize_;
+        num_deleted_ = 0;
+        label_lookup_.clear();
+        deleted_elements.clear();
+        element_levels_.assign(max_elements_, 0);
+
+        for (tableint i = 0; i < source_count; ++i) {
+            element_levels_[i] = source.element_levels_[i];
+            memset(data_level0_memory_ + i * size_data_per_element_, 0, size_data_per_element_);
+            memcpy(get_linklist0(i), source.get_linklist0(i), size_links_level0_);
+
+            copy_data(i, getDataByInternalId(i));
+            space_->commit_data_for_add(i, getDataByInternalId(i));
+
+            const labeltype label = source.getExternalLabel(i);
+            setExternalLabel(i, label);
+            label_lookup_[label] = i;
+
+            if (element_levels_[i] > 0) {
+                const size_t link_bytes = size_links_per_element_ * element_levels_[i];
+                linkLists_[i] = (char *) malloc(link_bytes + 1);
+                if (linkLists_[i] == nullptr) {
+                    throw std::runtime_error("Not enough memory: importGraphAndCopyDataFrom failed to allocate linklist");
+                }
+                memset(linkLists_[i], 0, link_bytes + 1);
+                memcpy(linkLists_[i], source.linkLists_[i], link_bytes);
+            } else {
+                linkLists_[i] = nullptr;
+            }
+
+            if (isMarkedDeleted(i)) {
+                num_deleted_ += 1;
+                if (allow_replace_deleted_) {
+                    deleted_elements.insert(i);
+                }
+            }
+        }
+    }
+
+    std::vector<tableint> bfsOrderLevel0() const {
+        const size_t count = cur_element_count;
+        std::vector<tableint> order;
+        order.reserve(count);
+        if (count == 0) return order;
+        std::vector<uint8_t> seen(count, 0);
+        std::queue<tableint> pending;
+        const tableint start = enterpoint_node_ < count ? enterpoint_node_ : 0;
+        seen[start] = 1;
+        pending.push(start);
+        while (!pending.empty()) {
+            const tableint current = pending.front();
+            pending.pop();
+            order.push_back(current);
+            linklistsizeint *links = get_linklist0(current);
+            const unsigned short degree = getListCount(links);
+            const tableint *neighbors = reinterpret_cast<const tableint *>(links + 1);
+            for (size_t j = 0; j < degree; ++j) {
+                const tableint neighbor = neighbors[j];
+                if (neighbor >= count)
+                    throw std::runtime_error("level-0 neighbor is outside the graph");
+                if (!seen[neighbor]) {
+                    seen[neighbor] = 1;
+                    pending.push(neighbor);
+                }
+            }
+        }
+        for (tableint id = 0; id < count; ++id) {
+            if (!seen[id]) order.push_back(id);
+        }
+        return order;
+    }
+
+    void importGraphAndCopyDataFromReordered(
+        const HierarchicalNSW<dist_t> &source,
+        const std::vector<tableint> &new_to_old,
+        const std::function<void(tableint source_internal_id, tableint target_internal_id,
+                                 void *target_data)> &copy_data) {
+        const size_t count = source.cur_element_count;
+        if (new_to_old.size() != count)
+            throw std::invalid_argument("reorder permutation size does not match graph");
+        std::vector<tableint> old_to_new(count);
+        std::vector<uint8_t> seen(count, 0);
+        for (tableint new_id = 0; new_id < count; ++new_id) {
+            const tableint old_id = new_to_old[new_id];
+            if (old_id >= count || seen[old_id])
+                throw std::invalid_argument("reorder mapping is not a permutation");
+            seen[old_id] = 1;
+            old_to_new[old_id] = new_id;
+        }
+        if (source.maxM_ != maxM_ || source.maxM0_ != maxM0_ || source.M_ != M_ ||
+            source.size_links_level0_ != size_links_level0_ ||
+            source.size_links_per_element_ != size_links_per_element_)
+            throw std::runtime_error("Cannot reorder HNSW graph with different M/link layout");
+        for (tableint i = 0; i < cur_element_count; ++i) {
+            if (element_levels_[i] > 0 && linkLists_[i]) free(linkLists_[i]);
+            linkLists_[i] = nullptr;
+        }
+        cur_element_count = count;
+        maxlevel_ = source.maxlevel_;
+        enterpoint_node_ = count ? old_to_new[source.enterpoint_node_] : static_cast<tableint>(-1);
+        ef_construction_ = source.ef_construction_;
+        ef_ = source.ef_;
+        mult_ = source.mult_;
+        revSize_ = source.revSize_;
+        num_deleted_ = 0;
+        label_lookup_.clear();
+        deleted_elements.clear();
+        element_levels_.assign(max_elements_, 0);
+
+        const auto remap_links = [&](linklistsizeint *links) {
+            const unsigned short degree = getListCount(links);
+            tableint *neighbors = reinterpret_cast<tableint *>(links + 1);
+            for (size_t j = 0; j < degree; ++j) {
+                if (neighbors[j] >= count)
+                    throw std::runtime_error("neighbor is outside the graph during reorder");
+                neighbors[j] = old_to_new[neighbors[j]];
+            }
+        };
+        for (tableint new_id = 0; new_id < count; ++new_id) {
+            const tableint old_id = new_to_old[new_id];
+            element_levels_[new_id] = source.element_levels_[old_id];
+            char *target_record = data_level0_memory_ + new_id * size_data_per_element_;
+            memset(target_record, 0, size_data_per_element_);
+            memcpy(get_linklist0(new_id), source.get_linklist0(old_id), size_links_level0_);
+            remap_links(get_linklist0(new_id));
+            copy_data(old_id, new_id, getDataByInternalId(new_id));
+            space_->commit_data_for_add(new_id, getDataByInternalId(new_id));
+            const labeltype label = source.getExternalLabel(old_id);
+            setExternalLabel(new_id, label);
+            label_lookup_[label] = new_id;
+            if (element_levels_[new_id] > 0) {
+                const size_t bytes = size_links_per_element_ * element_levels_[new_id];
+                linkLists_[new_id] = static_cast<char *>(malloc(bytes + 1));
+                if (!linkLists_[new_id])
+                    throw std::runtime_error("Not enough memory while reordering HNSW linklists");
+                memset(linkLists_[new_id], 0, bytes + 1);
+                memcpy(linkLists_[new_id], source.linkLists_[old_id], bytes);
+                for (int level = 1; level <= element_levels_[new_id]; ++level)
+                    remap_links(get_linklist(new_id, level));
+            } else {
+                linkLists_[new_id] = nullptr;
+            }
+            if (isMarkedDeleted(new_id)) {
+                ++num_deleted_;
+                if (allow_replace_deleted_) deleted_elements.insert(new_id);
+            }
+        }
+    }
+
+
+    inline std::mutex& getLabelOpMutex(labeltype label) const {
+        // calculate hash
+        size_t lock_id = label & (MAX_LABEL_OPERATION_LOCKS - 1);
+        return label_op_locks_[lock_id];
+    }
+
+
+    inline labeltype getExternalLabel(tableint internal_id) const {
+        labeltype return_label;
+        memcpy(&return_label, (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), sizeof(labeltype));
+        return return_label;
+    }
+
+    uint64_t graphFingerprint() const {
+        uint64_t hash = 1469598103934665603ULL;
+        const auto mix = [&hash](const void *data, size_t size) {
+            const uint8_t *bytes = static_cast<const uint8_t *>(data);
+            for (size_t i = 0; i < size; ++i) {
+                hash ^= bytes[i];
+                hash *= 1099511628211ULL;
+            }
+        };
+        mix(&cur_element_count, sizeof(cur_element_count));
+        mix(&maxlevel_, sizeof(maxlevel_));
+        mix(&enterpoint_node_, sizeof(enterpoint_node_));
+        for (tableint id = 0; id < cur_element_count; ++id) {
+            const labeltype label = getExternalLabel(id);
+            mix(&label, sizeof(label));
+            const int levels = element_levels_[id];
+            mix(&levels, sizeof(levels));
+            for (int level = 0; level <= levels; ++level) {
+                linklistsizeint *links = level == 0
+                    ? get_linklist0(id)
+                    : get_linklist(id, level);
+                const unsigned short count = getListCount(links);
+                mix(&count, sizeof(count));
+                mix(links + 1, static_cast<size_t>(count) * sizeof(tableint));
+            }
+        }
+        return hash;
+    }
+
+    uint64_t labelGraphFingerprint() const {
+        uint64_t hash = 1469598103934665603ULL;
+        const auto mix = [&hash](const void *data, size_t size) {
+            const uint8_t *bytes = static_cast<const uint8_t *>(data);
+            for (size_t i = 0; i < size; ++i) {
+                hash ^= bytes[i];
+                hash *= 1099511628211ULL;
+            }
+        };
+        const size_t count = cur_element_count;
+        mix(&count, sizeof(count));
+        if (count == 0) return hash;
+        const labeltype entry_label = getExternalLabel(enterpoint_node_);
+        mix(&entry_label, sizeof(entry_label));
+        std::vector<std::pair<labeltype, tableint>> nodes;
+        nodes.reserve(count);
+        for (tableint id = 0; id < count; ++id)
+            nodes.emplace_back(getExternalLabel(id), id);
+        std::sort(nodes.begin(), nodes.end());
+        for (const auto &node : nodes) {
+            const labeltype label = node.first;
+            const tableint id = node.second;
+            mix(&label, sizeof(label));
+            const int levels = element_levels_[id];
+            mix(&levels, sizeof(levels));
+            for (int level = 0; level <= levels; ++level) {
+                linklistsizeint *links = level == 0 ? get_linklist0(id) : get_linklist(id, level);
+                const unsigned short degree = getListCount(links);
+                mix(&degree, sizeof(degree));
+                const tableint *neighbors = reinterpret_cast<const tableint *>(links + 1);
+                for (size_t j = 0; j < degree; ++j) {
+                    const labeltype neighbor_label = getExternalLabel(neighbors[j]);
+                    mix(&neighbor_label, sizeof(neighbor_label));
+                }
+            }
+        }
+        return hash;
+    }
+
+    double averageLevel0NeighborIdDistance() const {
+        long double sum = 0.0;
+        size_t edges = 0;
+        for (tableint id = 0; id < cur_element_count; ++id) {
+            linklistsizeint *links = get_linklist0(id);
+            const unsigned short degree = getListCount(links);
+            const tableint *neighbors = reinterpret_cast<const tableint *>(links + 1);
+            for (size_t j = 0; j < degree; ++j) {
+                sum += id > neighbors[j] ? id - neighbors[j] : neighbors[j] - id;
+                ++edges;
+            }
+        }
+        return edges ? static_cast<double>(sum / edges) : 0.0;
+    }
+
+    void setGraphTurboConfig(const GraphTurboConfig &config) {
+        if (config.route_bits < 1 || config.route_bits > 32 ||
+            config.top_p < 1 || config.top_p > maxM0_ ||
+            config.prefetch_distance == 0) {
+            throw std::invalid_argument("invalid Graph-Turbo configuration");
+        }
+        if (config.mode == GraphTurboMode::RoutePriority &&
+            (!route_code_storage_ || route_code_storage_->size() != cur_element_count ||
+             route_dims_.size() != config.route_bits)) {
+            throw std::runtime_error("route_priority requires matching route codes and dimensions");
+        }
+        if ((config.short_shadow || config.two_bit_shadow || config.paper_shadow ||
+             config.paper_active || config.paper_staged_control) &&
+            config.mode != GraphTurboMode::BatchPrefetch)
+            throw std::invalid_argument("lower-bound shadow requires batch_prefetch mode");
+        const unsigned experimental_modes = static_cast<unsigned>(config.short_shadow) +
+            static_cast<unsigned>(config.two_bit_shadow) +
+            static_cast<unsigned>(config.paper_shadow) +
+            static_cast<unsigned>(config.paper_active) +
+            static_cast<unsigned>(config.paper_staged_control);
+        if (experimental_modes > 1)
+            throw std::invalid_argument("low-bit experimental modes are mutually exclusive");
+        if (!(config.paper_epsilon0 == 1.9f || config.paper_epsilon0 == 2.2f ||
+              config.paper_epsilon0 == 2.5f))
+            throw std::invalid_argument("paper epsilon0 must be 1.9, 2.2, or 2.5");
+        if (config.paper_shadow || config.paper_active || config.paper_staged_control) {
+            const size_t stride = space_->paper_msb_code_bytes();
+            if (stride == 0) throw std::runtime_error("paper pruning sidecar is unsupported");
+            if (paper_msb_stride_ != stride || paper_prune_factors_.size() != cur_element_count) {
+                paper_msb_stride_ = stride;
+                paper_msb_codes_.assign(cur_element_count * stride, 0);
+                paper_prune_factors_.resize(cur_element_count);
+                for (tableint id = 0; id < cur_element_count; ++id) {
+                    paper_prune_factors_[id] = space_->extract_paper_prune_sidecar(
+                        getDataByInternalId(id), paper_msb_codes_.data() + id * stride);
+                }
+            }
+        }
+        graph_turbo_config_ = config;
+    }
+
+    const GraphTurboConfig &getGraphTurboConfig() const { return graph_turbo_config_; }
+
+    void setRouteCodeStorage(
+        std::shared_ptr<const RouteCodeStorage> storage,
+        std::vector<uint32_t> route_dims) {
+        if (!storage || storage->size() != cur_element_count || route_dims.empty() || route_dims.size() > 32) {
+            throw std::invalid_argument("route-code storage does not match graph");
+        }
+        route_code_storage_ = std::move(storage);
+        route_dims_ = std::move(route_dims);
+    }
+
+    void clearRouteCodeStorage() {
+        route_code_storage_.reset();
+        route_dims_.clear();
+        if (graph_turbo_config_.mode == GraphTurboMode::RoutePriority)
+            graph_turbo_config_.mode = GraphTurboMode::Baseline;
+    }
+
+    const std::vector<uint32_t> &routeDimensions() const { return route_dims_; }
+    const std::shared_ptr<const RouteCodeStorage> &routeCodeStorage() const { return route_code_storage_; }
+    void freezeGraphTurboTopology(bool frozen = true) { graph_turbo_topology_frozen_ = frozen; }
+    bool graphTurboTopologyFrozen() const { return graph_turbo_topology_frozen_; }
+    void setRouteOracle(const float *vectors, size_t count, size_t dim) {
+        if (vectors && count != cur_element_count)
+            throw std::invalid_argument("route oracle must be ordered by internal ID");
+        route_oracle_vectors_ = vectors;
+        route_oracle_count_ = vectors ? count : 0;
+        route_oracle_dim_ = vectors ? dim : 0;
+    }
+
+
+    inline void setExternalLabel(tableint internal_id, labeltype label) const {
+        memcpy((data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), &label, sizeof(labeltype));
+    }
+
+
+    inline labeltype *getExternalLabeLp(tableint internal_id) const {
+        return (labeltype *) (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_);
+    }
+
+
+    inline char *getDataByInternalId(tableint internal_id) const {
+        return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+    }
+
+
+    int getRandomLevel(double reverse_size) {
+        std::uniform_real_distribution<double> distribution(0.0, 1.0);
+        double r = -log(distribution(level_generator_)) * reverse_size;
+        return (int) r;
+    }
+
+    size_t getMaxElements() {
+        return max_elements_;
+    }
+
+    size_t getCurrentElementCount() {
+        return cur_element_count;
+    }
+
+    size_t getDeletedCount() {
+        return num_deleted_;
+    }
+
+    void setAsymmetricBuildRawProvider(
+        std::function<const void *(labeltype)> provider) {
+        asymmetric_build_raw_by_label_ = std::move(provider);
+        asymmetric_build_enabled_ = static_cast<bool>(asymmetric_build_raw_by_label_);
+    }
+
+    void clearAsymmetricBuildRawProvider() {
+        asymmetric_build_raw_by_label_ = {};
+        asymmetric_build_enabled_ = false;
+    }
+
+    void setSymmetricBuildPrepared(bool enabled) {
+        if (enabled && !space_->supports_symmetric_build_prepared())
+            throw std::runtime_error("space does not support symmetric prepared build distance");
+        symmetric_build_prepared_enabled_ = enabled;
+    }
+
+    bool symmetricBuildPreparedEnabled() const {
+        return symmetric_build_prepared_enabled_;
+    }
+
+    uint64_t asymmetricBuildDistanceCalls() const {
+        uint64_t total = 0;
+        for (const auto &stripe : build_distance_counter_stripes_) {
+            total += stripe.asymmetric.load(std::memory_order_relaxed);
+        }
+        return total;
+    }
+
+    uint64_t encodedBuildDistanceCalls() const {
+        uint64_t total = 0;
+        for (const auto &stripe : build_distance_counter_stripes_) {
+            total += stripe.encoded.load(std::memory_order_relaxed);
+        }
+        return total;
+    }
+
+    uint64_t symmetricPreparedBuildDistanceCalls() const {
+        uint64_t total = 0;
+        for (const auto &stripe : build_distance_counter_stripes_) {
+            total += stripe.symmetric_prepared.load(std::memory_order_relaxed);
+        }
+        return total;
+    }
+
+    size_t buildDistanceCounterStripeIndex() const {
+#ifdef _OPENMP
+        const int thread_id = omp_get_thread_num();
+        if (thread_id >= 0)
+            return static_cast<size_t>(thread_id) % kBuildDistanceCounterStripes;
+#endif
+        static thread_local const size_t stripe =
+            std::hash<std::thread::id>{}(std::this_thread::get_id()) %
+            kBuildDistanceCounterStripes;
+        return stripe;
+    }
+
+    void addBuildDistanceCounts(
+        uint64_t asymmetric_count,
+        uint64_t encoded_count,
+        uint64_t symmetric_prepared_count) const {
+        if ((asymmetric_count | encoded_count | symmetric_prepared_count) == 0)
+            return;
+        BuildDistanceCounterStripe &stripe =
+            build_distance_counter_stripes_[buildDistanceCounterStripeIndex()];
+        if (asymmetric_count != 0) {
+            stripe.asymmetric.fetch_add(asymmetric_count, std::memory_order_relaxed);
+        }
+        if (encoded_count != 0) {
+            stripe.encoded.fetch_add(encoded_count, std::memory_order_relaxed);
+        }
+        if (symmetric_prepared_count != 0) {
+            stripe.symmetric_prepared.fetch_add(
+                symmetric_prepared_count, std::memory_order_relaxed);
+        }
+    }
+
+    dist_t queryToInternalBuildDistance(
+        const void *data_point,
+        tableint database_id,
+        const void *asymmetric_query_context,
+        const void *symmetric_query_context) const {
+        if (asymmetric_query_context != nullptr) {
+            addBuildDistanceCounts(1, 0, 0);
+            return space_->query_distance(
+                asymmetric_query_context, getDataByInternalId(database_id));
+        }
+        if (symmetric_query_context != nullptr) {
+            addBuildDistanceCounts(0, 1, 1);
+            return space_->symmetric_build_distance_prepared(
+                symmetric_query_context, getDataByInternalId(database_id));
+        }
+        addBuildDistanceCounts(0, 1, 0);
+        return fstdistfunc_(data_point, getDataByInternalId(database_id), dist_func_param_);
+    }
+
+    dist_t asymmetricDistanceByInternalId(tableint query_id, tableint database_id) const {
+        if (!asymmetric_build_enabled_ || !asymmetric_build_raw_by_label_)
+            throw std::runtime_error("asymmetric construction raw-vector provider is not configured");
+        const void *raw_query = asymmetric_build_raw_by_label_(getExternalLabel(query_id));
+        if (raw_query == nullptr)
+            throw std::runtime_error("asymmetric construction raw-vector provider returned null");
+        addBuildDistanceCounts(1, 0, 0);
+        return space_->asymmetric_build_distance(raw_query, getDataByInternalId(database_id));
+    }
+
+    dist_t buildDistanceBetweenInternalIds(tableint query_id, tableint database_id) const {
+        if (asymmetric_build_enabled_)
+            return asymmetricDistanceByInternalId(query_id, database_id);
+        if (symmetric_build_prepared_enabled_) {
+            const void *query_context =
+                space_->prepare_symmetric_build_query(getDataByInternalId(query_id));
+            dist_t distance{};
+            try {
+                distance = space_->symmetric_build_distance_prepared(
+                    query_context, getDataByInternalId(database_id));
+            } catch (...) {
+                space_->release_symmetric_build_query(query_context);
+                throw;
+            }
+            space_->release_symmetric_build_query(query_context);
+            addBuildDistanceCounts(0, 1, 1);
+            return distance;
+        }
+        addBuildDistanceCounts(0, 1, 0);
+        return fstdistfunc_(getDataByInternalId(query_id),
+                           getDataByInternalId(database_id), dist_func_param_);
+    }
+
+    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+    searchBaseLayer(tableint ep_id, const void *data_point, int layer,
+                    const void *asymmetric_query_context = nullptr,
+                    const void *symmetric_query_context = nullptr) {
+        if (asymmetric_query_context != nullptr && symmetric_query_context != nullptr)
+            throw std::runtime_error("construction received both asymmetric and symmetric query contexts");
+        VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+        vl_type *visited_array = vl->mass;
+        vl_type visited_array_tag = vl->curV;
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
+
+        dist_t lowerBound;
+        if (!isMarkedDeleted(ep_id)) {
+            dist_t dist = queryToInternalBuildDistance(
+                data_point, ep_id, asymmetric_query_context, symmetric_query_context);
+            top_candidates.emplace(dist, ep_id);
+            lowerBound = dist;
+            candidateSet.emplace(-dist, ep_id);
+        } else {
+            lowerBound = std::numeric_limits<dist_t>::max();
+            candidateSet.emplace(-lowerBound, ep_id);
+        }
+        visited_array[ep_id] = visited_array_tag;
+
+        while (!candidateSet.empty()) {
+            std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
+            if ((-curr_el_pair.first) > lowerBound && top_candidates.size() == ef_construction_) {
+                break;
+            }
+            candidateSet.pop();
+
+            tableint curNodeNum = curr_el_pair.second;
+
+            std::unique_lock <std::mutex> lock(link_list_locks_[curNodeNum]);
+
+            int *data;  // = (int *)(linkList0_ + curNodeNum * size_links_per_element0_);
+            if (layer == 0) {
+                data = (int*)get_linklist0(curNodeNum);
+            } else {
+                data = (int*)get_linklist(curNodeNum, layer);
+//                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
+            }
+            size_t size = getListCount((linklistsizeint*)data);
+            tableint *datal = (tableint *) (data + 1);
+#ifdef USE_SSE
+            if (size > 0) {
+                _mm_prefetch((char *) (visited_array + datal[0]), _MM_HINT_T0);
+                _mm_prefetch((char *) (visited_array + datal[0] + 64), _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(datal[0]), _MM_HINT_T0);
+            }
+            if (size > 1) {
+                _mm_prefetch(getDataByInternalId(datal[1]), _MM_HINT_T0);
+            }
+#endif
+
+            if ((asymmetric_query_context || symmetric_query_context) && size > 0) {
+                thread_local std::vector<tableint> build_candidate_ids;
+                thread_local std::vector<const void *> build_candidate_data;
+                thread_local std::vector<dist_t> build_candidate_distances;
+                build_candidate_ids.clear();
+                build_candidate_data.clear();
+                build_candidate_distances.clear();
+                build_candidate_ids.reserve(size);
+                build_candidate_data.reserve(size);
+                build_candidate_distances.reserve(size);
+                for (size_t j = 0; j < size; j++) {
+                    tableint candidate_id = *(datal + j);
+//                    if (candidate_id == 0) continue;
+#ifdef USE_SSE
+                    if (j + 1 < size) {
+                        _mm_prefetch((char *) (visited_array + datal[j + 1]), _MM_HINT_T0);
+                        _mm_prefetch(getDataByInternalId(datal[j + 1]), _MM_HINT_T0);
+                    }
+#endif
+                    if (visited_array[candidate_id] == visited_array_tag) continue;
+                    visited_array[candidate_id] = visited_array_tag;
+                    build_candidate_ids.push_back(candidate_id);
+                    build_candidate_data.push_back(getDataByInternalId(candidate_id));
+                }
+                if (!build_candidate_data.empty()) {
+                    build_candidate_distances.resize(build_candidate_data.size());
+                    if (asymmetric_query_context) {
+                        space_->query_distance_batch_k1(
+                            asymmetric_query_context,
+                            build_candidate_data.data(),
+                            build_candidate_data.size(),
+                            build_candidate_distances.data(),
+                            2);
+                        addBuildDistanceCounts(
+                            static_cast<uint64_t>(build_candidate_data.size()), 0, 0);
+                    } else {
+                        space_->symmetric_build_distance_batch(
+                            symmetric_query_context,
+                            build_candidate_data.data(),
+                            build_candidate_data.size(),
+                            build_candidate_distances.data(),
+                            2);
+                        addBuildDistanceCounts(
+                            0,
+                            static_cast<uint64_t>(build_candidate_data.size()),
+                            static_cast<uint64_t>(build_candidate_data.size()));
+                    }
+                }
+                for (size_t j = 0; j < build_candidate_ids.size(); ++j) {
+                    const tableint candidate_id = build_candidate_ids[j];
+                    const dist_t dist1 = build_candidate_distances[j];
+                    if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
+                        candidateSet.emplace(-dist1, candidate_id);
+#ifdef USE_SSE
+                        _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
+#endif
+
+                        if (!isMarkedDeleted(candidate_id))
+                            top_candidates.emplace(dist1, candidate_id);
+
+                        if (top_candidates.size() > ef_construction_)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+                }
+            } else {
+                for (size_t j = 0; j < size; j++) {
+                    tableint candidate_id = *(datal + j);
+//                    if (candidate_id == 0) continue;
+#ifdef USE_SSE
+                    if (j + 1 < size) {
+                        _mm_prefetch((char *) (visited_array + datal[j + 1]), _MM_HINT_T0);
+                        _mm_prefetch(getDataByInternalId(datal[j + 1]), _MM_HINT_T0);
+                    }
+#endif
+                    if (visited_array[candidate_id] == visited_array_tag) continue;
+                    visited_array[candidate_id] = visited_array_tag;
+                    char *currObj1 = (getDataByInternalId(candidate_id));
+
+                    dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                    addBuildDistanceCounts(0, 1, 0);
+                    if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
+                        candidateSet.emplace(-dist1, candidate_id);
+#ifdef USE_SSE
+                        _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
+#endif
+
+                        if (!isMarkedDeleted(candidate_id))
+                            top_candidates.emplace(dist1, candidate_id);
+
+                        if (top_candidates.size() > ef_construction_)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+                }
+            }
+        }
+        visited_list_pool_->releaseVisitedList(vl);
+
+        return top_candidates;
+    }
+
+
+    // bare_bone_search means there is no check for deletions and stop condition is ignored in return of extra performance
+    template <bool bare_bone_search = true, bool collect_metrics = false>
+    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+    searchBaseLayerST(
+        tableint ep_id,
+        const void *query_context,
+        size_t ef,
+        BaseFilterFunctor* isIdAllowed = nullptr,
+        BaseSearchStopCondition<dist_t>* stop_condition = nullptr,
+        RaBitQSearchMetrics *query_metrics = nullptr) const {
+        VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+        vl_type *visited_array = vl->mass;
+        vl_type visited_array_tag = vl->curV;
+
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
+
+        struct GraphTurboScratch {
+            std::vector<tableint> ids;
+            std::vector<uint16_t> original_pos;
+            std::vector<dist_t> distances;
+            std::vector<uint8_t> scores;
+            std::vector<uint16_t> order;
+            std::vector<const void *> data_points;
+            std::vector<PaperPruneEstimate<dist_t>> paper_estimates;
+        };
+        thread_local GraphTurboScratch turbo_scratch;
+        const bool turbo_enabled = graph_turbo_config_.mode != GraphTurboMode::Baseline;
+        if (turbo_enabled) {
+            turbo_scratch.ids.resize(maxM0_);
+            turbo_scratch.original_pos.resize(maxM0_);
+            turbo_scratch.distances.resize(maxM0_);
+            turbo_scratch.scores.resize(maxM0_);
+            turbo_scratch.order.resize(maxM0_);
+            turbo_scratch.data_points.resize(maxM0_);
+            turbo_scratch.paper_estimates.resize(maxM0_);
+        }
+        uint32_t query_route_code = 0;
+        if (graph_turbo_config_.mode == GraphTurboMode::RoutePriority &&
+            !space_->compute_query_route_code(query_context, route_dims_, &query_route_code)) {
+            visited_list_pool_->releaseVisitedList(vl);
+            throw std::runtime_error("space cannot compute a K=1 route code");
+        }
+
+        dist_t lowerBound;
+        if (bare_bone_search || 
+            (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
+            char* ep_data = getDataByInternalId(ep_id);
+            dist_t dist = space_->query_distance(query_context, ep_data);
+            if (query_metrics) {
+                ++query_metrics->distance_computations;
+                ++query_metrics->visited_nodes;
+            }
+            lowerBound = dist;
+            top_candidates.emplace(dist, ep_id);
+            if (!bare_bone_search && stop_condition) {
+                stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
+            }
+            candidate_set.emplace(-dist, ep_id);
+        } else {
+            lowerBound = std::numeric_limits<dist_t>::max();
+            candidate_set.emplace(-lowerBound, ep_id);
+        }
+
+        visited_array[ep_id] = visited_array_tag;
+
+        while (!candidate_set.empty()) {
+            std::pair<dist_t, tableint> current_node_pair = candidate_set.top();
+            dist_t candidate_dist = -current_node_pair.first;
+
+            bool flag_stop_search;
+            if (bare_bone_search) {
+                flag_stop_search = candidate_dist > lowerBound;
+            } else {
+                if (stop_condition) {
+                    flag_stop_search = stop_condition->should_stop_search(candidate_dist, lowerBound);
+                } else {
+                    flag_stop_search = candidate_dist > lowerBound && top_candidates.size() == ef;
+                }
+            }
+            if (flag_stop_search) {
+                break;
+            }
+            candidate_set.pop();
+
+            tableint current_node_id = current_node_pair.second;
+            int *data = (int *) get_linklist0(current_node_id);
+            size_t size = getListCount((linklistsizeint*)data);
+//                bool cur_node_deleted = isMarkedDeleted(current_node_id);
+            if (collect_metrics) {
+                metric_hops++;
+                metric_distance_computations+=size;
+            }
+
+#ifdef USE_SSE
+            _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
+            _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+            _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_, _MM_HINT_T0);
+            _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
+#endif
+
+            for (size_t j = 1; !turbo_enabled && j <= size; j++) {
+                int candidate_id = *(data + j);
+//                    if (candidate_id == 0) continue;
+#ifdef USE_SSE
+                _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
+                _mm_prefetch(data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
+                                _MM_HINT_T0);  ////////////
+#endif
+                if (!(visited_array[candidate_id] == visited_array_tag)) {
+                    visited_array[candidate_id] = visited_array_tag;
+                    if (query_metrics) {
+                        ++query_metrics->visited_nodes;
+                    }
+
+                    char *currObj1 = (getDataByInternalId(candidate_id));
+                    dist_t dist = space_->query_distance(query_context, currObj1);
+                    if (query_metrics) {
+                        ++query_metrics->distance_computations;
+                    }
+
+                    bool flag_consider_candidate;
+                    if (!bare_bone_search && stop_condition) {
+                        flag_consider_candidate = stop_condition->should_consider_candidate(dist, lowerBound);
+                    } else {
+                        flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
+                    }
+
+                    if (flag_consider_candidate) {
+                        candidate_set.emplace(-dist, candidate_id);
+#ifdef USE_SSE
+                        _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ +
+                                        offsetLevel0_,  ///////////
+                                        _MM_HINT_T0);  ////////////////////////
+#endif
+
+                        if (bare_bone_search || 
+                            (!isMarkedDeleted(candidate_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))) {
+                            top_candidates.emplace(dist, candidate_id);
+                            if (!bare_bone_search && stop_condition) {
+                                stop_condition->add_point_to_result(getExternalLabel(candidate_id), currObj1, dist);
+                            }
+                        }
+
+                        bool flag_remove_extra = false;
+                        if (!bare_bone_search && stop_condition) {
+                            flag_remove_extra = stop_condition->should_remove_extra();
+                        } else {
+                            flag_remove_extra = top_candidates.size() > ef;
+                        }
+                        while (flag_remove_extra) {
+                            tableint id = top_candidates.top().second;
+                            top_candidates.pop();
+                            if (!bare_bone_search && stop_condition) {
+                                stop_condition->remove_point_from_result(getExternalLabel(id), getDataByInternalId(id), dist);
+                                flag_remove_extra = stop_condition->should_remove_extra();
+                            } else {
+                                flag_remove_extra = top_candidates.size() > ef;
+                            }
+                        }
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+                }
+            }
+
+            if (turbo_enabled) {
+                size_t compact_count = 0;
+                if (query_metrics) query_metrics->neighbors_seen += size;
+                for (size_t j = 1; j <= size; ++j) {
+                    const tableint candidate_id = static_cast<tableint>(*(data + j));
+                    if (visited_array[candidate_id] == visited_array_tag) continue;
+                    visited_array[candidate_id] = visited_array_tag;
+                    turbo_scratch.ids[compact_count] = candidate_id;
+                    turbo_scratch.original_pos[compact_count] = static_cast<uint16_t>(j - 1);
+                    turbo_scratch.data_points[compact_count] = getDataByInternalId(candidate_id);
+                    turbo_scratch.order[compact_count] = static_cast<uint16_t>(compact_count);
+                    ++compact_count;
+                }
+                if (query_metrics) {
+                    query_metrics->neighbors_unvisited += compact_count;
+                    query_metrics->visited_nodes += compact_count;
+                }
+
+                const auto update_candidate = [&](size_t slot) {
+                    const tableint candidate_id = turbo_scratch.ids[slot];
+                    char *currObj1 = getDataByInternalId(candidate_id);
+                    const dist_t dist = turbo_scratch.distances[slot];
+                    const dist_t saved_lower_bound = lowerBound;
+                    const size_t saved_queue_size = top_candidates.size();
+                    bool consider;
+                    if (!bare_bone_search && stop_condition)
+                        consider = stop_condition->should_consider_candidate(dist, saved_lower_bound);
+                    else
+                        consider = baselineWouldAccept(
+                            dist, saved_lower_bound, saved_queue_size, ef);
+                    if (graph_turbo_config_.short_shadow && saved_queue_size >= ef) {
+                        const auto short_start = query_metrics
+                            ? std::chrono::steady_clock::now()
+                            : std::chrono::steady_clock::time_point{};
+                        const dist_t short_lower_bound = space_->compute_short_lower_bound(
+                            query_context, currObj1);
+                        if (query_metrics) {
+                            query_metrics->short_time_us +=
+                                std::chrono::duration<double, std::micro>(
+                                    std::chrono::steady_clock::now() - short_start).count();
+                            ++query_metrics->short_checked;
+                            const bool short_rejects = short_lower_bound > saved_lower_bound;
+                            if (short_rejects) {
+                                ++query_metrics->short_would_reject;
+                                if (consider) ++query_metrics->unsafe_reject;
+                            } else {
+                                ++query_metrics->short_ambiguous;
+                            }
+                            const dist_t tolerance = static_cast<dist_t>(1e-5) *
+                                std::max<dist_t>(static_cast<dist_t>(1), std::fabs(dist));
+                            if (short_lower_bound > dist + tolerance)
+                                ++query_metrics->short_bound_violation;
+                        }
+                    }
+                    if (graph_turbo_config_.two_bit_shadow && saved_queue_size >= ef) {
+                        const auto two_bit_start = query_metrics
+                            ? std::chrono::steady_clock::now()
+                            : std::chrono::steady_clock::time_point{};
+                        const dist_t two_bit_lower_bound = space_->compute_two_bit_lower_bound(
+                            query_context, currObj1);
+                        if (query_metrics) {
+                            query_metrics->two_bit_time_us +=
+                                std::chrono::duration<double, std::micro>(
+                                    std::chrono::steady_clock::now() - two_bit_start).count();
+                            ++query_metrics->two_bit_checked;
+                            const bool two_bit_rejects = two_bit_lower_bound > saved_lower_bound;
+                            if (two_bit_rejects) {
+                                ++query_metrics->two_bit_would_reject;
+                                if (consider) ++query_metrics->two_bit_unsafe_reject;
+                            } else {
+                                ++query_metrics->two_bit_ambiguous;
+                            }
+                            const dist_t tolerance = static_cast<dist_t>(1e-5) *
+                                std::max<dist_t>(static_cast<dist_t>(1), std::fabs(dist));
+                            if (two_bit_lower_bound > dist + tolerance)
+                                ++query_metrics->two_bit_bound_violation;
+                        }
+                    }
+                    if (graph_turbo_config_.paper_shadow && saved_queue_size >= ef) {
+                        const auto &paper = turbo_scratch.paper_estimates[slot];
+                        if (query_metrics) {
+                            if (paper.valid) {
+                                ++query_metrics->paper_checked;
+                                const bool rejects = paper.lower_bound > saved_lower_bound;
+                                if (rejects) {
+                                    ++query_metrics->paper_would_prune;
+                                    ++query_metrics->paper_full_saved;
+                                    if (consider) {
+                                        ++query_metrics->paper_false_prune_against_baseline;
+                                        ++query_metrics->paper_pruned_baseline_accept;
+                                    } else {
+                                        ++query_metrics->paper_pruned_baseline_reject;
+                                    }
+                                } else {
+                                    ++query_metrics->paper_not_pruned;
+                                }
+                            }
+                        }
+                    }
+                    if (!consider) return;
+                    candidate_set.emplace(-dist, candidate_id);
+                    if (bare_bone_search || (!isMarkedDeleted(candidate_id) &&
+                        ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))) {
+                        top_candidates.emplace(dist, candidate_id);
+                        if (!bare_bone_search && stop_condition)
+                            stop_condition->add_point_to_result(getExternalLabel(candidate_id), currObj1, dist);
+                    }
+                    bool remove_extra = !bare_bone_search && stop_condition
+                        ? stop_condition->should_remove_extra() : top_candidates.size() > ef;
+                    while (remove_extra) {
+                        const tableint id = top_candidates.top().second;
+                        top_candidates.pop();
+                        if (!bare_bone_search && stop_condition) {
+                            stop_condition->remove_point_from_result(
+                                getExternalLabel(id), getDataByInternalId(id), dist);
+                            remove_extra = stop_condition->should_remove_extra();
+                        } else remove_extra = top_candidates.size() > ef;
+                    }
+                    if (!top_candidates.empty()) lowerBound = top_candidates.top().first;
+                };
+
+                if (graph_turbo_config_.mode == GraphTurboMode::BatchPrefetch) {
+                    if (graph_turbo_config_.paper_shadow || graph_turbo_config_.paper_active ||
+                        graph_turbo_config_.paper_staged_control) {
+                        const auto paper_batch_start = query_metrics
+                            ? std::chrono::steady_clock::now()
+                            : std::chrono::steady_clock::time_point{};
+                        for (size_t i = 0; i < compact_count; ++i) {
+                            const tableint id = turbo_scratch.ids[i];
+                            turbo_scratch.paper_estimates[i] =
+                                space_->compute_paper_prune_estimate_sidecar(
+                                    query_context,
+                                    paper_msb_codes_.data() + static_cast<size_t>(id) * paper_msb_stride_,
+                                    paper_prune_factors_[id],
+                                    static_cast<dist_t>(graph_turbo_config_.paper_epsilon0));
+                        }
+                        if (query_metrics) {
+                            query_metrics->paper_short_time_us +=
+                                std::chrono::duration<double, std::micro>(
+                                    std::chrono::steady_clock::now() - paper_batch_start).count();
+                            query_metrics->paper_msb_kernel_calls += compact_count;
+                        }
+                    }
+                    if (graph_turbo_config_.paper_active ||
+                        graph_turbo_config_.paper_staged_control) {
+                        const auto queue_start = query_metrics ? std::chrono::steady_clock::now()
+                                                               : std::chrono::steady_clock::time_point{};
+                        for (size_t i = 0; i < compact_count; ++i) {
+                            const size_t pf = i + graph_turbo_config_.prefetch_distance;
+                            if (pf < compact_count) {
+#if defined(__GNUC__) || defined(__clang__)
+                                __builtin_prefetch(turbo_scratch.data_points[pf], 0, 3);
+#endif
+                                if (query_metrics) ++query_metrics->prefetch_issued;
+                            }
+                            const dist_t saved_lower_bound = lowerBound;
+                            const size_t saved_queue_size = top_candidates.size();
+                            const PaperPruneEstimate<dist_t> &paper =
+                                turbo_scratch.paper_estimates[i];
+                            if (graph_turbo_config_.paper_active && saved_queue_size >= ef &&
+                                paper.valid) {
+                                if (query_metrics) ++query_metrics->paper_checked;
+                                if (paper.lower_bound > saved_lower_bound) {
+                                    if (query_metrics) {
+                                        ++query_metrics->paper_would_prune;
+                                        ++query_metrics->paper_full_saved;
+                                    }
+                                    continue;
+                                }
+                                if (query_metrics) ++query_metrics->paper_not_pruned;
+                            }
+                            const auto remaining_start = query_metrics
+                                ? std::chrono::steady_clock::now()
+                                : std::chrono::steady_clock::time_point{};
+                            turbo_scratch.distances[i] = paper.valid
+                                ? space_->query_distance_with_paper_msb(
+                                    query_context, turbo_scratch.data_points[i], paper.short_ip)
+                                : space_->query_distance(query_context, turbo_scratch.data_points[i]);
+                            if (query_metrics) {
+                                const double elapsed = std::chrono::duration<double, std::micro>(
+                                    std::chrono::steady_clock::now() - remaining_start).count();
+                                query_metrics->paper_remaining_time_us += elapsed;
+                                query_metrics->full_distance_us += elapsed;
+                                query_metrics->full_distance_time_us += elapsed;
+                                ++query_metrics->paper_remaining_kernel_calls;
+                                ++query_metrics->distance_computations;
+                                ++query_metrics->full_distance_count;
+                                ++query_metrics->remaining_full_distance_count;
+                            }
+                            update_candidate(i);
+                        }
+                        if (query_metrics) query_metrics->queue_update_us +=
+                            std::chrono::duration<double, std::micro>(
+                                std::chrono::steady_clock::now() - queue_start).count();
+                        continue;
+                    }
+                    const auto full_start = query_metrics ? std::chrono::steady_clock::now()
+                                                          : std::chrono::steady_clock::time_point{};
+                    space_->query_distance_batch_k1(
+                        query_context, turbo_scratch.data_points.data(), compact_count,
+                        turbo_scratch.distances.data(), graph_turbo_config_.prefetch_distance);
+                    if (query_metrics) {
+                        query_metrics->distance_computations += compact_count;
+                        query_metrics->full_distance_count += compact_count;
+                        query_metrics->remaining_full_distance_count += compact_count;
+                        query_metrics->prefetch_issued += compact_count > graph_turbo_config_.prefetch_distance
+                            ? compact_count - graph_turbo_config_.prefetch_distance : 0;
+                        const double elapsed_full_us = std::chrono::duration<double, std::micro>(
+                            std::chrono::steady_clock::now() - full_start).count();
+                        query_metrics->full_distance_us += elapsed_full_us;
+                        query_metrics->full_distance_time_us += elapsed_full_us;
+                    }
+                    const auto queue_start = query_metrics ? std::chrono::steady_clock::now()
+                                                           : std::chrono::steady_clock::time_point{};
+                    for (size_t i = 0; i < compact_count; ++i) update_candidate(i);
+                    if (query_metrics) query_metrics->queue_update_us += std::chrono::duration<double, std::micro>(
+                        std::chrono::steady_clock::now() - queue_start).count();
+                } else {
+                    const auto route_start = query_metrics ? std::chrono::steady_clock::now()
+                                                           : std::chrono::steady_clock::time_point{};
+                    for (size_t i = 0; i < compact_count; ++i) {
+                        const uint32_t code = route_code_storage_->code(turbo_scratch.ids[i]);
+#if defined(__GNUC__) || defined(__clang__)
+                        turbo_scratch.scores[i] = static_cast<uint8_t>(__builtin_popcount(query_route_code ^ code));
+#else
+                        uint32_t value = query_route_code ^ code; uint8_t score = 0;
+                        while (value) { value &= value - 1; ++score; }
+                        turbo_scratch.scores[i] = score;
+#endif
+                    }
+                    if (query_metrics) {
+                        query_metrics->route_scored += compact_count;
+                        query_metrics->route_score_us += std::chrono::duration<double, std::micro>(
+                            std::chrono::steady_clock::now() - route_start).count();
+                    }
+                    const auto select_start = query_metrics ? std::chrono::steady_clock::now()
+                                                            : std::chrono::steady_clock::time_point{};
+                    const size_t priority_count = std::min<size_t>(graph_turbo_config_.top_p, compact_count);
+                    for (size_t i = 1; i < compact_count; ++i) {
+                        const uint16_t value = turbo_scratch.order[i];
+                        size_t pos = i;
+                        while (pos > 0 && turbo_scratch.scores[value] <
+                               turbo_scratch.scores[turbo_scratch.order[pos - 1]]) {
+                            turbo_scratch.order[pos] = turbo_scratch.order[pos - 1];
+                            --pos;
+                        }
+                        turbo_scratch.order[pos] = value;
+                    }
+                    if (query_metrics) query_metrics->top_p_select_us += std::chrono::duration<double, std::micro>(
+                        std::chrono::steady_clock::now() - select_start).count();
+                    const bool sample_oracle = query_metrics && route_oracle_vectors_ && compact_count > 0 &&
+                        graph_turbo_config_.statistics_sample_rate > 0 &&
+                        (query_metrics->lower_bound_samples % graph_turbo_config_.statistics_sample_rate == 0);
+                    if (sample_oracle) {
+                        std::vector<std::pair<float, size_t>> float_ranked;
+                        float_ranked.reserve(compact_count);
+                        for (size_t i = 0; i < compact_count; ++i) {
+                            float distance = 0.0f;
+                            if (!space_->float32_query_distance(
+                                    query_context,
+                                    route_oracle_vectors_ + static_cast<size_t>(turbo_scratch.ids[i]) * route_oracle_dim_,
+                                    &distance)) {
+                                float_ranked.clear();
+                                break;
+                            }
+                            float_ranked.emplace_back(distance, i);
+                        }
+                        if (!float_ranked.empty()) {
+                            const size_t float_top = std::min<size_t>(4, float_ranked.size());
+                            std::partial_sort(float_ranked.begin(), float_ranked.begin() + float_top,
+                                              float_ranked.end());
+                            ++query_metrics->route_oracle_samples;
+                            if (turbo_scratch.order[0] == float_ranked[0].second)
+                                ++query_metrics->route_top1_matches_float_top1;
+                            const size_t route_top4 = std::min<size_t>(4, compact_count);
+                            for (size_t r = 0; r < route_top4; ++r) {
+                                if (turbo_scratch.order[r] == float_ranked[0].second) {
+                                    ++query_metrics->route_top4_contains_float_top1;
+                                    break;
+                                }
+                            }
+                            const size_t route_top8 = std::min<size_t>(8, compact_count);
+                            query_metrics->route_top8_float_top4_total += float_top;
+                            for (size_t f = 0; f < float_top; ++f) {
+                                for (size_t r = 0; r < route_top8; ++r) {
+                                    if (turbo_scratch.order[r] == float_ranked[f].second) {
+                                        ++query_metrics->route_top8_float_top4_hits;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (query_metrics && priority_count) {
+                        query_metrics->lower_bound_before_priority += lowerBound;
+                        ++query_metrics->lower_bound_samples;
+                    }
+                    std::vector<uint8_t> &selected = turbo_scratch.scores;
+                    for (size_t i = 0; i < compact_count; ++i) selected[i] = 0;
+                    for (size_t rank = 0; rank < priority_count; ++rank) selected[turbo_scratch.order[rank]] = 1;
+                    const auto full_start = query_metrics ? std::chrono::steady_clock::now()
+                                                          : std::chrono::steady_clock::time_point{};
+                    for (size_t rank = 0; rank < priority_count; ++rank) {
+                        const size_t slot = turbo_scratch.order[rank];
+                        turbo_scratch.distances[slot] = space_->query_distance(
+                            query_context, turbo_scratch.data_points[slot]);
+                        update_candidate(slot);
+                    }
+                    if (query_metrics && priority_count) {
+                        query_metrics->priority_full_distance_count += priority_count;
+                        query_metrics->distance_computations += priority_count;
+                        query_metrics->lower_bound_after_priority += lowerBound;
+                    }
+                    for (size_t i = 0; i < compact_count; ++i) {
+                        const size_t slot = graph_turbo_config_.remaining_in_route_order
+                            ? turbo_scratch.order[i] : i;
+                        if (selected[slot]) continue;
+                        turbo_scratch.distances[slot] = space_->query_distance(
+                            query_context, turbo_scratch.data_points[slot]);
+                        update_candidate(slot);
+                    }
+                    if (query_metrics) {
+                        query_metrics->remaining_full_distance_count += compact_count - priority_count;
+                        query_metrics->distance_computations += compact_count - priority_count;
+                        query_metrics->full_distance_us += std::chrono::duration<double, std::micro>(
+                            std::chrono::steady_clock::now() - full_start).count();
+                    }
+                }
+            }
+        }
+
+        visited_list_pool_->releaseVisitedList(vl);
+        return top_candidates;
+    }
+
+
+    void getNeighborsByHeuristic2(
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+        const size_t M) {
+        if (top_candidates.size() < M) {
+            return;
+        }
+
+        std::priority_queue<std::pair<dist_t, tableint>> queue_closest;
+        std::vector<std::pair<dist_t, tableint>> return_list;
+        while (top_candidates.size() > 0) {
+            queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
+            top_candidates.pop();
+        }
+
+        while (queue_closest.size()) {
+            if (return_list.size() >= M)
+                break;
+            std::pair<dist_t, tableint> curent_pair = queue_closest.top();
+            dist_t dist_to_query = -curent_pair.first;
+            queue_closest.pop();
+            bool good = true;
+
+            if (symmetric_build_prepared_enabled_ && !asymmetric_build_enabled_ &&
+                !return_list.empty()) {
+                const void *query_context =
+                    space_->prepare_symmetric_build_query(
+                        getDataByInternalId(curent_pair.second));
+                uint64_t local_distance_count = 0;
+                try {
+                    for (const auto &second_pair : return_list) {
+                        dist_t curdist = space_->symmetric_build_distance_prepared(
+                            query_context, getDataByInternalId(second_pair.second));
+                        ++local_distance_count;
+                        if (curdist < dist_to_query) {
+                            good = false;
+                            break;
+                        }
+                    }
+                } catch (...) {
+                    space_->release_symmetric_build_query(query_context);
+                    throw;
+                }
+                space_->release_symmetric_build_query(query_context);
+                addBuildDistanceCounts(0, local_distance_count, local_distance_count);
+            } else {
+                for (std::pair<dist_t, tableint> second_pair : return_list) {
+                    dist_t curdist = buildDistanceBetweenInternalIds(
+                        curent_pair.second, second_pair.second);
+                    if (curdist < dist_to_query) {
+                        good = false;
+                        break;
+                    }
+                }
+            }
+            if (good) {
+                return_list.push_back(curent_pair);
+            }
+        }
+
+        for (std::pair<dist_t, tableint> curent_pair : return_list) {
+            top_candidates.emplace(-curent_pair.first, curent_pair.second);
+        }
+    }
+
+
+    linklistsizeint *get_linklist0(tableint internal_id) const {
+        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
+    }
+
+
+    linklistsizeint *get_linklist0(tableint internal_id, char *data_level0_memory_) const {
+        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
+    }
+
+
+    linklistsizeint *get_linklist(tableint internal_id, int level) const {
+        return (linklistsizeint *) (linkLists_[internal_id] + (level - 1) * size_links_per_element_);
+    }
+
+
+    linklistsizeint *get_linklist_at_level(tableint internal_id, int level) const {
+        return level == 0 ? get_linklist0(internal_id) : get_linklist(internal_id, level);
+    }
+
+
+    tableint mutuallyConnectNewElement(
+        const void *data_point,
+        tableint cur_c,
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+        int level,
+        bool isUpdate) {
+        size_t Mcurmax = level ? maxM_ : maxM0_;
+        getNeighborsByHeuristic2(top_candidates, M_);
+        if (top_candidates.size() > M_)
+            throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
+
+        std::vector<tableint> selectedNeighbors;
+        selectedNeighbors.reserve(M_);
+        while (top_candidates.size() > 0) {
+            selectedNeighbors.push_back(top_candidates.top().second);
+            top_candidates.pop();
+        }
+
+        tableint next_closest_entry_point = selectedNeighbors.back();
+
+        {
+            // lock only during the update
+            // because during the addition the lock for cur_c is already acquired
+            std::unique_lock <std::mutex> lock(link_list_locks_[cur_c], std::defer_lock);
+            if (isUpdate) {
+                lock.lock();
+            }
+            linklistsizeint *ll_cur;
+            if (level == 0)
+                ll_cur = get_linklist0(cur_c);
+            else
+                ll_cur = get_linklist(cur_c, level);
+
+            if (*ll_cur && !isUpdate) {
+                throw std::runtime_error("The newly inserted element should have blank link list");
+            }
+            setListCount(ll_cur, selectedNeighbors.size());
+            tableint *data = (tableint *) (ll_cur + 1);
+            for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
+                if (data[idx] && !isUpdate)
+                    throw std::runtime_error("Possible memory corruption");
+                if (level > element_levels_[selectedNeighbors[idx]])
+                    throw std::runtime_error("Trying to make a link on a non-existent level");
+
+                data[idx] = selectedNeighbors[idx];
+            }
+        }
+
+        for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
+            std::unique_lock <std::mutex> lock(link_list_locks_[selectedNeighbors[idx]]);
+
+            linklistsizeint *ll_other;
+            if (level == 0)
+                ll_other = get_linklist0(selectedNeighbors[idx]);
+            else
+                ll_other = get_linklist(selectedNeighbors[idx], level);
+
+            size_t sz_link_list_other = getListCount(ll_other);
+
+            if (sz_link_list_other > Mcurmax)
+                throw std::runtime_error("Bad value of sz_link_list_other");
+            if (selectedNeighbors[idx] == cur_c)
+                throw std::runtime_error("Trying to connect an element to itself");
+            if (level > element_levels_[selectedNeighbors[idx]])
+                throw std::runtime_error("Trying to make a link on a non-existent level");
+
+            tableint *data = (tableint *) (ll_other + 1);
+
+            bool is_cur_c_present = false;
+            if (isUpdate) {
+                for (size_t j = 0; j < sz_link_list_other; j++) {
+                    if (data[j] == cur_c) {
+                        is_cur_c_present = true;
+                        break;
+                    }
+                }
+            }
+
+            // If cur_c is already present in the neighboring connections of `selectedNeighbors[idx]` then no need to modify any connections or run the heuristics.
+            if (!is_cur_c_present) {
+                if (sz_link_list_other < Mcurmax) {
+                    data[sz_link_list_other] = cur_c;
+                    setListCount(ll_other, sz_link_list_other + 1);
+                } else {
+                    // finding the "weakest" element to replace it with the new one
+                    // Heuristic:
+                    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
+                    if (symmetric_build_prepared_enabled_ && !asymmetric_build_enabled_) {
+                        thread_local std::vector<tableint> reconnect_ids;
+                        thread_local std::vector<const void *> reconnect_data;
+                        thread_local std::vector<dist_t> reconnect_distances;
+                        reconnect_ids.clear();
+                        reconnect_data.clear();
+                        reconnect_distances.clear();
+                        reconnect_ids.reserve(sz_link_list_other + 1U);
+                        reconnect_data.reserve(sz_link_list_other + 1U);
+                        reconnect_ids.push_back(cur_c);
+                        reconnect_data.push_back(getDataByInternalId(cur_c));
+                        for (size_t j = 0; j < sz_link_list_other; j++) {
+                            reconnect_ids.push_back(data[j]);
+                            reconnect_data.push_back(getDataByInternalId(data[j]));
+                        }
+                        reconnect_distances.resize(reconnect_data.size());
+                        const void *query_context = space_->prepare_symmetric_build_query(
+                            getDataByInternalId(selectedNeighbors[idx]));
+                        try {
+                            space_->symmetric_build_distance_batch(
+                                query_context,
+                                reconnect_data.data(),
+                                reconnect_data.size(),
+                                reconnect_distances.data(),
+                                2);
+                        } catch (...) {
+                            space_->release_symmetric_build_query(query_context);
+                            throw;
+                        }
+                        space_->release_symmetric_build_query(query_context);
+                        addBuildDistanceCounts(
+                            0,
+                            static_cast<uint64_t>(reconnect_data.size()),
+                            static_cast<uint64_t>(reconnect_data.size()));
+                        for (size_t j = 0; j < reconnect_ids.size(); ++j) {
+                            candidates.emplace(reconnect_distances[j], reconnect_ids[j]);
+                        }
+                    } else {
+                        dist_t d_max = buildDistanceBetweenInternalIds(
+                            selectedNeighbors[idx], cur_c);
+                        candidates.emplace(d_max, cur_c);
+
+                        for (size_t j = 0; j < sz_link_list_other; j++) {
+                            candidates.emplace(
+                                buildDistanceBetweenInternalIds(selectedNeighbors[idx], data[j]), data[j]);
+                        }
+                    }
+
+                    getNeighborsByHeuristic2(candidates, Mcurmax);
+
+                    int indx = 0;
+                    while (candidates.size() > 0) {
+                        data[indx] = candidates.top().second;
+                        candidates.pop();
+                        indx++;
+                    }
+
+                    setListCount(ll_other, indx);
+                    // Nearest K:
+                    /*int indx = -1;
+                    for (int j = 0; j < sz_link_list_other; j++) {
+                        dist_t d = fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(rez[idx]), dist_func_param_);
+                        if (d > d_max) {
+                            indx = j;
+                            d_max = d;
+                        }
+                    }
+                    if (indx >= 0) {
+                        data[indx] = cur_c;
+                    } */
+                }
+            }
+        }
+
+        return next_closest_entry_point;
+    }
+
+
+    void resizeIndex(size_t new_max_elements) {
+        if (graph_turbo_topology_frozen_)
+            throw std::runtime_error("Graph-Turbo route topology is frozen; resize is disabled");
+        if (new_max_elements < cur_element_count)
+            throw std::runtime_error("Cannot resize, max element is less than the current number of elements");
+
+        visited_list_pool_.reset(new VisitedListPool(1, new_max_elements));
+
+        element_levels_.resize(new_max_elements);
+
+        std::vector<std::mutex>(new_max_elements).swap(link_list_locks_);
+
+        // Reallocate base layer
+        char * data_level0_memory_new = (char *) realloc(data_level0_memory_, new_max_elements * size_data_per_element_);
+        if (data_level0_memory_new == nullptr)
+            throw std::runtime_error("Not enough memory: resizeIndex failed to allocate base layer");
+        data_level0_memory_ = data_level0_memory_new;
+
+        // Reallocate all other layers
+        char ** linkLists_new = (char **) realloc(linkLists_, sizeof(void *) * new_max_elements);
+        if (linkLists_new == nullptr)
+            throw std::runtime_error("Not enough memory: resizeIndex failed to allocate other layers");
+        linkLists_ = linkLists_new;
+
+        max_elements_ = new_max_elements;
+    }
+
+    size_t indexFileSize() const {
+        size_t size = 0;
+        size += sizeof(offsetLevel0_);
+        size += sizeof(max_elements_);
+        size += sizeof(cur_element_count);
+        size += sizeof(size_data_per_element_);
+        size += sizeof(label_offset_);
+        size += sizeof(offsetData_);
+        size += sizeof(maxlevel_);
+        size += sizeof(enterpoint_node_);
+        size += sizeof(maxM_);
+
+        size += sizeof(maxM0_);
+        size += sizeof(M_);
+        size += sizeof(mult_);
+        size += sizeof(ef_construction_);
+
+        size += cur_element_count * size_data_per_element_;
+
+        for (size_t i = 0; i < cur_element_count; i++) {
+            unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+            size += sizeof(linkListSize);
+            size += linkListSize;
+        }
+        return size;
+    }
+
+    void saveIndex(const std::string &location) {
+        std::ofstream output(location, std::ios::binary);
+
+        writeBinaryPOD(output, offsetLevel0_);
+        writeBinaryPOD(output, max_elements_);
+        writeBinaryPOD(output, cur_element_count);
+        writeBinaryPOD(output, size_data_per_element_);
+        writeBinaryPOD(output, label_offset_);
+        writeBinaryPOD(output, offsetData_);
+        writeBinaryPOD(output, maxlevel_);
+        writeBinaryPOD(output, enterpoint_node_);
+        writeBinaryPOD(output, maxM_);
+
+        writeBinaryPOD(output, maxM0_);
+        writeBinaryPOD(output, M_);
+        writeBinaryPOD(output, mult_);
+        writeBinaryPOD(output, ef_construction_);
+
+        output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
+
+        for (size_t i = 0; i < cur_element_count; i++) {
+            unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+            writeBinaryPOD(output, linkListSize);
+            if (linkListSize)
+                output.write(linkLists_[i], linkListSize);
+        }
+        output.close();
+    }
+
+
+    void loadIndex(const std::string &location, SpaceInterface<dist_t> *s, size_t max_elements_i = 0) {
+        std::ifstream input(location, std::ios::binary);
+
+        if (!input.is_open())
+            throw std::runtime_error("Cannot open file");
+
+        clear();
+        // get file size:
+        input.seekg(0, input.end);
+        std::streampos total_filesize = input.tellg();
+        input.seekg(0, input.beg);
+
+        readBinaryPOD(input, offsetLevel0_);
+        readBinaryPOD(input, max_elements_);
+        readBinaryPOD(input, cur_element_count);
+
+        size_t max_elements = max_elements_i;
+        if (max_elements < cur_element_count)
+            max_elements = max_elements_;
+        max_elements_ = max_elements;
+        readBinaryPOD(input, size_data_per_element_);
+        readBinaryPOD(input, label_offset_);
+        readBinaryPOD(input, offsetData_);
+        readBinaryPOD(input, maxlevel_);
+        readBinaryPOD(input, enterpoint_node_);
+
+        readBinaryPOD(input, maxM_);
+        readBinaryPOD(input, maxM0_);
+        readBinaryPOD(input, M_);
+        readBinaryPOD(input, mult_);
+        readBinaryPOD(input, ef_construction_);
+
+        data_size_ = s->get_data_size();
+        fstdistfunc_ = s->get_dist_func();
+        dist_func_param_ = s->get_dist_func_param();
+
+        auto pos = input.tellg();
+
+        /// Optional - check if index is ok:
+        input.seekg(cur_element_count * size_data_per_element_, input.cur);
+        for (size_t i = 0; i < cur_element_count; i++) {
+            if (input.tellg() < 0 || input.tellg() >= total_filesize) {
+                throw std::runtime_error("Index seems to be corrupted or unsupported");
+            }
+
+            unsigned int linkListSize;
+            readBinaryPOD(input, linkListSize);
+            if (linkListSize != 0) {
+                input.seekg(linkListSize, input.cur);
+            }
+        }
+
+        // throw exception if it either corrupted or old index
+        if (input.tellg() != total_filesize)
+            throw std::runtime_error("Index seems to be corrupted or unsupported");
+
+        input.clear();
+        /// Optional check end
+
+        input.seekg(pos, input.beg);
+
+        data_level0_memory_ = (char *) malloc(max_elements * size_data_per_element_);
+        if (data_level0_memory_ == nullptr)
+            throw std::runtime_error("Not enough memory: loadIndex failed to allocate level0");
+        input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
+
+        size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
+
+        size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+        std::vector<std::mutex>(max_elements).swap(link_list_locks_);
+        std::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS).swap(label_op_locks_);
+
+        visited_list_pool_.reset(new VisitedListPool(1, max_elements));
+
+        linkLists_ = (char **) malloc(sizeof(void *) * max_elements);
+        if (linkLists_ == nullptr)
+            throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklists");
+        element_levels_ = std::vector<int>(max_elements);
+        revSize_ = 1.0 / mult_;
+        ef_ = 10;
+        for (size_t i = 0; i < cur_element_count; i++) {
+            label_lookup_[getExternalLabel(i)] = i;
+            unsigned int linkListSize;
+            readBinaryPOD(input, linkListSize);
+            if (linkListSize == 0) {
+                element_levels_[i] = 0;
+                linkLists_[i] = nullptr;
+            } else {
+                element_levels_[i] = linkListSize / size_links_per_element_;
+                linkLists_[i] = (char *) malloc(linkListSize);
+                if (linkLists_[i] == nullptr)
+                    throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklist");
+                input.read(linkLists_[i], linkListSize);
+            }
+        }
+
+        for (size_t i = 0; i < cur_element_count; i++) {
+            if (isMarkedDeleted(i)) {
+                num_deleted_ += 1;
+                if (allow_replace_deleted_) deleted_elements.insert(i);
+            }
+        }
+
+        input.close();
+
+        return;
+    }
+
+
+    template<typename data_t>
+    std::vector<data_t> getDataByLabel(labeltype label) const {
+        // lock all operations with element by label
+        std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+        
+        std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+        auto search = label_lookup_.find(label);
+        if (search == label_lookup_.end() || isMarkedDeleted(search->second)) {
+            throw std::runtime_error("Label not found");
+        }
+        tableint internalId = search->second;
+        lock_table.unlock();
+
+        char* data_ptrv = getDataByInternalId(internalId);
+        size_t dim = *((size_t *) dist_func_param_);
+        std::vector<data_t> data;
+        data_t* data_ptr = (data_t*) data_ptrv;
+        for (size_t i = 0; i < dim; i++) {
+            data.push_back(*data_ptr);
+            data_ptr += 1;
+        }
+        return data;
+    }
+
+
+    /*
+    * Marks an element with the given label deleted, does NOT really change the current graph.
+    */
+    void markDelete(labeltype label) {
+        // lock all operations with element by label
+        std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+
+        std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+        auto search = label_lookup_.find(label);
+        if (search == label_lookup_.end()) {
+            throw std::runtime_error("Label not found");
+        }
+        tableint internalId = search->second;
+        lock_table.unlock();
+
+        markDeletedInternal(internalId);
+    }
+
+
+    /*
+    * Uses the last 16 bits of the memory for the linked list size to store the mark,
+    * whereas maxM0_ has to be limited to the lower 16 bits, however, still large enough in almost all cases.
+    */
+    void markDeletedInternal(tableint internalId) {
+        assert(internalId < cur_element_count);
+        if (!isMarkedDeleted(internalId)) {
+            unsigned char *ll_cur = ((unsigned char *)get_linklist0(internalId))+2;
+            *ll_cur |= DELETE_MARK;
+            num_deleted_ += 1;
+            if (allow_replace_deleted_) {
+                std::unique_lock <std::mutex> lock_deleted_elements(deleted_elements_lock);
+                deleted_elements.insert(internalId);
+            }
+        } else {
+            throw std::runtime_error("The requested to delete element is already deleted");
+        }
+    }
+
+
+    /*
+    * Removes the deleted mark of the node, does NOT really change the current graph.
+    * 
+    * Note: the method is not safe to use when replacement of deleted elements is enabled,
+    *  because elements marked as deleted can be completely removed by addPoint
+    */
+    void unmarkDelete(labeltype label) {
+        // lock all operations with element by label
+        std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+
+        std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+        auto search = label_lookup_.find(label);
+        if (search == label_lookup_.end()) {
+            throw std::runtime_error("Label not found");
+        }
+        tableint internalId = search->second;
+        lock_table.unlock();
+
+        unmarkDeletedInternal(internalId);
+    }
+
+
+
+    /*
+    * Remove the deleted mark of the node.
+    */
+    void unmarkDeletedInternal(tableint internalId) {
+        assert(internalId < cur_element_count);
+        if (isMarkedDeleted(internalId)) {
+            unsigned char *ll_cur = ((unsigned char *)get_linklist0(internalId)) + 2;
+            *ll_cur &= ~DELETE_MARK;
+            num_deleted_ -= 1;
+            if (allow_replace_deleted_) {
+                std::unique_lock <std::mutex> lock_deleted_elements(deleted_elements_lock);
+                deleted_elements.erase(internalId);
+            }
+        } else {
+            throw std::runtime_error("The requested to undelete element is not deleted");
+        }
+    }
+
+
+    /*
+    * Checks the first 16 bits of the memory to see if the element is marked deleted.
+    */
+    bool isMarkedDeleted(tableint internalId) const {
+        unsigned char *ll_cur = ((unsigned char*)get_linklist0(internalId)) + 2;
+        return *ll_cur & DELETE_MARK;
+    }
+
+
+    unsigned short int getListCount(linklistsizeint * ptr) const {
+        return *((unsigned short int *)ptr);
+    }
+
+
+    void setListCount(linklistsizeint * ptr, unsigned short int size) const {
+        *((unsigned short int*)(ptr))=*((unsigned short int *)&size);
+    }
+
+
+    /*
+    * Adds point. Updates the point if it is already in the index.
+    * If replacement of deleted elements is enabled: replaces previously deleted point if any, updating it with new point
+    */
+    void addPoint(const void *data_point, labeltype label, bool replace_deleted = false) {
+        if ((allow_replace_deleted_ == false) && (replace_deleted == true)) {
+            throw std::runtime_error("Replacement of deleted elements is disabled in constructor");
+        }
+
+        // lock all operations with element by label
+        std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+        if (!replace_deleted) {
+            if (symmetric_build_prepared_enabled_) {
+                const void *query_context = space_->prepare_symmetric_build_query(data_point);
+                try {
+                    addPoint(data_point, label, -1, nullptr, query_context);
+                } catch (...) {
+                    space_->release_symmetric_build_query(query_context);
+                    throw;
+                }
+                space_->release_symmetric_build_query(query_context);
+            } else {
+                addPoint(data_point, label, -1);
+            }
+            return;
+        }
+        // check if there is vacant place
+        tableint internal_id_replaced;
+        std::unique_lock <std::mutex> lock_deleted_elements(deleted_elements_lock);
+        bool is_vacant_place = !deleted_elements.empty();
+        if (is_vacant_place) {
+            internal_id_replaced = *deleted_elements.begin();
+            deleted_elements.erase(internal_id_replaced);
+        }
+        lock_deleted_elements.unlock();
+
+        // if there is no vacant place then add or update point
+        // else add point to vacant place
+        if (!is_vacant_place) {
+            addPoint(data_point, label, -1);
+        } else {
+            // we assume that there are no concurrent operations on deleted element
+            labeltype label_replaced = getExternalLabel(internal_id_replaced);
+            setExternalLabel(internal_id_replaced, label);
+
+            std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+            label_lookup_.erase(label_replaced);
+            label_lookup_[label] = internal_id_replaced;
+            lock_table.unlock();
+
+            unmarkDeletedInternal(internal_id_replaced);
+            updatePoint(data_point, internal_id_replaced, 1.0);
+        }
+    }
+
+    void addPointAsymmetric(
+        const void *encoded_data_point,
+        const void *raw_data_point,
+        labeltype label) {
+        if (!asymmetric_build_enabled_)
+            throw std::runtime_error("asymmetric construction is not enabled");
+        if (encoded_data_point == nullptr || raw_data_point == nullptr)
+            throw std::invalid_argument("asymmetric construction received null data");
+        std::unique_lock<std::mutex> lock_label(getLabelOpMutex(label));
+        const void *query_context = space_->prepare_asymmetric_build_query(raw_data_point);
+        try {
+            addPoint(encoded_data_point, label, -1, query_context);
+        } catch (...) {
+            space_->release_asymmetric_build_query(query_context);
+            throw;
+        }
+        space_->release_asymmetric_build_query(query_context);
+    }
+
+
+    void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability) {
+        if (graph_turbo_topology_frozen_)
+            throw std::runtime_error("Graph-Turbo route topology is frozen; updates are disabled");
+        // update the feature vector associated with existing point with new vector
+        memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
+        space_->commit_data_for_add(internalId, dataPoint);
+
+        int maxLevelCopy = maxlevel_;
+        tableint entryPointCopy = enterpoint_node_;
+        // If point to be updated is entry point and graph just contains single element then just return.
+        if (entryPointCopy == internalId && cur_element_count == 1)
+            return;
+
+        int elemLevel = element_levels_[internalId];
+        std::uniform_real_distribution<float> distribution(0.0, 1.0);
+        for (int layer = 0; layer <= elemLevel; layer++) {
+            std::unordered_set<tableint> sCand;
+            std::unordered_set<tableint> sNeigh;
+            std::vector<tableint> listOneHop = getConnectionsWithLock(internalId, layer);
+            if (listOneHop.size() == 0)
+                continue;
+
+            sCand.insert(internalId);
+
+            for (auto&& elOneHop : listOneHop) {
+                sCand.insert(elOneHop);
+
+                if (distribution(update_probability_generator_) > updateNeighborProbability)
+                    continue;
+
+                sNeigh.insert(elOneHop);
+
+                std::vector<tableint> listTwoHop = getConnectionsWithLock(elOneHop, layer);
+                for (auto&& elTwoHop : listTwoHop) {
+                    sCand.insert(elTwoHop);
+                }
+            }
+
+            for (auto&& neigh : sNeigh) {
+                // if (neigh == internalId)
+                //     continue;
+
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
+                size_t size = sCand.find(neigh) == sCand.end() ? sCand.size() : sCand.size() - 1;  // sCand guaranteed to have size >= 1
+                size_t elementsToKeep = std::min(ef_construction_, size);
+                for (auto&& cand : sCand) {
+                    if (cand == neigh)
+                        continue;
+
+                    dist_t distance = fstdistfunc_(getDataByInternalId(neigh), getDataByInternalId(cand), dist_func_param_);
+                    if (candidates.size() < elementsToKeep) {
+                        candidates.emplace(distance, cand);
+                    } else {
+                        if (distance < candidates.top().first) {
+                            candidates.pop();
+                            candidates.emplace(distance, cand);
+                        }
+                    }
+                }
+
+                // Retrieve neighbours using heuristic and set connections.
+                getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : maxM_);
+
+                {
+                    std::unique_lock <std::mutex> lock(link_list_locks_[neigh]);
+                    linklistsizeint *ll_cur;
+                    ll_cur = get_linklist_at_level(neigh, layer);
+                    size_t candSize = candidates.size();
+                    setListCount(ll_cur, candSize);
+                    tableint *data = (tableint *) (ll_cur + 1);
+                    for (size_t idx = 0; idx < candSize; idx++) {
+                        data[idx] = candidates.top().second;
+                        candidates.pop();
+                    }
+                }
+            }
+        }
+
+        repairConnectionsForUpdate(dataPoint, entryPointCopy, internalId, elemLevel, maxLevelCopy);
+    }
+
+
+    void repairConnectionsForUpdate(
+        const void *dataPoint,
+        tableint entryPointInternalId,
+        tableint dataPointInternalId,
+        int dataPointLevel,
+        int maxLevel) {
+        tableint currObj = entryPointInternalId;
+        if (dataPointLevel < maxLevel) {
+            dist_t curdist = fstdistfunc_(dataPoint, getDataByInternalId(currObj), dist_func_param_);
+            for (int level = maxLevel; level > dataPointLevel; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data;
+                    std::unique_lock <std::mutex> lock(link_list_locks_[currObj]);
+                    data = get_linklist_at_level(currObj, level);
+                    int size = getListCount(data);
+                    tableint *datal = (tableint *) (data + 1);
+#ifdef USE_SSE
+                    _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+#endif
+                    for (int i = 0; i < size; i++) {
+#ifdef USE_SSE
+                        _mm_prefetch(getDataByInternalId(*(datal + i + 1)), _MM_HINT_T0);
+#endif
+                        tableint cand = datal[i];
+                        dist_t d = fstdistfunc_(dataPoint, getDataByInternalId(cand), dist_func_param_);
+                        if (d < curdist) {
+                            curdist = d;
+                            currObj = cand;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (dataPointLevel > maxLevel)
+            throw std::runtime_error("Level of item to be updated cannot be bigger than max level");
+
+        for (int level = dataPointLevel; level >= 0; level--) {
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> topCandidates = searchBaseLayer(
+                    currObj, dataPoint, level);
+
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> filteredTopCandidates;
+            while (topCandidates.size() > 0) {
+                if (topCandidates.top().second != dataPointInternalId)
+                    filteredTopCandidates.push(topCandidates.top());
+
+                topCandidates.pop();
+            }
+
+            // Since element_levels_ is being used to get `dataPointLevel`, there could be cases where `topCandidates` could just contains entry point itself.
+            // To prevent self loops, the `topCandidates` is filtered and thus can be empty.
+            if (filteredTopCandidates.size() > 0) {
+                bool epDeleted = isMarkedDeleted(entryPointInternalId);
+                if (epDeleted) {
+                    filteredTopCandidates.emplace(fstdistfunc_(dataPoint, getDataByInternalId(entryPointInternalId), dist_func_param_), entryPointInternalId);
+                    if (filteredTopCandidates.size() > ef_construction_)
+                        filteredTopCandidates.pop();
+                }
+
+                currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true);
+            }
+        }
+    }
+
+
+    std::vector<tableint> getConnectionsWithLock(tableint internalId, int level) {
+        std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
+        unsigned int *data = get_linklist_at_level(internalId, level);
+        int size = getListCount(data);
+        std::vector<tableint> result(size);
+        tableint *ll = (tableint *) (data + 1);
+        memcpy(result.data(), ll, size * sizeof(tableint));
+        return result;
+    }
+
+
+    tableint addPoint(
+        const void *data_point,
+        labeltype label,
+        int level,
+        const void *asymmetric_query_context = nullptr,
+        const void *symmetric_query_context = nullptr) {
+        if (asymmetric_query_context != nullptr && symmetric_query_context != nullptr)
+            throw std::runtime_error("construction received both asymmetric and symmetric query contexts");
+        if (graph_turbo_topology_frozen_)
+            throw std::runtime_error("Graph-Turbo route topology is frozen; insertion is disabled");
+        tableint cur_c = 0;
+        {
+            // Checking if the element with the same label already exists
+            // if so, updating it *instead* of creating a new element.
+            std::unique_lock <std::mutex> lock_table(label_lookup_lock);
+            auto search = label_lookup_.find(label);
+            if (search != label_lookup_.end()) {
+                tableint existingInternalId = search->second;
+                if (allow_replace_deleted_) {
+                    if (isMarkedDeleted(existingInternalId)) {
+                        throw std::runtime_error("Can't use addPoint to update deleted elements if replacement of deleted elements is enabled.");
+                    }
+                }
+                lock_table.unlock();
+
+                if (isMarkedDeleted(existingInternalId)) {
+                    unmarkDeletedInternal(existingInternalId);
+                }
+                updatePoint(data_point, existingInternalId, 1.0);
+
+                return existingInternalId;
+            }
+
+            if (cur_element_count >= max_elements_) {
+                throw std::runtime_error("The number of elements exceeds the specified limit");
+            }
+
+            cur_c = cur_element_count;
+            cur_element_count++;
+            label_lookup_[label] = cur_c;
+        }
+
+        std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
+        int curlevel = getRandomLevel(mult_);
+        if (level > 0)
+            curlevel = level;
+
+        element_levels_[cur_c] = curlevel;
+
+        std::unique_lock <std::mutex> templock(global);
+        int maxlevelcopy = maxlevel_;
+        if (curlevel <= maxlevelcopy)
+            templock.unlock();
+        tableint currObj = enterpoint_node_;
+        tableint enterpoint_copy = enterpoint_node_;
+
+        memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+
+        // Initialisation of the data and label
+        memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
+        memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+        space_->commit_data_for_add(cur_c, data_point);
+
+        if (curlevel) {
+            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
+            if (linkLists_[cur_c] == nullptr)
+                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
+        }
+
+        if ((signed)currObj != -1) {
+            if (curlevel < maxlevelcopy) {
+                dist_t curdist = queryToInternalBuildDistance(
+                    data_point, currObj, asymmetric_query_context, symmetric_query_context);
+                for (int level = maxlevelcopy; level > curlevel; level--) {
+                    bool changed = true;
+                    while (changed) {
+                        changed = false;
+                        unsigned int *data;
+                        std::unique_lock <std::mutex> lock(link_list_locks_[currObj]);
+                        data = get_linklist(currObj, level);
+                        int size = getListCount(data);
+
+                        tableint *datal = (tableint *) (data + 1);
+                        for (int i = 0; i < size; i++) {
+                            tableint cand = datal[i];
+                            if (cand < 0 || cand > max_elements_)
+                                throw std::runtime_error("cand error");
+                            dist_t d = queryToInternalBuildDistance(
+                                data_point, cand, asymmetric_query_context, symmetric_query_context);
+                            if (d < curdist) {
+                                curdist = d;
+                                currObj = cand;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            bool epDeleted = isMarkedDeleted(enterpoint_copy);
+            for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
+                if (level > maxlevelcopy || level < 0)  // possible?
+                    throw std::runtime_error("Level error");
+
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+                        currObj, data_point, level,
+                        asymmetric_query_context, symmetric_query_context);
+                if (epDeleted) {
+                    const dist_t entry_distance = queryToInternalBuildDistance(
+                        data_point, enterpoint_copy,
+                        asymmetric_query_context, symmetric_query_context);
+                    top_candidates.emplace(entry_distance, enterpoint_copy);
+                    if (top_candidates.size() > ef_construction_)
+                        top_candidates.pop();
+                }
+                currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
+            }
+        } else {
+            // Do nothing for the first element
+            enterpoint_node_ = 0;
+            maxlevel_ = curlevel;
+        }
+
+        // Releasing lock for the maximum level
+        if (curlevel > maxlevelcopy) {
+            enterpoint_node_ = cur_c;
+            maxlevel_ = curlevel;
+        }
+        return cur_c;
+    }
+
+
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0) return result;
+
+        const void *query_context = space_->prepare_query(query_data);
+        tableint currObj = enterpoint_node_;
+        dist_t curdist = space_->query_distance(query_context, getDataByInternalId(enterpoint_node_));
+
+        try {
+            for (int level = maxlevel_; level > 0; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data;
+
+                    data = (unsigned int *) get_linklist(currObj, level);
+                    int size = getListCount(data);
+                    metric_hops++;
+                    metric_distance_computations+=size;
+
+                    tableint *datal = (tableint *) (data + 1);
+                    for (int i = 0; i < size; i++) {
+                        tableint cand = datal[i];
+                        if (cand < 0 || cand > max_elements_)
+                            throw std::runtime_error("cand error");
+                        char *cand_data = getDataByInternalId(cand);
+                        dist_t d = space_->query_distance(query_context, cand_data);
+                        if (d < curdist) {
+                            curdist = d;
+                            currObj = cand;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            bool bare_bone_search = !num_deleted_ && !isIdAllowed;
+            if (bare_bone_search) {
+                top_candidates = searchBaseLayerST<true>(
+                        currObj, query_context, std::max(ef_, k), isIdAllowed);
+            } else {
+                top_candidates = searchBaseLayerST<false>(
+                        currObj, query_context, std::max(ef_, k), isIdAllowed);
+            }
+
+            while (top_candidates.size() > k) {
+                top_candidates.pop();
+            }
+            while (top_candidates.size() > 0) {
+                std::pair<dist_t, tableint> rez = top_candidates.top();
+                result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+                top_candidates.pop();
+            }
+        } catch (...) {
+            space_->release_query(query_context);
+            throw;
+        }
+        space_->release_query(query_context);
+        return result;
+    }
+
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnnPlainThenResidualRerank(
+        const void *query_data,
+        size_t k,
+        size_t rerank_candidates,
+        BaseFilterFunctor* isIdAllowed = nullptr,
+        RaBitQSearchMetrics *query_metrics = nullptr,
+        bool enable_residual_rerank = true) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0 || k == 0) return result;
+
+        if (query_metrics) {
+            *query_metrics = RaBitQSearchMetrics{};
+        }
+        const auto total_start = std::chrono::steady_clock::now();
+
+        rerank_candidates = std::max(k, rerank_candidates);
+        const auto prepare_start = std::chrono::steady_clock::now();
+        const void *query_context = space_->prepare_query(query_data);
+        const auto traversal_start = std::chrono::steady_clock::now();
+        if (query_metrics) {
+            query_metrics->prepare_query_us = std::chrono::duration_cast<
+                std::chrono::duration<double, std::micro>>(traversal_start - prepare_start).count();
+        }
+        tableint currObj = enterpoint_node_;
+        dist_t curdist = space_->query_distance(query_context, getDataByInternalId(enterpoint_node_));
+        if (query_metrics) {
+            ++query_metrics->distance_computations;
+            ++query_metrics->visited_nodes;
+        }
+
+        try {
+            for (int level = maxlevel_; level > 0; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data = (unsigned int *) get_linklist(currObj, level);
+                    int size = getListCount(data);
+                    metric_hops++;
+                    metric_distance_computations += size;
+
+                    tableint *datal = (tableint *) (data + 1);
+                    for (int i = 0; i < size; i++) {
+                        tableint cand = datal[i];
+                        if (cand < 0 || cand > max_elements_) {
+                            throw std::runtime_error("cand error");
+                        }
+                        char *cand_data = getDataByInternalId(cand);
+                        dist_t d = space_->query_distance(query_context, cand_data);
+                        if (query_metrics) {
+                            ++query_metrics->distance_computations;
+                            ++query_metrics->visited_nodes;
+                        }
+                        if (d < curdist) {
+                            curdist = d;
+                            currObj = cand;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            std::priority_queue<
+                std::pair<dist_t, tableint>,
+                std::vector<std::pair<dist_t, tableint>>,
+                CompareByFirst> top_candidates;
+            const bool bare_bone_search = !num_deleted_ && !isIdAllowed;
+            if (bare_bone_search) {
+                top_candidates = searchBaseLayerST<true>(
+                    currObj, query_context, ef_, isIdAllowed, nullptr, query_metrics);
+            } else {
+                top_candidates = searchBaseLayerST<false>(
+                    currObj, query_context, ef_, isIdAllowed, nullptr, query_metrics);
+            }
+
+            const auto rerank_start = std::chrono::steady_clock::now();
+            if (query_metrics) {
+                query_metrics->traversal_us = std::chrono::duration_cast<
+                    std::chrono::duration<double, std::micro>>(rerank_start - traversal_start).count();
+            }
+
+            while (top_candidates.size() > rerank_candidates) {
+                top_candidates.pop();
+            }
+
+            std::vector<std::pair<dist_t, tableint>> candidates;
+            candidates.reserve(top_candidates.size());
+            while (!top_candidates.empty()) {
+                candidates.push_back(top_candidates.top());
+                top_candidates.pop();
+            }
+
+            if (enable_residual_rerank && !candidates.empty()) {
+                std::vector<size_t> residual_ids(candidates.size(), 0);
+                std::vector<const void *> residual_points(candidates.size(), nullptr);
+                std::vector<dist_t> long_distances(candidates.size(), 0);
+                std::vector<DistanceInterval> residual_intervals(candidates.size());
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    residual_ids[i] = candidates[i].second;
+                    residual_points[i] = getDataByInternalId(candidates[i].second);
+                    long_distances[i] = candidates[i].first;
+                }
+                space_->batch_compute_residual_distance_intervals_by_id(
+                    query_context,
+                    residual_ids.data(),
+                    residual_points.data(),
+                    long_distances.data(),
+                    candidates.size(),
+                    residual_intervals.data());
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    candidates[i].first = residual_intervals[i].estimate;
+                }
+            }
+
+            std::sort(candidates.begin(), candidates.end());
+            for (size_t i = 0; i < k && i < candidates.size(); ++i) {
+                result.emplace(candidates[i].first, getExternalLabel(candidates[i].second));
+            }
+            if (query_metrics) {
+                const auto rerank_end = std::chrono::steady_clock::now();
+                query_metrics->rerank_us = std::chrono::duration_cast<
+                    std::chrono::duration<double, std::micro>>(rerank_end - rerank_start).count();
+            }
+        } catch (...) {
+            space_->release_query(query_context);
+            throw;
+        }
+        if (query_metrics) {
+            query_metrics->active_centroids = space_->query_active_centroids(query_context);
+            query_metrics->total_query_us = std::chrono::duration_cast<
+                std::chrono::duration<double, std::micro>>(
+                    std::chrono::steady_clock::now() - total_start).count();
+        }
+        space_->release_query(query_context);
+        return result;
+    }
+
+    std::priority_queue<std::pair<dist_t, labeltype >>
+    searchKnnNested4x4Rerank(
+        const void *query_data,
+        size_t k,
+        size_t rerank_candidates,
+        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::priority_queue<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0 || k == 0) return result;
+
+        rerank_candidates = std::max(k, rerank_candidates);
+
+        const void *query_context = space_->prepare_query(query_data);
+        tableint currObj = enterpoint_node_;
+        dist_t curdist = space_->query_distance(query_context, getDataByInternalId(enterpoint_node_));
+
+        try {
+            for (int level = maxlevel_; level > 0; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data = (unsigned int *) get_linklist(currObj, level);
+                    int size = getListCount(data);
+                    metric_hops++;
+                    metric_distance_computations += size;
+
+                    tableint *datal = (tableint *) (data + 1);
+                    for (int i = 0; i < size; i++) {
+                        tableint cand = datal[i];
+                        if (cand < 0 || cand > max_elements_) {
+                            throw std::runtime_error("cand error");
+                        }
+                        char *cand_data = getDataByInternalId(cand);
+                        dist_t d = space_->query_distance(query_context, cand_data);
+                        if (d < curdist) {
+                            curdist = d;
+                            currObj = cand;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            std::priority_queue<
+                std::pair<dist_t, tableint>,
+                std::vector<std::pair<dist_t, tableint>>,
+                CompareByFirst> top_candidates;
+            const bool bare_bone_search = !num_deleted_ && !isIdAllowed;
+            if (bare_bone_search) {
+                top_candidates = searchBaseLayerST<true>(
+                    currObj, query_context, ef_, isIdAllowed);
+            } else {
+                top_candidates = searchBaseLayerST<false>(
+                    currObj, query_context, ef_, isIdAllowed);
+            }
+
+            std::vector<std::pair<dist_t, tableint>> candidates;
+            candidates.reserve(top_candidates.size());
+            while (!top_candidates.empty()) {
+                candidates.push_back(top_candidates.top());
+                top_candidates.pop();
+            }
+
+            if (!candidates.empty()) {
+                std::sort(candidates.begin(), candidates.end());
+                if (candidates.size() > rerank_candidates) {
+                    candidates.resize(rerank_candidates);
+                }
+                std::vector<size_t> internal_ids(candidates.size(), 0);
+                std::vector<const void *> data_points(candidates.size(), nullptr);
+                std::vector<dist_t> high4_distances(candidates.size(), 0);
+                std::vector<dist_t> nested_distances(candidates.size(), 0);
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    internal_ids[i] = candidates[i].second;
+                    data_points[i] = getDataByInternalId(candidates[i].second);
+                    high4_distances[i] = candidates[i].first;
+                }
+                space_->batch_compute_nested4x4_distances_by_internal_id(
+                    query_context,
+                    internal_ids.data(),
+                    data_points.data(),
+                    high4_distances.data(),
+                    candidates.size(),
+                    nested_distances.data());
+
+                for (size_t i = 0; i < candidates.size(); ++i) {
+                    candidates[i].first = nested_distances[i];
+                }
+            }
+
+            std::sort(candidates.begin(), candidates.end());
+            for (size_t i = 0; i < k && i < candidates.size(); ++i) {
+                result.emplace(candidates[i].first, getExternalLabel(candidates[i].second));
+            }
+        } catch (...) {
+            space_->release_query(query_context);
+            throw;
+        }
+        space_->release_query(query_context);
+        return result;
+    }
+
+
+    std::vector<std::pair<dist_t, labeltype >>
+    searchStopConditionClosest(
+        const void *query_data,
+        BaseSearchStopCondition<dist_t>& stop_condition,
+        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::vector<std::pair<dist_t, labeltype >> result;
+        if (cur_element_count == 0) return result;
+
+        const void *query_context = space_->prepare_query(query_data);
+        tableint currObj = enterpoint_node_;
+        dist_t curdist = space_->query_distance(query_context, getDataByInternalId(enterpoint_node_));
+
+        try {
+            for (int level = maxlevel_; level > 0; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data;
+
+                    data = (unsigned int *) get_linklist(currObj, level);
+                    int size = getListCount(data);
+                    metric_hops++;
+                    metric_distance_computations+=size;
+
+                    tableint *datal = (tableint *) (data + 1);
+                    for (int i = 0; i < size; i++) {
+                        tableint cand = datal[i];
+                        if (cand < 0 || cand > max_elements_)
+                            throw std::runtime_error("cand error");
+                        dist_t d = space_->query_distance(query_context, getDataByInternalId(cand));
+
+                        if (d < curdist) {
+                            curdist = d;
+                            currObj = cand;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            top_candidates = searchBaseLayerST<false>(currObj, query_context, 0, isIdAllowed, &stop_condition);
+
+            size_t sz = top_candidates.size();
+            result.resize(sz);
+            while (!top_candidates.empty()) {
+                result[--sz] = top_candidates.top();
+                top_candidates.pop();
+            }
+
+            stop_condition.filter_results(result);
+        } catch (...) {
+            space_->release_query(query_context);
+            throw;
+        }
+        space_->release_query(query_context);
+
+        return result;
+    }
+
+
+    void checkIntegrity() {
+        int connections_checked = 0;
+        std::vector <int > inbound_connections_num(cur_element_count, 0);
+        for (int i = 0; i < cur_element_count; i++) {
+            for (int l = 0; l <= element_levels_[i]; l++) {
+                linklistsizeint *ll_cur = get_linklist_at_level(i, l);
+                int size = getListCount(ll_cur);
+                tableint *data = (tableint *) (ll_cur + 1);
+                std::unordered_set<tableint> s;
+                for (int j = 0; j < size; j++) {
+                    assert(data[j] < cur_element_count);
+                    assert(data[j] != i);
+                    inbound_connections_num[data[j]]++;
+                    s.insert(data[j]);
+                    connections_checked++;
+                }
+                assert(s.size() == size);
+            }
+        }
+        if (cur_element_count > 1) {
+            int min1 = inbound_connections_num[0], max1 = inbound_connections_num[0];
+            for (int i=0; i < cur_element_count; i++) {
+                assert(inbound_connections_num[i] > 0);
+                min1 = std::min(inbound_connections_num[i], min1);
+                max1 = std::max(inbound_connections_num[i], max1);
+            }
+            std::cout << "Min inbound: " << min1 << ", Max inbound:" << max1 << "\n";
+        }
+        std::cout << "integrity ok, checked " << connections_checked << " connections\n";
+    }
+};
+}  // namespace hnswlib

@@ -111,8 +111,7 @@ def main() -> int:
         "--centroid-count",
         type=int,
         default=1,
-        help="ExRaBitQ centroid count K (unified default K=1; K>1 reserved "
-        "for future multi-centroid symmetric Vamana work)",
+        help="ExRaBitQ centroid count K (default 1; K in 1..256, 1-byte id)",
     )
     ap.add_argument(
         "--centroid-train-samples",
@@ -133,11 +132,10 @@ def main() -> int:
     for degree in degrees:
         if degree not in (32, 64):
             ap.error("--M values must be 32 or 64")
-    if args.centroid_count != 1:
+    if not (1 <= args.centroid_count <= 256):
         raise SystemExit(
-            "K>1 ExRaBitQ is not enabled for the unified Ours pipeline; "
-            "the formal configuration is K=1 (02/03 symmetric Vamana and "
-            "01 quantizer comparison share the same K)."
+            "ExRaBitQ centroid count K must be in 1..256 "
+            "(the 1-byte centroid-id layout caps K at 256)."
         )
 
     _, _, test_q, test_gt = prepare_query_splits(
@@ -155,6 +153,12 @@ def main() -> int:
             "--dataset", args.dataset,
             "--methods", "Ours",
             "--max-degree", str(degree),
+            "--centroid-count", str(args.centroid_count),
+            "--centroid-train-samples", str(args.centroid_train_samples),
+            # 03 end-to-end keeps the full refine capability; 02 fair runs use
+            # the runner default refine_passes=0.
+            "--refine-passes", "2",
+            "--out-root", str(args.out_root),
             "--repeats", str(args.repeats),
             "--threads", str(args.threads),
             "--query-path", str(test_q),

@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Full three-suite reproduction: 01 quantizer fair -> 02 payload fair ->
+# 03 system fair, per dataset (agnews -> gist -> dbpedia).
+# All outputs go to ${OUT_ROOT}/round2/.
+#
+# Usage: OUT_ROOT=results PYTHON=python3 bash scripts/run_master_round2.sh
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${ROOT}" || exit 1
+
+PY="${PYTHON:-python3}"
+BIN01="${BIN01:-${ROOT}/build/01_quantizer_fair/faiss_quantizer_smoke}"
+BIN01_CAND="${BIN01_CAND:-${ROOT}/build/01_quantizer_fair/faiss_hard_negative_candidates}"
+BIN02="${BIN02:-${ROOT}/experiments/02_diskann_fair/target/release/run_diskann_fair}"
+OUT="${OUT_ROOT:-results}/round2"
+LOG_DIR="${ROOT}/logs"
+STATUS_LOG="${LOG_DIR}/round2.status"
+RERANK="10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,40,50,60,70,80,90,100,140,180,220,260,300,340,380,420,460,1000"
+
+log() { echo "[r2] $(date '+%F %T') $*" | tee -a "${STATUS_LOG}"; }
+mkdir -p "${LOG_DIR}" "${OUT}"
+echo $$ > "${LOG_DIR}/round2.pid"
+
+run_01() {
+  local ds="$1"
+  log "== 01 ${ds}: PQ/SQ/Ours_K1 =="
+  # shellcheck source=/dev/null
+  source experiments/01_quantizer_fair/configs/formal_faiss_4bit.env
+  local workdir="work/01_quantizer_fair/${ds}"
+  mkdir -p "${workdir}"
+  if [[ "${REBUILD_CANDIDATES:-0}" != "1" \
+        && -f "${workdir}/fixed_candidates_k${CANDIDATE_SIZE}.bin" \
+        && -f "${workdir}/fixed_candidates_k${CANDIDATE_SIZE}.meta.json" ]]; then
+    echo "${ds}: reuse ${workdir}/fixed_candidates_k${CANDIDATE_SIZE}.bin"
+  else
+    "${BIN01_CAND}" \
+      --dataset "${ds}" --data-root data --out-root "${OUT}" \
+      --candidate-root work --candidate-size "${CANDIDATE_SIZE}" \
+      --search-k "${HARD_NEGATIVE_SEARCH_K}" --hnsw-M "${HARD_NEGATIVE_HNSW_M}" \
+      --efConstruction "${HARD_NEGATIVE_EF_CONSTRUCTION}" \
+      --efSearch "${HARD_NEGATIVE_EF_SEARCH}" \
+      --seed "${SEED}" --force \
+      > "${LOG_DIR}/round2_01_${ds}_candidates.log" 2>&1 \
+      || log "01 ${ds} candidates FAILED"
+  fi
+  "${BIN01}" \
+    --dataset "${ds}" --data-root data --out-root "${OUT}" \
+    --candidate-root work --candidate-size "${CANDIDATE_SIZE}" \
+    --max-train "${MAX_TRAIN}" --max-queries "${MAX_QUERIES}" \
+    --methods PQ,SQ,Ours_RaBitQ_K1 --rerank-candidates "${RERANK}" \
+    --repeat-id "${REPEAT_ID}" --seed "${SEED}" --overwrite-summary \
+    > "${LOG_DIR}/round2_01_${ds}_pqsqours.log" 2>&1 \
+    || log "01 ${ds} PQ/SQ/Ours FAILED"
+  log "== 01 ${ds}: SAQ =="
+  DATASETS="${ds}" RERANK_CANDIDATES="${RERANK}" OUT_ROOT="${OUT}" WORK_ROOT="work" \
+    bash scripts/run_saq_fixed_candidates_fair.sh \
+    > "${LOG_DIR}/round2_01_${ds}_saq.log" 2>&1 \
+    || log "01 ${ds} SAQ FAILED"
+  # Pad short SAQ rows to the current summary schema (inner-product columns).
+  "${PY}" - "${OUT}/${ds}/csv/01_quantizer_fair/faiss_quantizer_summary.csv" <<'EOF'
+import csv
+import sys
+from pathlib import Path
+
+p = Path(sys.argv[1])
+if not p.exists():
+    sys.exit(0)
+rows = list(csv.reader(p.open()))
+if not rows:
+    sys.exit(0)
+width = len(rows[0])
+changed = 0
+out = []
+for row in rows:
+    if len(row) < width:
+        row = row + [""] * (width - len(row))
+        changed += 1
+    out.append(row)
+if changed:
+    with p.open("w", newline="") as f:
+        csv.writer(f).writerows(out)
+print(f"padded {changed} short rows in {p}")
+EOF
+  log "== 01 ${ds}: export paper table =="
+  "${PY}" scripts/export_paper_quantizer_table.py \
+    --datasets "${ds}" --out-root "${OUT}" --work-root work \
+    >> "${LOG_DIR}/round2_01_${ds}_pqsqours.log" 2>&1 \
+    || log "01 ${ds} export FAILED"
+  log "01 ${ds} done"
+}
+
+run_02() {
+  local ds="$1" valq="$2"
+  log "== 02 ${ds}: per-method quantized graphs R=64/L=400 (PQ,SQ,SAQ,Ours) =="
+  local split_root="results/${ds}/csv/03_system_fair/_query_splits"
+  mkdir -p "${split_root}"
+  "${PY}" - "${ds}" "${valq}" <<'EOF'
+import sys
+from pathlib import Path
+from Ours.experiments.run_ours import prepare_query_splits
+
+ds, valq = sys.argv[1], int(sys.argv[2])
+prepare_query_splits(ds, Path("data"), Path("results"), valq)
+print(f"query splits ready: {ds} val={valq}")
+EOF
+  "${BIN02}" \
+    --dataset "${ds}" --methods PQ,SQ,SAQ,Ours --max-degree 64 --build-beam 400 \
+    --out-root "${OUT}" --repeats 1 --threads 64 --refine-passes 0 \
+    --query-path "${split_root}/test_query.fvecs" \
+    --gt-path "${split_root}/test_gt.ivecs" \
+    > "${LOG_DIR}/round2_02_${ds}.log" 2>&1 \
+    || log "02 ${ds} FAILED"
+  log "02 ${ds} done"
+}
+
+run_03() {
+  local ds="$1" valq="$2"
+  log "== 03 ${ds}: system fair (Ours,SymphonyQG,OG-LVQ,Glass-NSG) =="
+  "${PY}" -u experiments/03_system_fair/run_system_fair.py \
+    --dataset "${ds}" --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG \
+    --validate --run --repeats 1 --threads 64 --val-queries "${valq}" --out-root "${OUT}" \
+    > "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
+    || log "03 ${ds} FAILED"
+  "${PY}" scripts/plot_system_fair.py --dataset "${ds}" --out-root "${OUT}" \
+    >> "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
+    || log "03 ${ds} plots FAILED"
+  "${PY}" scripts/consolidate_system_logs.py --dataset "${ds}" --out-root "${OUT}" \
+    >> "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
+    || log "03 ${ds} consolidate FAILED"
+  "${PY}" scripts/generate_experiment_audit.py --dataset "${ds}" --out-root "${OUT}" \
+    >> "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
+    || log "03 ${ds} audit FAILED"
+  log "03 ${ds} done"
+}
+
+log "started round2 (out-root=${OUT})"
+for pair in "agnews 200" "gist 200" "dbpedia 1000"; do
+  set -- ${pair}
+  DS="$1"
+  VALQ="$2"
+  log "######## dataset ${DS} ########"
+  run_01 "${DS}"
+  run_02 "${DS}" "${VALQ}"
+  run_03 "${DS}" "${VALQ}"
+done
+log "ALL DONE (round2)"

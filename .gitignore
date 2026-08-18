@@ -4,7 +4,6 @@ __pycache__/
 *.egg-info/
 .eggs/
 dist/
-build/
 .venv/
 .pytest_cache/
 .mypy_cache/
@@ -12,15 +11,20 @@ build/
 .coverage
 htmlcov/
 
+# Rust / C++
+target/
+**/target/
+build/
+*.o
+*.a
+
 # Editors / OS
 .vscode/
 .idea/
 .DS_Store
 
-# Generated logs (keep the archived method logs under Ours/logs)
+# Logs (all generated logs)
 *.log
-!Ours/logs/
-!Ours/logs/**/*.log
 
 # Generated data / result artifacts
 *.fvecs
@@ -39,3 +43,12 @@ htmlcov/
 
 data/
 results/
+work/01_quantizer_fair/
+
+# Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
+baselines/builds/
+baselines/faiss/
+
+# DiskANN3 vendored tree: keep generated artifacts out of git
+baselines/diskann/target/
+baselines/diskann/test_data/
