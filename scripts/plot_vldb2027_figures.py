@@ -646,15 +646,14 @@ def fig06_endtoend_recall_index() -> None:
 def fig09_memory_summary() -> None:
     fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.4))
     for row, (label, ds) in enumerate(DATASETS):
-        # 02: payload index size on the shared Vamana graph (R=32 rows only).
+        # 02: per-method 4-bit payload index size under the current protocol
+        # (each method builds its own graph with R=M=64 / L=400; see fig04).
         raw = median_aggregate(
             read_csv(RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv")
         )
         idx: dict[str, float] = {}
         for r in raw:
             if r.get("status") != "done":
-                continue
-            if r["method"] == "Ours" and r.get("max_degree", "") != "32":
                 continue
             if r["method"] not in idx:
                 idx[r["method"]] = fnum(r, "index_size_mb")
@@ -672,7 +671,7 @@ def fig09_memory_summary() -> None:
         ax.tick_params(axis="y", labelsize=6.5)
         ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
         if row == 0:
-            ax.set_ylabel("02 payload index size (R=32)", fontsize=7)
+            ax.set_ylabel("02 payload index size (R=64/M=64)", fontsize=7)
         ax.set_title(label, fontsize=7.5, pad=4)
 
         # 03: end-to-end system peak RSS.
