@@ -912,6 +912,39 @@ class RaBitQSpace : public SpaceInterface<float> {
 
     void hadamard(std::vector<float> &values) const {
         for (size_t step = 1; step < code_dim_; step <<= 1U) {
+            if (step >= 16) {
+#if defined(__AVX512F__)
+                const size_t vec = 16;
+                for (size_t block = 0; block < code_dim_; block += (step << 1U)) {
+                    size_t i = 0;
+                    for (; i + vec <= step; i += vec) {
+                        const __m512 a = _mm512_loadu_ps(values.data() + block + i);
+                        const __m512 b =
+                            _mm512_loadu_ps(values.data() + block + step + i);
+                        _mm512_storeu_ps(
+                            values.data() + block + i, _mm512_add_ps(a, b));
+                        _mm512_storeu_ps(
+                            values.data() + block + step + i, _mm512_sub_ps(a, b));
+                    }
+                    for (; i < step; ++i) {
+                        const float a = values[block + i];
+                        const float b = values[block + step + i];
+                        values[block + i] = a + b;
+                        values[block + step + i] = a - b;
+                    }
+                }
+#else
+                for (size_t block = 0; block < code_dim_; block += (step << 1U)) {
+                    for (size_t i = 0; i < step; ++i) {
+                        const float a = values[block + i];
+                        const float b = values[block + step + i];
+                        values[block + i] = a + b;
+                        values[block + step + i] = a - b;
+                    }
+                }
+#endif
+                continue;
+            }
             for (size_t block = 0; block < code_dim_; block += (step << 1U)) {
                 for (size_t i = 0; i < step; ++i) {
                     const float a = values[block + i];
@@ -3694,6 +3727,56 @@ class RaBitQSpace : public SpaceInterface<float> {
         const float short_ip = selected_sum - query.half_sum_residual;
         return finish_paper_prune_estimate_sidecar(short_ip, factors, query, epsilon0);
     }
+
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+    // 16-candidate lane-parallel paper estimate. Each candidate accumulates
+    // over chunks in the exact same order as the single-candidate AVX-512
+    // path (chunk ascending, 16 masked lanes added per chunk, one final
+    // horizontal reduce), so short_ip / lower_bound are bit-identical.
+    void compute_paper_prune_estimate_sidecar_batch(
+        const void *prepared_query,
+        const uint8_t *const *msb_codes,
+        const PaperPruneFactors<float> *factors,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        __m512 acc[16];
+        for (size_t c = 0; c < 16; ++c) {
+            acc[c] = _mm512_setzero_ps();
+        }
+        for (size_t i = 0; i < code_dim_; i += 16U) {
+            const __m512 qvec =
+                _mm512_loadu_ps(query.rotated_residual.data() + i);
+            for (size_t c = 0; c < 16; ++c) {
+                uint16_t bits = 0;
+                std::memcpy(&bits, msb_codes[c] + (i >> 3U), sizeof(bits));
+                const __m512 sel =
+                    _mm512_maskz_mov_ps(static_cast<__mmask16>(bits), qvec);
+                acc[c] = _mm512_add_ps(acc[c], sel);
+            }
+        }
+        for (size_t c = 0; c < 16; ++c) {
+            const float selected_sum = _mm512_reduce_add_ps(acc[c]);
+            const float short_ip = selected_sum - query.half_sum_residual;
+            out[c] = finish_paper_prune_estimate_sidecar(
+                short_ip, factors[c], query, epsilon0);
+        }
+    }
+#else
+    void compute_paper_prune_estimate_sidecar_batch(
+        const void *prepared_query,
+        const uint8_t *const *msb_codes,
+        const PaperPruneFactors<float> *factors,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        for (size_t c = 0; c < 16; ++c) {
+            out[c] = compute_paper_prune_estimate_sidecar(
+                prepared_query, msb_codes[c], factors[c], epsilon0);
+        }
+    }
+#endif
 
     // Tail of the sidecar paper estimate: turns a computed short-code inner
     // product into the prune lower bound using the pre-extracted factors.

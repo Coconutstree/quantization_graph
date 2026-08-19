@@ -261,11 +261,11 @@ pub fn write_raw_log(
         opt_f64(payload.peak_rss_mb)
     )
     .map_err(to_string)?;
-    writeln!(file, "search_list_size recall latency_mean_us qps latency_p95_us visited_nodes distance_computations mean_relative_error p95_relative_error mean_absolute_error top10_overlap pairwise_flip_rate_top10 payload_bytes_read avg_bits_read refine_calls paper_checked paper_would_prune paper_msb_kernel_calls paper_remaining_kernel_calls ffi_calls_per_query status").map_err(to_string)?;
+    writeln!(file, "search_list_size recall latency_mean_us qps latency_p95_us prepare_us traverse_us rerank_us neighbor_fetch_us visited_mark_us paper_batch_us flush_us visited_nodes distance_computations mean_relative_error p95_relative_error mean_absolute_error top10_overlap pairwise_flip_rate_top10 payload_bytes_read avg_bits_read refine_calls paper_checked paper_would_prune paper_msb_kernel_calls paper_remaining_kernel_calls ffi_calls_per_query status").map_err(to_string)?;
     for result in &payload.search_results {
         writeln!(
             file,
-            "{} {:.6} {:.6} us search_list_size={} efSearch={} search_beam_width={} total_us_per_query={:.6} qps={:.6} p95_us={:.6} visited_nodes={} distance_computations={} mean_relative_error={} p95_relative_error={} mean_absolute_error={} top10_overlap={} pairwise_flip_rate_top10={} payload_bytes_read=NaN avg_bits_read=NaN refine_calls=0 paper_checked={} paper_would_prune={} paper_msb_kernel_calls={} paper_remaining_kernel_calls={} ffi_calls_per_query={} status={}",
+            "{} {:.6} {:.6} us search_list_size={} efSearch={} search_beam_width={} total_us_per_query={:.6} qps={:.6} p95_us={:.6} prepare_us={} traverse_us={} rerank_us={} neighbor_fetch_us={} visited_mark_us={} paper_batch_us={} flush_us={} visited_nodes={} distance_computations={} mean_relative_error={} p95_relative_error={} mean_absolute_error={} top10_overlap={} pairwise_flip_rate_top10={} payload_bytes_read=NaN avg_bits_read=NaN refine_calls=0 paper_checked={} paper_would_prune={} paper_msb_kernel_calls={} paper_remaining_kernel_calls={} ffi_calls_per_query={} status={}",
             result.search_list_size,
             result.recall,
             result.latency_mean_us,
@@ -275,6 +275,13 @@ pub fn write_raw_log(
             result.latency_mean_us,
             result.qps,
             result.latency_p95_us,
+            fmt_metric(result.prepare_us),
+            fmt_metric(result.traverse_us),
+            fmt_metric(result.rerank_us),
+            fmt_metric(result.neighbor_fetch_us),
+            fmt_metric(result.visited_mark_us),
+            fmt_metric(result.paper_batch_us),
+            fmt_metric(result.flush_us),
             fmt_metric(result.visited_nodes),
             fmt_metric(result.distance_computations),
             fmt_metric(result.mean_relative_error),
@@ -304,7 +311,7 @@ pub fn append_raw_csv(
     }
 
     let needs_header = !paths.raw_csv.exists();
-    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,recall,qps,latency_mean_us,latency_p95_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
+    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,recall,qps,latency_mean_us,latency_p95_us,prepare_us,traverse_us,rerank_us,neighbor_fetch_us,visited_mark_us,paper_batch_us,flush_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
     let header_matches = if needs_header {
         true
     } else {
@@ -359,6 +366,13 @@ pub fn append_raw_csv(
             format!("{:.6}", result.qps),
             format!("{:.6}", result.latency_mean_us),
             format!("{:.6}", result.latency_p95_us),
+            fmt_metric(result.prepare_us),
+            fmt_metric(result.traverse_us),
+            fmt_metric(result.rerank_us),
+            fmt_metric(result.neighbor_fetch_us),
+            fmt_metric(result.visited_mark_us),
+            fmt_metric(result.paper_batch_us),
+            fmt_metric(result.flush_us),
             fmt_metric(result.visited_nodes),
             fmt_metric(result.distance_computations),
             fmt_metric(result.mean_relative_error),

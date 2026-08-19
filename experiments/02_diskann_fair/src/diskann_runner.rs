@@ -347,6 +347,13 @@ pub fn run_ours_exrabitq4(
                 stats.distance_computations += result.stats.distance_computations;
                 stats.hops += result.stats.hops;
                 stats.prefetch_issued += result.stats.prefetch_issued;
+                stats.prepare_ns += result.stats.prepare_ns;
+                stats.traverse_ns += result.stats.traverse_ns;
+                stats.rerank_ns += result.stats.rerank_ns;
+                stats.neighbor_fetch_ns += result.stats.neighbor_fetch_ns;
+                stats.visited_mark_ns += result.stats.visited_mark_ns;
+                stats.paper_batch_ns += result.stats.paper_batch_ns;
+                stats.flush_ns += result.stats.flush_ns;
                 stats.paper_checked += result.stats.paper_checked;
                 stats.paper_would_prune += result.stats.paper_would_prune;
                 stats.paper_not_pruned += result.stats.paper_not_pruned;
@@ -388,6 +395,13 @@ pub fn run_ours_exrabitq4(
             qps,
             latency_mean_us,
             latency_p95_us,
+            prepare_us: stats.prepare_ns as f64 / query_count / 1000.0,
+            traverse_us: stats.traverse_ns as f64 / query_count / 1000.0,
+            rerank_us: stats.rerank_ns as f64 / query_count / 1000.0,
+            neighbor_fetch_us: stats.neighbor_fetch_ns as f64 / query_count / 1000.0,
+            visited_mark_us: stats.visited_mark_ns as f64 / query_count / 1000.0,
+            paper_batch_us: stats.paper_batch_ns as f64 / query_count / 1000.0,
+            flush_us: stats.flush_ns as f64 / query_count / 1000.0,
             visited_nodes: stats.visited_nodes as f64 / query_count,
             distance_computations: stats.distance_computations as f64 / query_count,
             paper_checked: stats.paper_checked as f64 / query_count,
@@ -406,10 +420,14 @@ pub fn run_ours_exrabitq4(
             progress_log,
             "search",
             &format!(
-                "search_list_size={search_list_size} recall={recall:.6} qps={qps:.3} paper_pruned={} paper_checked={} remaining_kernels={}",
+                "search_list_size={search_list_size} recall={recall:.6} qps={qps:.3} paper_pruned={} paper_checked={} remaining_kernels={} traverse_breakdown_us=neighbor={:.3} visited_mark={:.3} paper_batch={:.3} flush={:.3}",
                 stats.paper_full_saved,
                 stats.paper_checked,
-                stats.paper_remaining_kernel_calls
+                stats.paper_remaining_kernel_calls,
+                stats.neighbor_fetch_ns as f64 / query_count / 1000.0,
+                stats.visited_mark_ns as f64 / query_count / 1000.0,
+                stats.paper_batch_ns as f64 / query_count / 1000.0,
+                stats.flush_ns as f64 / query_count / 1000.0,
             ),
         )?;
     }
@@ -761,6 +779,13 @@ where
             qps,
             latency_mean_us,
             latency_p95_us,
+            prepare_us: f64::NAN,
+            traverse_us: f64::NAN,
+            rerank_us: f64::NAN,
+            neighbor_fetch_us: f64::NAN,
+            visited_mark_us: f64::NAN,
+            paper_batch_us: f64::NAN,
+            flush_us: f64::NAN,
             visited_nodes: f64::NAN,
             distance_computations: f64::NAN,
             paper_checked: f64::NAN,
@@ -1020,6 +1045,13 @@ where
             qps,
             latency_mean_us,
             latency_p95_us,
+            prepare_us: f64::NAN,
+            traverse_us: f64::NAN,
+            rerank_us: f64::NAN,
+            neighbor_fetch_us: f64::NAN,
+            visited_mark_us: f64::NAN,
+            paper_batch_us: f64::NAN,
+            flush_us: f64::NAN,
             visited_nodes: f64::NAN,
             distance_computations: f64::NAN,
             paper_checked: f64::NAN,
@@ -1384,6 +1416,13 @@ pub fn run_fp32_graph(
             qps,
             latency_mean_us,
             latency_p95_us,
+            prepare_us: f64::NAN,
+            traverse_us: f64::NAN,
+            rerank_us: f64::NAN,
+            neighbor_fetch_us: f64::NAN,
+            visited_mark_us: f64::NAN,
+            paper_batch_us: f64::NAN,
+            flush_us: f64::NAN,
             visited_nodes: f64::NAN,
             distance_computations: f64::NAN,
             paper_checked: f64::NAN,

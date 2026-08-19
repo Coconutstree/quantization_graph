@@ -1,6 +1,7 @@
 use std::cell::UnsafeCell;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use diskann::error::IntoANNResult;
 use diskann::graph::glue::{
@@ -810,6 +811,13 @@ pub struct OursPaperSearchStats {
     pub distance_computations: u64,
     pub hops: u64,
     pub prefetch_issued: u64,
+    pub prepare_ns: u64,
+    pub traverse_ns: u64,
+    pub rerank_ns: u64,
+    pub neighbor_fetch_ns: u64,
+    pub visited_mark_ns: u64,
+    pub paper_batch_ns: u64,
+    pub flush_ns: u64,
     pub paper_checked: u64,
     pub paper_would_prune: u64,
     pub paper_not_pruned: u64,
@@ -1035,9 +1043,11 @@ where
 
         for node in frontier.iter().copied() {
             fresh.clear();
+            let t_fetch = Instant::now();
             provider
                 .neighbors()
                 .get_neighbors_sync(node.into_usize(), &mut id_buffer)?;
+            stats.neighbor_fetch_ns += t_fetch.elapsed().as_nanos() as u64;
             for neighbor in id_buffer.iter().copied() {
                 let neighbor_usize = neighbor.into_usize();
                 if neighbor_usize >= total_points {
@@ -1045,8 +1055,12 @@ where
                         "Ours DiskANN graph contains out-of-range neighbor {neighbor}"
                     )));
                 }
+                let t_mark = Instant::now();
                 if visited_scratch.try_mark(neighbor_usize) {
+                    stats.visited_mark_ns += t_mark.elapsed().as_nanos() as u64;
                     fresh.push(neighbor);
+                } else {
+                    stats.visited_mark_ns += t_mark.elapsed().as_nanos() as u64;
                 }
             }
             if fresh.is_empty() {
@@ -1225,8 +1239,10 @@ where
         });
     }
 
-    let computer = QueryComputer::new(provider.aux_vectors.space.clone(), query)?;
     let mut stats = OursPaperSearchStats::default();
+    let t_prepare = Instant::now();
+    let computer = QueryComputer::new(provider.aux_vectors.space.clone(), query)?;
+    stats.prepare_ns = t_prepare.elapsed().as_nanos() as u64;
     stats.ffi_calls += 1; // rabitq_prepare_query
     visited_scratch.reset_for(total_points);
     let mut pool = Vec::with_capacity(l_value + provider.num_start_points() + 1);
@@ -1261,6 +1277,7 @@ where
     let mut batch_short_ips: Vec<f32> = Vec::with_capacity(DIST_BATCH_SIZE);
     let mut batch_distances: Vec<f32> = Vec::with_capacity(DIST_BATCH_SIZE);
 
+    let t_traverse = Instant::now();
     let mut stall_hops = 0usize;
     loop {
         let back_before = pool.last().map(|candidate| candidate.distance).unwrap_or(0.0f32);
@@ -1301,6 +1318,7 @@ where
 
             paper_estimates.clear();
             paper_estimates.resize(fresh.len(), RabitqPaperEstimate::default());
+            let t_paper = Instant::now();
             computer.paper_estimate_batch_sidecar(
                 &fresh,
                 provider.aux_vectors.msb_ptr(),
@@ -1313,6 +1331,7 @@ where
                 paper_epsilon0,
                 &mut paper_estimates,
             )?;
+            stats.paper_batch_ns += t_paper.elapsed().as_nanos() as u64;
             stats.paper_msb_kernel_calls += fresh.len() as u64;
             stats.ffi_calls += 1;
 
@@ -1370,6 +1389,7 @@ where
                     )?;
                 }
             }
+            let t_flush = Instant::now();
             flush_distance_batch(
                 &computer,
                 provider,
@@ -1383,6 +1403,7 @@ where
                 &mut batch_distances,
                 &mut stats,
             )?;
+            stats.flush_ns += t_flush.elapsed().as_nanos() as u64;
         }
         stats.hops += frontier.len() as u64;
         if kth_stop && pool.len() >= k {
@@ -1409,7 +1430,9 @@ where
             }
         }
     }
+    stats.traverse_ns = t_traverse.elapsed().as_nanos() as u64;
 
+    let t_rerank = Instant::now();
     let rerank_count = pool
         .iter()
         .filter(|candidate| candidate.id.into_usize() < base_points)
@@ -1462,6 +1485,7 @@ where
         ids.push(id);
         distances.push(distance);
     }
+    stats.rerank_ns = t_rerank.elapsed().as_nanos() as u64;
     stats.ffi_calls += 1; // rabitq_release_query
 
     Ok(OursPaperSearchResult {

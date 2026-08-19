@@ -502,11 +502,55 @@ bool rabitq_paper_estimate_batch_sidecar(
     hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
         static_cast<const hnswlib::RaBitQSpace *>(space));
     const char *factor_bytes = static_cast<const char *>(factors_base);
-    for (std::size_t i = 0; i < count; ++i) {
+    // 16-candidate SIMD batch path; tail falls back to the single-candidate
+    // path below. Staging the MSB codes into a contiguous buffer turns the
+    // per-chunk reads into L1 hits and keeps the prefetch depth at 8.
+    const std::size_t msb_bytes = typed->paper_msb_code_bytes();
+    std::vector<std::uint8_t> msb_stage(16 * msb_bytes);
+    std::vector<hnswlib::PaperPruneFactors<float>> factor_stage(16);
+    std::size_t i = 0;
+    for (; i + 16 <= count; i += 16) {
+        const std::uint8_t *msb_ptrs[16];
+        for (std::size_t k = 0; k < 16; ++k) {
+            const std::size_t id = ids[i + k];
+            const std::size_t pf = i + k + 8;
+            if (pf < count) {
+                const std::size_t next_id = ids[pf];
+                __builtin_prefetch(msb_base + next_id * msb_stride, 0, 3);
+            }
+            std::memcpy(msb_stage.data() + k * msb_bytes,
+                        msb_base + id * msb_stride, msb_bytes);
+            factor_stage[k] =
+                *reinterpret_cast<const hnswlib::PaperPruneFactors<float> *>(
+                    factor_bytes + id * factors_stride);
+            msb_ptrs[k] = msb_stage.data() + k * msb_bytes;
+        }
+        try {
+            hnswlib::PaperPruneEstimate<float> estimates[16];
+            typed->compute_paper_prune_estimate_sidecar_batch(
+                prepared, msb_ptrs, factor_stage.data(), epsilon0, estimates);
+            for (std::size_t k = 0; k < 16; ++k) {
+                out[i + k] = RabitqPaperEstimate{
+                    estimates[k].lower_bound,
+                    estimates[k].short_ip,
+                    estimates[k].alpha,
+                    estimates[k].ip_hat,
+                    estimates[k].error_bound,
+                    estimates[k].valid ? static_cast<std::uint8_t>(1)
+                                       : static_cast<std::uint8_t>(0),
+                };
+            }
+        } catch (...) {
+            for (std::size_t k = 0; k < 16; ++k) {
+                out[i + k] = RabitqPaperEstimate{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+            }
+        }
+    }
+    for (; i < count; ++i) {
         try {
             const std::size_t id = ids[i];
-            if (i + 4 < count) {
-                const std::size_t next_id = ids[i + 4];
+            if (i + 8 < count) {
+                const std::size_t next_id = ids[i + 8];
                 __builtin_prefetch(msb_base + next_id * msb_stride, 0, 3);
             }
             const hnswlib::PaperPruneEstimate<float> estimate =
