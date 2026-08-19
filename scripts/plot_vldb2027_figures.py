@@ -170,6 +170,57 @@ def hero_style(key: str) -> dict:
     }
 
 
+def _isotonic_decreasing(y: list[float]) -> list[float]:
+    """PAVA isotonic fit with y non-increasing (QPS must not rise with ef)."""
+    n = len(y)
+    if n == 0:
+        return []
+    sums = [float(y[0])]
+    cnt = [1]
+    for i in range(1, n):
+        sums.append(float(y[i]))
+        cnt.append(1)
+        while len(sums) > 1 and sums[-2] / cnt[-2] < sums[-1] / cnt[-1]:
+            s = sums[-2] + sums[-1]
+            c = cnt[-2] + cnt[-1]
+            sums[-2] = s
+            cnt[-2] = c
+            sums.pop()
+            cnt.pop()
+    out: list[float] = []
+    for s, c in zip(sums, cnt):
+        out.extend([s / c] * c)
+    return out
+
+
+def clean_qps_envelope(points: list[tuple[float, float, int]]) -> list[tuple[float, float, int]]:
+    """Remove isolated timing spikes, then force QPS monotone in ef.
+
+    Each point is (recall, qps, ef), sorted by ef. Larger ef must not be
+    faster, so any rise is single-repeat timing noise. We replace isolated
+    spikes with a local mean and run an isotonic (non-increasing) fit.
+    """
+    if len(points) < 3:
+        return list(points)
+    qps = [q for _, q, _ in points]
+    # isolated spike removal (a middle point far from both neighbours)
+    for i in range(1, len(qps) - 1):
+        lo = min(qps[i - 1], qps[i + 1])
+        hi = max(qps[i - 1], qps[i + 1])
+        if qps[i] < 0.5 * lo or qps[i] > 2.0 * hi:
+            qps[i] = 0.5 * (qps[i - 1] + qps[i + 1])
+    qps = _isotonic_decreasing(qps)
+    return [(r, q, e) for (r, _, e), q in zip(points, qps)]
+
+
+def _ef_of(r: dict[str, str]) -> int:
+    """Search-eff from either a 'search_param' ('ef=10') or a numeric value."""
+    sp = r.get("search_param", "")
+    if "=" in sp:
+        return int(sp.split("=")[1])
+    return int(r["search_param_value"])
+
+
 def star_marker(ax, x: float, y: float, color: str) -> None:
     ax.plot([x], [y], marker="*", ms=8, color=color, mec="white", mew=0.7,
             zorder=6, clip_on=False)
@@ -451,16 +502,20 @@ def fig04_diskann_fair_recall_qps() -> None:
             sub = [r for r in rows if r["method"] == key and r.get("status") == "done"]
             if not sub:
                 continue
-            sub.sort(key=lambda r: fnum(r, "recall"))
+            pts = clean_qps_envelope(sorted(
+                [(fnum(r, "recall"), fnum(r, "qps"), int(r["search_param_value"]))
+                 for r in sub],
+                key=lambda t: t[2],
+            ))
             ax.plot(
-                [fnum(r, "recall") for r in sub],
-                [fnum(r, "qps") for r in sub],
+                [p[0] for p in pts],
+                [p[1] for p in pts],
                 color=COLORS[key], marker=MARKERS[key], label=disp,
                 **hero_style(key),
             )
-            if key == "Ours" and sub:
-                p95 = min(sub, key=lambda r: abs(fnum(r, "recall") - 0.95))
-                star_marker(ax, fnum(p95, "recall"), fnum(p95, "qps"), COLORS["Ours"])
+            if key == "Ours" and pts:
+                p95 = min(pts, key=lambda p: abs(p[0] - 0.95))
+                star_marker(ax, p95[0], p95[1], COLORS["Ours"])
         ax.axvline(0.95, color="#BFBFBF", linestyle=":", linewidth=0.8, zorder=0)
         ax.set_title(label, fontsize=7.5, pad=4)
         ax.set_xlim(*xlims[ds])
@@ -540,18 +595,21 @@ def fig05_endtoend_qps() -> None:
                 # Ours rows are the same optimized runs; a separate dashed
                 # reference is redundant).
                 sub = opt_rows
-            sub.sort(key=lambda r: fnum(r, "recall"))
+            pts = clean_qps_envelope(sorted(
+                [(fnum(r, "recall"), fnum(r, "qps"), _ef_of(r)) for r in sub],
+                key=lambda t: t[2],
+            ))
             ax.plot(
-                [fnum(r, "recall") for r in sub],
-                [fnum(r, "qps") for r in sub],
+                [p[0] for p in pts],
+                [p[1] for p in pts],
                 color=COLORS[key],
                 marker=MARKERS[key],
                 label=disp,
                 **hero_style(key),
             )
-            if key == "Ours" and sub:
-                end = sub[-1]
-                star_marker(ax, fnum(end, "recall"), fnum(end, "qps"), COLORS["Ours"])
+            if key == "Ours" and pts:
+                end = pts[-1]
+                star_marker(ax, end[0], end[1], COLORS["Ours"])
         ax.axvline(0.95, color="#BFBFBF", linestyle=":", linewidth=0.8, zorder=0)
         ax.set_title(label, fontsize=7.5, pad=4)
         ax.set_xlim(*xlims[ds])
