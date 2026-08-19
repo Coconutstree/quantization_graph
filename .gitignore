@@ -54,3 +54,22 @@ baselines/faiss/
 # DiskANN3 vendored tree: keep generated artifacts out of git
 baselines/diskann/target/
 baselines/diskann/test_data/
+
+# Local logs / generated state
+logs/
+
+# Third-party baselines fetched or linked by setup scripts
+baselines/saq/
+baselines/deps/
+
+# Generated graph/index artifacts
+*.graph
+*.index
+baselines/symphonyqg/
+
+# Copied ablation inputs for figure generation (not produced by master)
+ablation/
+
+# 600-dpi print TIFFs are regenerated locally by scripts/plot_vldb2027_figures.py
+# (too large for GitHub: fig09 alone is ~325 MB, over the 100 MB file limit)
+paper/figures/*.tiff

@@ -1,0 +1,13 @@
+# Python runtime dependencies for quantization_graph.
+#   pip install -r requirements.txt
+# C++/Rust toolchain and third-party sources (Faiss/SAQ/SymphonyQG binding,
+# datasets) are NOT pip packages; see README "依赖" / scripts/*.sh.
+numpy>=1.24
+h5py>=3.10
+matplotlib>=3.8
+pybind11>=2.13.1
+scipy>=1.10
+tqdm>=4.60
+glass==2.1.0          # Zilliz pyglass (import name: glass; NSG + SQ4U). 若 PyPI 名称冲突，
+#                         从 baselines/pyglass 源码安装（pip install ./baselines/pyglass/python）
+scalable-vs==0.4.0    # Intel SVS official LVQ (import name: svs)
