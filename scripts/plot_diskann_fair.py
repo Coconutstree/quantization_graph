@@ -118,9 +118,9 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    base = Path(args.results_root) / args.dataset
-    csv_dir = base / "csv" / "02_diskann_fair"
-    fig_dir = base / "figures" / "02_diskann_fair"
+    base = Path(args.results_root) / "02_diskann_fair" / args.dataset
+    csv_dir = base / "csv"
+    fig_dir = base / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     raw_path = csv_dir / "diskann_fair_raw.csv"
@@ -143,7 +143,7 @@ def main() -> int:
     # ---- optional 03 system-fair overlay -----------------------------------
     sys_rows: list[dict[str, str]] = []
     if args.include_system_fair:
-        sys_raw = base / "csv" / "03_system_fair" / "system_fair_raw.csv"
+        sys_raw = Path(args.results_root) / "03_system_fair" / args.dataset / "csv" / "system_fair_raw.csv"
         if not sys_raw.exists():
             raise SystemExit(f"missing system-fair raw CSV: {sys_raw}")
         sys_rows = read_raw(sys_raw)

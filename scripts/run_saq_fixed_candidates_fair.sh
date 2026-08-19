@@ -38,7 +38,7 @@ GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 "${CMAKE_BIN}" --build "${SAQ_BUILD_DIR}" --target test_fixed_candidates -j "${BUILD_JOBS}"
 
 for DATASET in ${DATASETS}; do
-  RAW_DIR="${OUT_ROOT}/${DATASET}/raw/01_quantizer_fair/SAQ"
+  RAW_DIR="${OUT_ROOT}/01_quantizer_fair/${DATASET}/logs/SAQ"
   mkdir -p "${RAW_DIR}"
 
   "${SAQ_ROOT}/bin/test_fixed_candidates" \

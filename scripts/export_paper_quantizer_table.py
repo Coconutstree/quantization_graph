@@ -159,9 +159,9 @@ def main() -> int:
     for dataset in args.datasets:
         source = (
             out_root
+            / "01_quantizer_fair"
             / dataset
             / "csv"
-            / "01_quantizer_fair"
             / "faiss_quantizer_summary.csv"
         )
         if not source.exists() or source.stat().st_size == 0:

@@ -58,14 +58,14 @@ from `work/01_quantizer_fair/<dataset>/fixed_candidates_k<CANDIDATE_SIZE>.bin`.
 Compile and run dbpedia:
 
 ```bash
-cd /home/kai3/coco/quantization_graph
+cd <repo>
 DATASETS="dbpedia" scripts/run_saq_fixed_candidates_fair.sh
 ```
 
 Explicit dbpedia command:
 
 ```bash
-cd /home/kai3/coco/quantization_graph
+cd <repo>
 DATASETS="dbpedia" \
 CANDIDATE_SIZE=1000 \
 RERANK_CANDIDATES="10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,40,50,60,70,80,90,100,140,180,220,260,300,340,380,420,460" \

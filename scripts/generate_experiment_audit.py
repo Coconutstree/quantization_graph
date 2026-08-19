@@ -24,11 +24,11 @@ def main() -> int:
     ap.add_argument("--out-root", default="results")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
-    base = Path(args.out_root) / args.dataset
+    base = Path(args.out_root) / args.suite / args.dataset
     manifest = base / "manifests" / "03_system_fair_manifest.csv"
     budget_path = base / "manifests" / "03_system_fair_tuning_budget.json"
-    median_csv = base / "csv" / args.suite / "system_fair_median.csv"
-    interp_csv = base / "csv" / args.suite / "system_fair_interpolated.csv"
+    median_csv = base / "csv" / "system_fair_median.csv"
+    interp_csv = base / "csv" / "system_fair_interpolated.csv"
 
     budget = json.loads(budget_path.read_text()) if budget_path.exists() else {}
     rows = read_csv(manifest) if manifest.exists() else []

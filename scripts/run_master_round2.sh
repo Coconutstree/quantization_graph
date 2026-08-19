@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Full three-suite reproduction: 01 quantizer fair -> 02 payload fair ->
 # 03 system fair, per dataset (agnews -> gist -> dbpedia).
-# All outputs go to ${OUT_ROOT}/round2/.
+# All outputs go to ${OUT_ROOT}/<suite>/<dataset>/ (suite-first, logs/ not raw/).
 #
-# Usage: OUT_ROOT=results PYTHON=python3 bash scripts/run_master_round2.sh
+# Usage (OUT_ROOT / PYTHON / DATASETS / M / L are optional env vars; defaults: M=64, L=400, all datasets):
+#   OUT_ROOT=results PYTHON=python3 bash scripts/run_master_round2.sh
+#   DATASETS=agnews bash scripts/run_master_round2.sh
+#   DATASETS="agnews gist" M=32 L=200 bash scripts/run_master_round2.sh
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,10 +16,13 @@ PY="${PYTHON:-python3}"
 BIN01="${BIN01:-${ROOT}/build/01_quantizer_fair/faiss_quantizer_smoke}"
 BIN01_CAND="${BIN01_CAND:-${ROOT}/build/01_quantizer_fair/faiss_hard_negative_candidates}"
 BIN02="${BIN02:-${ROOT}/experiments/02_diskann_fair/target/release/run_diskann_fair}"
-OUT="${OUT_ROOT:-results}/round2"
+OUT="${OUT_ROOT:-results}"
 LOG_DIR="${ROOT}/logs"
 STATUS_LOG="${LOG_DIR}/round2.status"
 RERANK="10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,40,50,60,70,80,90,100,140,180,220,260,300,340,380,420,460,1000"
+M="${M:-64}"
+L="${L:-400}"
+DATASETS="${DATASETS:-agnews gist dbpedia}"
 
 log() { echo "[r2] $(date '+%F %T') $*" | tee -a "${STATUS_LOG}"; }
 mkdir -p "${LOG_DIR}" "${OUT}"
@@ -44,21 +50,28 @@ run_01() {
       > "${LOG_DIR}/round2_01_${ds}_candidates.log" 2>&1 \
       || log "01 ${ds} candidates FAILED"
   fi
+  local one_logs="${OUT}/01_quantizer_fair/${ds}/logs"
+  mkdir -p "${one_logs}"
   "${BIN01}" \
     --dataset "${ds}" --data-root data --out-root "${OUT}" \
     --candidate-root work --candidate-size "${CANDIDATE_SIZE}" \
     --max-train "${MAX_TRAIN}" --max-queries "${MAX_QUERIES}" \
     --methods PQ,SQ,Ours_RaBitQ_K1 --rerank-candidates "${RERANK}" \
     --repeat-id "${REPEAT_ID}" --seed "${SEED}" --overwrite-summary \
-    > "${LOG_DIR}/round2_01_${ds}_pqsqours.log" 2>&1 \
+    2>&1 | tee "${LOG_DIR}/round2_01_${ds}_pqsqours.log" > "${one_logs}/faiss_quantizer_smoke.log" \
     || log "01 ${ds} PQ/SQ/Ours FAILED"
+  # 按方法拆分原始日志，与 SAQ 的 logs/SAQ 布局一致
+  mkdir -p "${one_logs}/PQ" "${one_logs}/SQ" "${one_logs}/Ours_RaBitQ_K1"
+  grep -E '^PQ ' "${one_logs}/faiss_quantizer_smoke.log" > "${one_logs}/PQ/PQ.log" || true
+  grep -E '^SQ ' "${one_logs}/faiss_quantizer_smoke.log" > "${one_logs}/SQ/SQ.log" || true
+  grep -E '^Ours_RaBitQ_K1 ' "${one_logs}/faiss_quantizer_smoke.log" > "${one_logs}/Ours_RaBitQ_K1/Ours.log" || true
   log "== 01 ${ds}: SAQ =="
   DATASETS="${ds}" RERANK_CANDIDATES="${RERANK}" OUT_ROOT="${OUT}" WORK_ROOT="work" \
     bash scripts/run_saq_fixed_candidates_fair.sh \
     > "${LOG_DIR}/round2_01_${ds}_saq.log" 2>&1 \
     || log "01 ${ds} SAQ FAILED"
   # Pad short SAQ rows to the current summary schema (inner-product columns).
-  "${PY}" - "${OUT}/${ds}/csv/01_quantizer_fair/faiss_quantizer_summary.csv" <<'EOF'
+  "${PY}" - "${OUT}/01_quantizer_fair/${ds}/csv/faiss_quantizer_summary.csv" <<'EOF'
 import csv
 import sys
 from pathlib import Path
@@ -92,8 +105,8 @@ EOF
 
 run_02() {
   local ds="$1" valq="$2"
-  log "== 02 ${ds}: per-method quantized graphs R=64/L=400 (PQ,SQ,SAQ,Ours) =="
-  local split_root="results/${ds}/csv/03_system_fair/_query_splits"
+  log "== 02 ${ds}: per-method quantized graphs R=${M}/L=${L} (PQ,SQ,SAQ,Ours) =="
+  local split_root="results/03_system_fair/${ds}/csv/_query_splits"
   mkdir -p "${split_root}"
   "${PY}" - "${ds}" "${valq}" <<'EOF'
 import sys
@@ -105,8 +118,8 @@ prepare_query_splits(ds, Path("data"), Path("results"), valq)
 print(f"query splits ready: {ds} val={valq}")
 EOF
   "${BIN02}" \
-    --dataset "${ds}" --methods PQ,SQ,SAQ,Ours --max-degree 64 --build-beam 400 \
-    --out-root "${OUT}" --repeats 1 --threads 64 --refine-passes 0 \
+    --dataset "${ds}" --methods PQ,SQ,SAQ,Ours --max-degree "${M}" --build-beam "${L}" \
+    --out-root "${OUT}" --repeats 1 --threads 64 --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
     --query-path "${split_root}/test_query.fvecs" \
     --gt-path "${split_root}/test_gt.ivecs" \
     > "${LOG_DIR}/round2_02_${ds}.log" 2>&1 \
@@ -117,9 +130,58 @@ EOF
 run_03() {
   local ds="$1" valq="$2"
   log "== 03 ${ds}: system fair (Ours,SymphonyQG,OG-LVQ,Glass-NSG) =="
+
+  # 固定 03 配置（Ours M=64；SymphonyQG R=64/EF=400；OG-LVQ R=64/W=400；
+  # Glass-NSG R=64/L=400）：直接写死 selected config，跳过验证自动选参，
+  # 保证四个系统同参数（M/R=64、L/EF/W=400）对比。
+  "${PY}" - "${OUT}/03_system_fair/${ds}/csv/tuning" "${M}" "${L}" <<'EOF'
+import json
+import sys
+from pathlib import Path
+
+tuning = Path(sys.argv[1])
+m = int(sys.argv[2])
+l = int(sys.argv[3])
+tuning.mkdir(parents=True, exist_ok=True)
+fixed = {
+    "Ours": {
+        "config_id": f"OursDiskANN_M{m}",
+        "M": m, "R": m, "L_build": l, "alpha": 1.2,
+        "rerank_candidates": 100, "residual_bits": 4, "centroid_count": 1,
+        "selection_note": f"fixed M={m}/L={l}",
+    },
+    "SymphonyQG": {
+        "config_id": f"R{m}_EF{l}_t3", "R": m, "EF": l, "iters": 3,
+        "selection_note": f"fixed R={m}/EF={l}",
+    },
+    "OG-LVQ": {
+        "config_id": f"LVQ4_R{m}_W{l}",
+        "R": m, "W": l, "alpha": 1.2, "primary": 4, "residual": 0,
+        "selection_note": f"fixed R={m}/W={l}",
+    },
+    "Glass-NSG": {
+        "config_id": f"R{m}_L{l}", "R": m, "L": l,
+        "selection_note": f"fixed R={m}/L={l}",
+    },
+}
+for method, cfg in fixed.items():
+    (tuning / f"{method}_selected_config.json").write_text(
+        json.dumps(
+            {
+                "method": method,
+                "selected_config": cfg,
+                "status": "ok",
+                "recall_target": 0.95,
+                "fixed": True,
+            },
+            indent=2,
+        )
+    )
+print(f"fixed 03 configs written to {tuning}")
+EOF
   "${PY}" -u experiments/03_system_fair/run_system_fair.py \
     --dataset "${ds}" --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG \
-    --validate --run --repeats 1 --threads 64 --val-queries "${valq}" --out-root "${OUT}" \
+    --run --repeats 1 --threads 64 --val-queries "${valq}" --out-root "${OUT}" \
     > "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
     || log "03 ${ds} FAILED"
   "${PY}" scripts/plot_system_fair.py --dataset "${ds}" --out-root "${OUT}" \
@@ -134,12 +196,17 @@ run_03() {
   log "03 ${ds} done"
 }
 
-log "started round2 (out-root=${OUT})"
-for pair in "agnews 200" "gist 200" "dbpedia 1000"; do
-  set -- ${pair}
-  DS="$1"
-  VALQ="$2"
-  log "######## dataset ${DS} ########"
+log "started round2 (out-root=${OUT}) datasets=${DATASETS} M=${M} L=${L}"
+valq_for() {
+  case "$1" in
+    agnews|gist) echo 200 ;;
+    dbpedia) echo 1000 ;;
+    *) echo 200 ;;
+  esac
+}
+for DS in ${DATASETS}; do
+  VALQ="$(valq_for "${DS}")"
+  log "######## dataset ${DS} (val_queries=${VALQ}) ########"
   run_01 "${DS}"
   run_02 "${DS}" "${VALQ}"
   run_03 "${DS}" "${VALQ}"

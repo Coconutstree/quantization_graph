@@ -1,3 +1,5 @@
+
+> 说明：文中 `/home/kai3/...` 为本机审计记录，公开复现请以 `scripts/` 与 `README.md` 为准（路径均由环境变量/`setup_local_env.sh` 控制）。
 # BASELINE_EXPERIMENT_PLAN_MS_V2.md
 
 ## 目标

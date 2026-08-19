@@ -169,7 +169,7 @@ def main() -> int:
     ap.add_argument("--suite", default="03_system_fair")
     ap.add_argument("--targets", default="0.90,0.95,0.97")
     args = ap.parse_args()
-    base = Path(args.out_root) / args.dataset / "csv" / args.suite
+    base = Path(args.out_root) / args.suite / args.dataset / "csv"
     raw = base / "system_fair_raw.csv"
     if not raw.exists():
         raise SystemExit(f"missing {raw}")

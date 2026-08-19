@@ -22,7 +22,7 @@ def main() -> int:
     ap.add_argument("--out-root", default="results")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
-    base = Path(args.out_root) / args.dataset / "csv" / args.suite
+    base = Path(args.out_root) / args.suite / args.dataset / "csv"
     median_results(base / "system_fair_merged.csv", base / "system_fair_median.csv")
     print(f"wrote {base / 'system_fair_median.csv'}")
     return 0

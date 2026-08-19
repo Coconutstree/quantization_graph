@@ -1003,7 +1003,7 @@ int main(int argc, char** argv) {
         }
 
         const fs::path csv_dir =
-                args.out_root / args.dataset / "csv" / "01_quantizer_fair";
+                args.out_root / "01_quantizer_fair" / args.dataset / "csv";
         const fs::path work_dir =
                 args.candidate_root / "01_quantizer_fair" / args.dataset;
         const fs::path summary_path = csv_dir / "faiss_quantizer_summary.csv";

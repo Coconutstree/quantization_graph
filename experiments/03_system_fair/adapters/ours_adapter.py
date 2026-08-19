@@ -28,7 +28,7 @@ def ours_rows_from_02_csv(
 ) -> list[dict[str, Any]]:
     """Read experiment 02's Ours-DiskANN rows for the given graph degree."""
     csv_path = (
-        Path(out_root) / dataset / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv"
+        Path(out_root) / "02_diskann_fair" / dataset / "csv" / "diskann_fair_raw.csv"
     )
     if not csv_path.exists():
         raise RuntimeError(f"02 Ours rows missing at {csv_path}")
@@ -76,7 +76,7 @@ def ensure_ours_run(
 ) -> None:
     """Run the Ours-DiskANN binary once for this dataset/degree if missing."""
     csv_path = (
-        Path(out_root) / dataset / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv"
+        Path(out_root) / "02_diskann_fair" / dataset / "csv" / "diskann_fair_raw.csv"
     )
     if csv_path.exists():
         with csv_path.open() as f:

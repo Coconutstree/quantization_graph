@@ -26,7 +26,7 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MINICONDA_PYTHON = Path("/home/kai3/miniconda3/bin/python")
+MINICONDA_PYTHON = Path(os.environ.get("MINICONDA_PYTHON", "python3"))
 NLTK_FIELDS = ["build_time_ms", "index_size_mb", "peak_rss_mb"]
 
 
@@ -321,23 +321,23 @@ class RunContext:
 
     @property
     def out_dir(self) -> Path:
-        return self.out_root / self.dataset
+        return self.out_root / self.suite / self.dataset
 
     @property
     def raw_dir(self) -> Path:
-        return self.out_dir / "raw" / self.suite
+        return self.out_dir / "logs"
 
     @property
     def csv_dir(self) -> Path:
-        return self.out_dir / "csv" / self.suite
+        return self.out_dir / "csv"
 
     @property
     def index_root(self) -> Path:
-        return self.out_dir / "indexes" / self.suite
+        return self.out_dir / "indexes"
 
     @property
     def figures_dir(self) -> Path:
-        return self.out_dir / "figures" / self.suite
+        return self.out_dir / "figures"
 
     @property
     def audit_dir(self) -> Path:
@@ -345,7 +345,7 @@ class RunContext:
 
     @property
     def manifest_dir(self) -> Path:
-        return self.out_root / self.dataset / "manifests"
+        return self.out_root / self.suite / self.dataset / "manifests"
 
     @property
     def shared_split_dir(self) -> Path:

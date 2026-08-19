@@ -51,8 +51,8 @@ def param_num(label: str) -> float:
 def build_table_rows(
     dataset: str, out_root: Path, suite: str
 ) -> list[dict[str, str]]:
-    base = out_root / dataset
-    csv_dir = base / "csv" / suite
+    base = out_root / suite / dataset
+    csv_dir = base / "csv"
     raw_path = csv_dir / "system_fair_raw.csv"
     if not raw_path.exists():
         raise FileNotFoundError(f"missing {raw_path}")
@@ -105,7 +105,7 @@ def write_per_dataset_outputs(
     out_root: Path,
     suite: str,
 ) -> None:
-    csv_dir = out_root / dataset / "csv" / suite
+    csv_dir = out_root / suite / dataset / "csv"
     csv_path = csv_dir / "system_fair_paper_table.csv"
     with csv_path.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(table_rows[0].keys()))

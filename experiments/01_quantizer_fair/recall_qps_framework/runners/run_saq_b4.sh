@@ -54,7 +54,7 @@ check_saq_prep() {
 for DATASET in ${DATASETS}; do
   SRC_DIR="${DATA_ROOT}/${DATASET}"
   SAQ_DATA_DIR="${SAQ_ROOT}/data/${DATASET}"
-  RAW_DIR="${OUT_ROOT}/${DATASET}/raw/01_quantizer_fair/SAQ"
+  RAW_DIR="${OUT_ROOT}/01_quantizer_fair/${DATASET}/logs/SAQ"
   CSV_DIR="${OUT_ROOT}/${DATASET}/csv/01_quantizer_fair"
   mkdir -p "${SAQ_DATA_DIR}" "${RAW_DIR}" "${CSV_DIR}"
 

@@ -104,7 +104,7 @@ search_list_sizes=10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
 Run dbpedia with all currently real DiskANN adapters:
 
 ```bash
-cd /home/kai3/coco/quantization_graph
+cd <repo>
 conda run -n rust-build cargo run --release \
   --manifest-path experiments/02_diskann_fair/Cargo.toml \
   --bin run_diskann_fair \

@@ -12,11 +12,11 @@ pub struct OutputPaths {
 }
 
 pub fn create_output_dirs(ctx: &RunContext, method: &str) -> Result<OutputPaths, String> {
-    let dataset_root = ctx.out_root.join(&ctx.dataset.name);
-    let raw_dir = dataset_root.join("raw/02_diskann_fair").join(method);
-    let csv_dir = dataset_root.join("csv/02_diskann_fair");
+    let dataset_root = ctx.out_root.join("02_diskann_fair").join(&ctx.dataset.name);
+    let raw_dir = dataset_root.join("logs").join(method);
+    let csv_dir = dataset_root.join("csv");
     let manifest_dir = dataset_root.join("manifests");
-    let shared_graph_dir = dataset_root.join("indexes/02_diskann_fair/shared_graph");
+    let shared_graph_dir = dataset_root.join("indexes/shared_graph");
 
     for dir in [&raw_dir, &csv_dir, &manifest_dir, &shared_graph_dir] {
         fs::create_dir_all(dir).map_err(|err| format!("mkdir {}: {err}", dir.display()))?;

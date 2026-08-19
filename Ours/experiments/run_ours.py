@@ -35,7 +35,7 @@ def prepare_query_splits(
     dataset: str, data_root: Path, out_root: Path, val_queries: int
 ) -> tuple[Path, Path, Path, Path]:
     """Reuse the 03 shared split (first N queries = validation, rest = test)."""
-    split_dir = out_root / dataset / "csv" / "03_system_fair" / "_query_splits"
+    split_dir = out_root / "03_system_fair" / dataset / "csv" / "_query_splits"
     split_dir.mkdir(parents=True, exist_ok=True)
     test_gt = split_dir / "test_gt.ivecs"
     if test_gt.exists():

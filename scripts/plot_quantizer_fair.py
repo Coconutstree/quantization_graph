@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 OURS_PREFIX = "Ours_RaBitQ_K"
 PLANNED = {"4bit_recall_qps", "4bit_quantization_error"}
+METHOD_ORDER = ["PQ_4bit", "SQ_4bit", "SAQ_B4", f"{OURS_PREFIX}1"]
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -68,9 +69,9 @@ def main() -> int:
     args = ap.parse_args()
 
     METHOD_ORDER = ["PQ_4bit", "SQ_4bit", "SAQ_B4", f"{OURS_PREFIX}{args.ours_k}"]
-    base = Path(args.results_root) / args.dataset
-    csv_dir = base / "csv" / "01_quantizer_fair"
-    fig_dir = base / "figures" / "01_quantizer_fair"
+    base = Path(args.results_root) / "01_quantizer_fair" / args.dataset
+    csv_dir = base / "csv"
+    fig_dir = base / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     recall_methods = load_methods(csv_dir, "recall_qps")

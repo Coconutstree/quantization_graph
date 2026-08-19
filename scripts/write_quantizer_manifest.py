@@ -154,7 +154,7 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
 
 
 def write_manifest(dataset: str, out_root: Path) -> Path:
-    out_dir = out_root / dataset / "manifests"
+    out_dir = out_root / "01_quantizer_fair" / dataset / "manifests"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "01_quantizer_fair_manifest.csv"
     rows = method_rows(dataset)

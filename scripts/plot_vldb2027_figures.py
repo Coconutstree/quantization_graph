@@ -26,6 +26,7 @@ import csv
 import json
 import math
 import os
+import statistics
 import sys
 from pathlib import Path
 
@@ -54,10 +55,19 @@ plt.rcParams.update({
 })
 
 ROOT = Path(__file__).resolve().parents[1]
-# Read experiment results from an alternative root (e.g. results/round2) by
+# Read experiment results from an alternative root (e.g. results/03_system_fair) by
 # setting PAPER_RESULTS_ROOT=/abs/path; defaults to <repo>/results.
 RESULTS_ROOT = Path(os.environ.get("PAPER_RESULTS_ROOT", ROOT / "results"))
 OUT_DIR = ROOT / "paper" / "figures"
+
+# Optional external experiment-data home. The source checkout that owns the
+# optimized-Ours query runs (query_es/), the Glass R64/L400 robustness rebuild
+# (glass_l400_robustness/) and the round2 build records used by fig10.
+# Defaults to the sibling quantized_hnsw checkout when present; otherwise the
+# repo-local results/ tree is used (and the affected figures degrade to
+# whatever data is available).
+_QH_DIR = Path(os.environ.get("QH_DIR", ROOT.parent / "quantized_hnsw"))
+QH_DIR = _QH_DIR if _QH_DIR.exists() else RESULTS_ROOT
 
 DATASETS = [
     ("DBpedia-1M", "dbpedia"),
@@ -105,6 +115,38 @@ Q03_METHODS = [
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="") as f:
         return list(csv.DictReader(f))
+
+
+def median_aggregate(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Collapse duplicate (method, search_param_value) rows to one median row.
+
+    The per-suite raw CSVs currently contain every ef point twice (two
+    "aggregate" measurements of the same run with identical recall but slightly
+    different QPS/latency). Plotting both copies makes the curves zigzag, so we
+    aggregate the numeric fields by median and keep the first row for the rest.
+    """
+    groups: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for r in rows:
+        groups.setdefault((r.get("method", ""), r.get("search_param_value", "")), []).append(r)
+    out: list[dict[str, str]] = []
+    for key, rs in groups.items():
+        if len(rs) == 1 or key[1] == "":
+            out.append(rs[0])
+            continue
+        base = dict(rs[0])
+        for col in base:
+            vals: list[float] = []
+            for r in rs:
+                try:
+                    vals.append(float(r[col]))
+                except (TypeError, ValueError):
+                    break
+            else:
+                if vals:
+                    base[col] = f"{statistics.median(vals):.9g}"
+        base["n_repeats"] = str(len(rs))
+        out.append(base)
+    return out
 
 
 def fnum(row: dict[str, str], key: str) -> float:
@@ -223,10 +265,12 @@ def fig01_quantizer_fair() -> None:
         qps: dict[str, float] = {}
         mx: dict[str, float] = {}
         for key, disp, file_key in Q01_METHODS:
-            path = RESULTS_ROOT / ds / "csv" / "01_quantizer_fair" / f"{file_key}_recall_qps.csv"
+            path = RESULTS_ROOT / "01_quantizer_fair" / ds / "csv" / f"{file_key}_recall_qps.csv"
             if not path.exists():
                 continue
-            rows = [r for r in read_csv(path) if int(r["search_param_value"]) >= 16]
+            rows = median_aggregate(
+                [r for r in read_csv(path) if int(r["search_param_value"]) >= 16]
+            )
             q = _interp_log_qps(rows, tgt)
             if q is not None:
                 qps[key] = q
@@ -287,7 +331,7 @@ def fig02_quantizer_error() -> None:
         l2 = np.full(len(Q01_METHODS), np.nan)
         ip = np.full(len(Q01_METHODS), np.nan)
         for j, (_, _, file_key) in enumerate(Q01_METHODS):
-            path = RESULTS_ROOT / ds / "csv" / "01_quantizer_fair" / f"{file_key}_accuracy.csv"
+            path = RESULTS_ROOT / "01_quantizer_fair" / ds / "csv" / f"{file_key}_accuracy.csv"
             if not path.exists():
                 continue
             r = read_csv(path)[0]
@@ -334,12 +378,14 @@ def fig03_quantizer_error_qps() -> None:
         l2_map: dict[str, float] = {}
         ip_map: dict[str, float] = {}
         for key, _, file_key in Q01_METHODS:
-            acc_path = RESULTS_ROOT / ds / "csv" / "01_quantizer_fair" / f"{file_key}_accuracy.csv"
-            rq_path = RESULTS_ROOT / ds / "csv" / "01_quantizer_fair" / f"{file_key}_recall_qps.csv"
+            acc_path = RESULTS_ROOT / "01_quantizer_fair" / ds / "csv" / f"{file_key}_accuracy.csv"
+            rq_path = RESULTS_ROOT / "01_quantizer_fair" / ds / "csv" / f"{file_key}_recall_qps.csv"
             if not acc_path.exists() or not rq_path.exists():
                 continue
             acc = read_csv(acc_path)[0]
-            rows = [r for r in read_csv(rq_path) if int(r["search_param_value"]) == 1000]
+            rows = median_aggregate(
+                [r for r in read_csv(rq_path) if int(r["search_param_value"]) == 1000]
+            )
             if not rows:
                 continue
             qps_map[key] = fnum(rows[0], "qps")
@@ -399,8 +445,8 @@ def fig04_diskann_fair_recall_qps() -> None:
     ]
     fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.55), sharey=True)
     for i, (ax, (label, ds)) in enumerate(zip(axes, DATASETS)):
-        rows = read_csv(
-            RESULTS_ROOT / ds / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv"
+        rows = median_aggregate(
+            read_csv(RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv")
         )
         for key, disp in methods:
             sub = [r for r in rows if r["method"] == key and r.get("status") == "done"]
@@ -436,26 +482,46 @@ def fig04_diskann_fair_recall_qps() -> None:
 # Figure 4: 03 end-to-end Recall@10-QPS over the full recall range (Ours M=64)
 # --------------------------------------------------------------------------
 def _load_q03(ds: str) -> list[dict[str, str]]:
-    return read_csv(RESULTS_ROOT / ds / "csv" / "03_system_fair" / "system_fair_median.csv")
+    return read_csv(RESULTS_ROOT / "03_system_fair" / ds / "csv" / "system_fair_median.csv")
 
 
 def _opt_ours_rows(ds: str) -> list[dict[str, str]] | None:
     """Final optimized Ours rows (M64 + cap256 + back-stop2 + refine1 + sidecar)."""
-    path = (
+    # Per-dataset canonical run dirs (values match the Feishu doc, 2026-08-19):
+    #   agnews  -> query_es/agnews_final_refine1_sidecar  (build 81.7 s, R@10=0.9942)
+    #   gist    -> build_opt/gist_opt_refine1             (build 100.9 s, R@10=0.9855)
+    #   dbpedia -> query_es/dbpedia_final_refine1_sidecar (build 217.8 s, R@10=0.9935)
+    run_rel = {
+        "agnews": "results/query_es/agnews_final_refine1_sidecar/agnews/csv/02_diskann_fair/diskann_fair_raw.csv",
+        "gist": "results/build_opt/gist_opt_refine1/gist/csv/02_diskann_fair/diskann_fair_raw.csv",
+        "dbpedia": "results/query_es/dbpedia_final_refine1_sidecar/dbpedia/csv/02_diskann_fair/diskann_fair_raw.csv",
+    }
+    for base in (QH_DIR, ROOT / "results"):
+        path = base / run_rel.get(
+            ds, f"results/query_es/{ds}_final_refine1_sidecar/{ds}/csv/02_diskann_fair/diskann_fair_raw.csv"
+        )
+        if path.exists():
+            rows = [r for r in read_csv(path) if r.get("method") == "Ours"]
+            return rows or None
+    # Legacy repo-local layout (kept for backward compatibility).
+    legacy = (
         ROOT / "results" / "query_es" / f"{ds}_final_refine1_sidecar"
-        / ds / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv"
+        / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv"
     )
-    if not path.exists():
-        return None
-    rows = [r for r in read_csv(path) if r.get("method") == "Ours"]
-    return rows or None
+    if legacy.exists():
+        rows = [r for r in read_csv(legacy) if r.get("method") == "Ours"]
+        return rows or None
+    return None
 
 
 def _opt_ours_build_time_ms(ds: str) -> float | None:
     rows = _opt_ours_rows(ds)
     if not rows:
         return None
-    return fnum(rows[0], "build_time_ms")
+    r = rows[0]
+    if r.get("graph_build_time_ms"):
+        return fnum(r, "graph_build_time_ms")
+    return fnum(r, "build_time_ms")
 
 
 def fig05_endtoend_qps() -> None:
@@ -581,7 +647,9 @@ def fig09_memory_summary() -> None:
     fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.4))
     for row, (label, ds) in enumerate(DATASETS):
         # 02: payload index size on the shared Vamana graph (R=32 rows only).
-        raw = read_csv(RESULTS_ROOT / ds / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv")
+        raw = median_aggregate(
+            read_csv(RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv")
+        )
         idx: dict[str, float] = {}
         for r in raw:
             if r.get("status") != "done":
@@ -669,7 +737,7 @@ def fig10_build_time_02_03() -> None:
     fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.7), sharey=True)
     for col, (ax, (label, ds)) in enumerate(zip(axes, DATASETS)):
         bt: dict[str, float] = {}
-        raw = read_csv(RESULTS_ROOT / ds / "csv" / "02_diskann_fair" / "diskann_fair_raw.csv")
+        raw = read_csv(RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv")
         for r in raw:
             if r.get("status") != "done":
                 continue
@@ -679,18 +747,28 @@ def fig10_build_time_02_03() -> None:
         if opt_build is not None:
             bt["Ours"] = opt_build / 1000.0
 
+        # Prefer the round2 build records (values match the Feishu doc:
+        # SymphonyQG R64 111.9 / 139.4 / 382.9 s), then the repo-local
+        # results tree, then the source checkout's records.
         build_records = [
             ("SymphonyQG",
-             RESULTS_ROOT / ds / "indexes" / "03_system_fair" / "SymphonyQG"
+             QH_DIR / "results" / "round2" / ds / "indexes" / "03_system_fair"
+             / "SymphonyQG" / "SymphonyQG_R64_EF400_t3_build.json",
+             RESULTS_ROOT / "03_system_fair" / ds / "indexes" / "SymphonyQG"
              / "SymphonyQG_R64_EF400_t3_build.json"),
             ("OG-LVQ",
-             RESULTS_ROOT / ds / "indexes" / "03_system_fair" / "OG-LVQ"
+             QH_DIR / "results" / "round2" / ds / "indexes" / "03_system_fair"
+             / "OG-LVQ" / "OG-LVQ_LVQ4_R64_W400_build.json",
+             RESULTS_ROOT / "03_system_fair" / ds / "indexes" / "OG-LVQ"
              / "OG-LVQ_LVQ4_R64_W400_build.json"),
             ("Glass-NSG",
+             QH_DIR / "results" / "glass_l400_robustness" / ds
+             / "Glass-NSG_R64_L400_build.json",
              ROOT / "results" / "glass_l400_robustness" / ds
              / "Glass-NSG_R64_L400_build.json"),
         ]
-        for key, path in build_records:
+        for key, primary, fallback in build_records:
+            path = primary if primary.exists() else fallback
             if path.exists():
                 bt[key] = float(json.loads(path.read_text()).get("build_time_ms", 0.0)) / 1000.0
 
@@ -783,7 +861,7 @@ def fig07_kmeans_summary() -> None:
 def _k_summary(ds: str) -> dict[int, dict[str, float]]:
     """K -> {recall, qps, mean_rel, train_s} from summary + consolidated CSV."""
     rows: dict[int, dict[str, float]] = {}
-    summary = RESULTS_ROOT / ds / "csv" / "01_quantizer_fair" / "faiss_quantizer_summary.csv"
+    summary = RESULTS_ROOT / "01_quantizer_fair" / ds / "csv" / "faiss_quantizer_summary.csv"
     if summary.exists():
         for r in read_csv(summary):
             method = r.get("method", "")
@@ -925,17 +1003,22 @@ def fig11_decomposition_attribution() -> None:
 # --------------------------------------------------------------------------
 def fig12_agnews_instrumented_ef100() -> None:
     systems = ["Ours", "SymphonyQG", "Glass-NSG", "OG-LVQ"]
-    # Ours = final config (M64 / L_build=400 / build cap256 + back-stop2 + refine1
-    # + sidecar paper estimates) at ef=100, from
-    # results/query_es/agnews_final_refine1_sidecar/.../agnews_Ours_R64_Lbuild400.log
-    # (visited=2989.34, dist=727.62, latency=1176.44us, recall=0.99275).
-    # Same config's second run measured 1371.24us with identical counts
-    # (agnews_final_refine1_sidecar_v2); the first run is used here for
-    # consistency with the Feishu doc's own latency breakdown.
+    # R64 / M=64 instrumented measurements at ef=100 (2026-08-19, Feishu doc):
+    #   Ours        = final config (M64 / L_build=400 / cap256 + back-stop2 +
+    #                 refine1 + sidecar), from query_es/agnews_final_refine1_
+    #                 sidecar (visited=2989.34, dist=727.62, latency=1176.44us,
+    #                 recall=0.99275).
+    #   SymphonyQG  = official source instrumentation, R64: 46.3 expanded
+    #                 nodes, 3,011 distances (46.3 exact L2 + 2,965 fast-scan),
+    #                 142.6 us, recall 0.994 (R32 was 60/1,969/148).
+    #   Glass-NSG   = official source instrumentation, R64_L100: 104.7 visited,
+    #                 1,876.6 SQ4U distances, 213.1 us, recall 0.9425
+    #                 (R32_L50 was 106/1,431/250).
+    #   OG-LVQ      = SVS official binding exposes no counts; latency 938 us.
     metrics = [
-        ("visited", "Visited / query", [2989, 60, 106, None]),
-        ("distance", "Distance comps / query", [728, 1969, 1431, None]),
-        ("latency", "Latency (us) / query", [1176, 148, 250, 938]),
+        ("visited", "Visited / query", [2989, 46.3, 104.7, None]),
+        ("distance", "Distance comps / query", [728, 3011, 1876.6, None]),
+        ("latency", "Latency (us) / query", [1176, 142.6, 213.1, 938]),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.6), sharey=True)
     for col, (ax, (_, title, vals)) in enumerate(zip(axes, metrics)):
@@ -947,7 +1030,8 @@ def fig12_agnews_instrumented_ef100() -> None:
             edge = "#FF4D00" if sys_name == "Ours" else "white"
             ax.bar([i], [v], width=0.62, color=color, edgecolor=edge,
                    linewidth=1.3 if sys_name == "Ours" else 0.5, zorder=3)
-            ax.text(i, v * 1.18, f"{v:,.0f}", ha="center", va="bottom",
+            label = f"{v:,.1f}".rstrip("0").rstrip(".")
+            ax.text(i, v * 1.18, label, ha="center", va="bottom",
                     fontsize=6, color=COLORS.get(sys_name, "#333333"))
         ax.set_yscale("log")
         ax.set_ylim(10, 20000)

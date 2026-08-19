@@ -2,7 +2,7 @@
 """Consolidate per-search-parameter raw logs into ONE unified log per method.
 
 The unified log lives at
-``results/<dataset>/raw/03_system_fair/<method>/<method>.log`` and contains a
+``results/03_system_fair/<dataset>/logs/<method>/<method>.log`` and contains a
 header with build time / memory / config plus one block per search parameter.
 The original per-parameter files are preserved under ``<method>/_per_param/``.
 """
@@ -54,8 +54,8 @@ def main() -> int:
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
 
-    base = Path(args.out_root) / args.dataset / "raw" / args.suite
-    raw_csv = Path(args.out_root) / args.dataset / "csv" / args.suite / "system_fair_raw.csv"
+    base = Path(args.out_root) / args.suite / args.dataset / "logs"
+    raw_csv = Path(args.out_root) / args.suite / args.dataset / "csv" / "system_fair_raw.csv"
     if not raw_csv.exists():
         raise SystemExit(f"missing {raw_csv} (run phase must be complete)")
     rows = read_csv(raw_csv)

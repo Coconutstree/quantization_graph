@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import resource
+import os
 import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, "/tmp/baseline_python")
+sys.path.insert(0, os.environ.get("SYMPHONYQG_PYTHONPATH", "/tmp/baseline_python"))
 import numpy as np  # noqa: E402
 from symphonyqg.symphonyqg import Index  # noqa: E402
 

@@ -10,7 +10,7 @@ fi
 DATA_ROOT="${DATA_ROOT:-data}"
 OUT_ROOT="${OUT_ROOT:-results}"
 WORK_ROOT="${WORK_ROOT:-work}"
-CMAKE_BIN="${CMAKE_BIN:-/home/kai3/miniconda3/envs/ngt-build/bin/cmake}"
+CMAKE_BIN="${CMAKE_BIN:-cmake}"
 CXX_BIN="${CXX_BIN:-/usr/bin/g++-11}"
 BUILD_DIR="${BUILD_DIR:-build/01_quantizer_fair}"
 

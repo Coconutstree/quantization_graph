@@ -61,9 +61,9 @@ def main() -> int:
         help="comma-separated methods to exclude from the figures",
     )
     args = ap.parse_args()
-    base = Path(args.out_root) / args.dataset
-    csv_dir = base / "csv" / args.suite
-    fig_dir = Path(args.out_dir) if args.out_dir else base / "figures" / args.suite
+    base = Path(args.out_root) / args.suite / args.dataset
+    csv_dir = base / "csv"
+    fig_dir = Path(args.out_dir) if args.out_dir else base / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
     exclude = {m.strip() for m in args.exclude_methods.split(",") if m.strip()}
 
