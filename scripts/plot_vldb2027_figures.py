@@ -13,7 +13,6 @@ codebook-size (K) ablation summary, and renders seven publication figures as a
   fig06_endtoend_recall_index            -- 03 recall ceiling + index size
   fig07_kmeans_ablation_recall_qps       -- K ablation R@10/QPS vs K
   fig08_kmeans_ablation_error_train      -- K ablation mean error + train time
-  fig09_memory_02_03                     -- 02 payload index + 03 peak RSS
   fig10_build_time_02_03                 -- 02/03 construction time
 
 Exports SVG (editable text), PDF (editable TrueType), PNG (300 dpi) and TIFF
@@ -631,78 +630,6 @@ def fig06_endtoend_recall_index() -> None:
 
 
 # --------------------------------------------------------------------------
-# Figure 6: memory summary -- 02 payload index size + 03 system peak RSS
-# --------------------------------------------------------------------------
-def fig09_memory_summary() -> None:
-    fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.4))
-    for row, (label, ds) in enumerate(DATASETS):
-        # 02: per-method 4-bit payload index size under the current protocol
-        # (each method builds its own graph with R=M=64 / L=400; see fig04).
-        raw = median_aggregate(
-            read_csv(RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv")
-        )
-        idx: dict[str, float] = {}
-        for r in raw:
-            if r.get("status") != "done":
-                continue
-            if r["method"] not in idx:
-                idx[r["method"]] = fnum(r, "index_size_mb")
-        m02 = [m for m in ("PQ", "SQ", "SAQ", "Ours") if m in idx]
-
-        ax = axes[row, 0]
-        colors02 = [to_rgba(COLORS[m], 1.0 if m == "Ours" else 0.55) for m in m02]
-        vals02 = [idx[m] for m in m02]
-        bars = ax.bar(m02, vals02, color=colors02, width=0.62, zorder=3)
-        style_log_y(ax)
-        for b, v in zip(bars, vals02):
-            ax.text(b.get_x() + b.get_width() / 2, v * 1.12, _fmt_size(v),
-                    ha="center", va="bottom", fontsize=6)
-        ax.tick_params(axis="x", labelsize=6)
-        ax.tick_params(axis="y", labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("02 payload index size (R=64/M=64)", fontsize=7)
-        ax.set_title(label, fontsize=7.5, pad=4)
-
-        # 03: end-to-end system peak RSS.
-        rows = _load_q03(ds)
-        rss: dict[str, float] = {}
-        for r in rows:
-            if r["method"] not in rss:
-                rss[r["method"]] = fnum(r, "peak_rss_mb")
-        m03 = [m for m, _ in Q03_METHODS if m in rss]
-
-        ax = axes[row, 1]
-        colors03 = [to_rgba(COLORS[m], 1.0 if m == "Ours" else 0.55) for m in m03]
-        vals03 = [rss[m] / 1024.0 for m in m03]
-        bars = ax.bar(m03, vals03, color=colors03, width=0.62, zorder=3)
-        style_log_y(ax)
-        for b, v in zip(bars, vals03):
-            ax.text(b.get_x() + b.get_width() / 2, v * 1.12, f"{v:.1f} GB",
-                    ha="center", va="bottom", fontsize=6)
-        ax.tick_params(axis="x", labelsize=6)
-        ax.tick_params(axis="y", labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("03 peak RSS (GB, M=64 full system)", fontsize=7)
-        ax.set_title(label, fontsize=7.5, pad=4)
-
-        panel_label(axes[row, 0], "abc"[row])
-        panel_label(axes[row, 1], "def"[row])
-
-    handles, labels = [], []
-    for m, disp in [("PQ", "PQ-4bit"), ("SQ", "SQ-4bit"), ("SAQ", "SAQ (B=4)"),
-                    ("Glass-NSG", "Glass-NSG"), ("OG-LVQ", "OG-LVQ"),
-                    ("Ours", "Ours (ExRaBitQ-4bit)"), ("SymphonyQG", "SymphonyQG")]:
-        handles.append(plt.Line2D([], [], color=COLORS[m], marker="s", linestyle="",
-                                  markersize=4.5))
-        labels.append(disp)
-    add_figure_legend(fig, handles, labels, ncol=4)
-    fig.tight_layout(rect=(0, 0.16, 1, 1))
-    save_pub(fig, "fig09_memory_02_03")
-
-
-# --------------------------------------------------------------------------
 # Figure 7: build cost -- 02 end-to-end construction + 03 system build time
 # --------------------------------------------------------------------------
 def _fmt_s(v: float) -> str:
@@ -1044,7 +971,6 @@ def main() -> int:
     fig06_endtoend_recall_index()
     fig07_kmeans_summary()
     fig08_kmeans_error_train()
-    fig09_memory_summary()
     fig10_build_time_02_03()
     fig11_decomposition_attribution()
     fig12_agnews_instrumented_ef100()
