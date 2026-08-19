@@ -536,21 +536,11 @@ def fig05_endtoend_qps() -> None:
             sub = [r for r in rows if r["method"] == key]
             if not sub:
                 continue
-            if key == "Ours":
-                # round2 Ours as a light dashed reference.
-                sub.sort(key=lambda r: fnum(r, "recall"))
-                ax.plot(
-                    [fnum(r, "recall") for r in sub],
-                    [fnum(r, "qps") for r in sub],
-                    color="#BBBBBB",
-                    linestyle="--",
-                    linewidth=0.8,
-                    marker="o",
-                    markersize=1.6,
-                    zorder=2,
-                )
-                if opt_rows is not None:
-                    sub = opt_rows
+            if key == "Ours" and opt_rows is not None:
+                # Use the final optimized Ours series only (the median CSV
+                # Ours rows are the same optimized runs; a separate dashed
+                # reference is redundant).
+                sub = opt_rows
             sub.sort(key=lambda r: fnum(r, "recall"))
             ax.plot(
                 [fnum(r, "recall") for r in sub],
