@@ -42,6 +42,16 @@ Ours-DiskANN 由四部分组成：
 数据集：DBpedia-1M（1536-d）、GIST-1M（960-d）、AGNews（1024-d）；查询单线程计时，
 构图 64 线程。查询切分约定：前 N 条为验证集、其余为测试集（agnews/gist N=200，dbpedia N=1000）。
 
+**SymphonyQG 基线说明（重要）**：官方 AVX512 FastScan 路径
+（`symqglib/qg/qg_scanner.hpp`）用 `_mm512_cvtepi16_epi32` 对 uint16 累加结果做
+**符号扩展**。当补零后的维度 ≥ 2048（即原维度 > 1024，如 DBpedia 1536→2048）时，
+查询侧 6-bit 点积 Σ(q̃·code) 常超 32767，被当成负数，量化导航距离大面积失真，
+DBpedia 端到端 Recall@10 仅约 0.46。将两处 `cvtepi16_epi32` 改为
+`cvtepu16_epi32`（零扩展）后，同一索引端到端召回 0.46→0.88（ef=580），
+逼近其图 fp32 上限 0.89。本仓库 03 表格/图中 SymphonyQG 的 DBpedia 行即采用
+修复后实测值（`results/03_system_fair/dbpedia/csv/`），修复前的归因实验
+（PCA-960 恢复 0.997）仍可复现，但机制是实现缺陷而非量化算法或数据问题。
+
 ## 3. 目录结构（Layout）
 
 ```text
