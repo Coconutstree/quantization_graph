@@ -311,7 +311,7 @@ pub fn append_raw_csv(
     }
 
     let needs_header = !paths.raw_csv.exists();
-    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,recall,qps,latency_mean_us,latency_p95_us,prepare_us,traverse_us,rerank_us,neighbor_fetch_us,visited_mark_us,paper_batch_us,flush_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
+    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,query_coarse_codec,recall,qps,latency_mean_us,latency_p95_us,prepare_us,traverse_us,rerank_us,neighbor_fetch_us,visited_mark_us,paper_batch_us,flush_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,paper_checked,paper_would_prune,paper_msb_kernel_calls,paper_remaining_kernel_calls,ffi_calls_per_query,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
     let header_matches = if needs_header {
         true
     } else {
@@ -362,6 +362,7 @@ pub fn append_raw_csv(
             "efSearch".to_string(),
             result.search_list_size.to_string(),
             ctx.config.search_beam_width.to_string(),
+            csv_quote(&result.query_coarse_codec),
             format!("{:.6}", result.recall),
             format!("{:.6}", result.qps),
             format!("{:.6}", result.latency_mean_us),
@@ -380,6 +381,11 @@ pub fn append_raw_csv(
             fmt_metric(result.mean_absolute_error),
             fmt_metric(result.top10_overlap),
             fmt_metric(result.pairwise_flip_rate_top10),
+            fmt_metric(result.paper_checked),
+            fmt_metric(result.paper_would_prune),
+            fmt_metric(result.paper_msb_kernel_calls),
+            fmt_metric(result.paper_remaining_kernel_calls),
+            fmt_metric(result.ffi_calls_per_query),
             "NaN".to_string(),
             "NaN".to_string(),
             "0".to_string(),

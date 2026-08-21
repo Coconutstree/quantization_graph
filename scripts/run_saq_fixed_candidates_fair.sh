@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${ROOT}" || exit 1
 
 CONFIG="${CONFIG:-experiments/01_quantizer_fair/configs/formal_saq_4bit.env}"
 if [[ -f "${CONFIG}" ]]; then
@@ -9,7 +10,7 @@ if [[ -f "${CONFIG}" ]]; then
   source "${CONFIG}"
 fi
 
-DATA_ROOT="${DATA_ROOT:-data}"
+DATA_ROOT="${DATA_ROOT:-${ROOT}/data}"
 OUT_ROOT="${OUT_ROOT:-results}"
 WORK_ROOT="${WORK_ROOT:-work}"
 SAQ_ROOT="${SAQ_ROOT:-baselines/saq}"

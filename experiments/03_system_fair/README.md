@@ -7,7 +7,7 @@ payload where their official implementation supports it:
 
 | system | implementation | 4-bit path |
 |---|---|---|
-| Ours | `Ours/experiments/run_ours.py` → `experiments/02_diskann_fair/target/release/run_diskann_fair` | ExRaBitQ4 symmetric Vamana + residual4 rerank, M=32/64, L_build=400, efSearch sweep |
+| Ours | `Ours/experiments/run_ours.py` → `experiments/02_diskann_fair/target/release/run_diskann_fair` | ExRaBitQ4 symmetric Vamana + DB1 coarse gate + INT8 query reused by residual4 rerank, M=32/64, L_build=400, efSearch sweep |
 | SymphonyQG | official python binding (SIGMOD'25) | native QG quantization |
 | NGT-QG | official Yahoo Japan NGT `qbg` CLI | native QG quantization |
 | OG-LVQ | official Intel SVS python bindings | LVQ4 (4 bit/dim) Vamana |
@@ -55,7 +55,8 @@ python scripts/consolidate_system_logs.py --dataset dbpedia
 
 * Ours uses the ExRaBitQ4 symmetric Vamana build/search path from
   `Ours/core/hnswlib/` inside the DiskANN3 framework (see
-  `experiments/02_diskann_fair/`).
+  `experiments/02_diskann_fair/`). Formal rows use only the DB1 x INT8-query
+  codec; full, b1, and INT4 queries are retained solely in codec ablations.
 * NGT-QG: two fixes were required. (1) `ngt`/`qbg` indexes created from TSV
   use 1-based object ids; the adapter subtracts 1 so recall is computed
   against the 0-based ground truth. (2) The QG default quantization is

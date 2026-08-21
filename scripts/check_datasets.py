@@ -202,7 +202,11 @@ def main() -> int:
         default=list(DEFAULT_DATASETS),
         help="Dataset names to check. Default: dbpedia gist.",
     )
-    parser.add_argument("--data-root", default="data", help="Dataset root directory.")
+    parser.add_argument(
+        "--data-root",
+        default=str(Path(__file__).resolve().parents[1] / "data"),
+        help="Dataset root directory (default: <repo>/data).",
+    )
     parser.add_argument("--out-root", default="results", help="Result root directory.")
     args = parser.parse_args()
 

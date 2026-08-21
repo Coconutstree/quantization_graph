@@ -33,6 +33,16 @@ enum class RaBitQCodeLayout : uint8_t {
     Turbo128 = 1,
 };
 
+enum class QueryCoarseCodec : uint8_t {
+    Full = 0,
+    B1 = 1,
+    Int4 = 2,
+    Int8 = 3,
+    B1Main = 4,
+    FullStaged = 5,
+    FullRerankScalar = 6,
+};
+
 class RaBitQSpace : public SpaceInterface<float> {
  public:
     enum class CentroidQueryMode : uint8_t {
@@ -41,6 +51,7 @@ class RaBitQSpace : public SpaceInterface<float> {
     };
     static constexpr size_t kTotalBits = 4;
     static constexpr size_t kShortBits = 1;
+    static constexpr size_t kPaperBatch = 32;
     static constexpr size_t kRemainingBits = 3;
     static constexpr uint32_t kUnsignedMax = 15;
     static constexpr uint32_t kRemainingMax = 7;
@@ -98,6 +109,24 @@ class RaBitQSpace : public SpaceInterface<float> {
         float half_sum_residual = 0.0f;
         float rotated_residual_sum = 0.0f;
         float positive_sum_residual = 0.0f;
+        // Quantized query state for the coarse filter (built per centroid in
+        // buildCentroidQuery). b1 uses the same bit layout as the paper-prune
+        // MSB sidecar (bit i of byte i>>3); INT4/INT8 use centered per-query
+        // global-scale quantization q_hat_i = scale * x_i.
+        std::vector<uint8_t> b1_code;
+        std::vector<int8_t> b1_signed;
+        int64_t b1_signed_sum = 0;
+        float b1_short_scale = 0.0f;
+        float b1_error_scale = 0.0f;
+        float b1_alpha = 0.0f;
+        std::vector<int8_t> int8_code;
+        std::vector<int8_t> int4_code;
+        float int8_scale = 1.0f;
+        float int4_scale = 1.0f;
+        float int8_error_norm = 0.0f;
+        float int4_error_norm = 0.0f;
+        int64_t int8_code_sum = 0;
+        int64_t int4_code_sum = 0;
         mutable bool residual_nibble_lut_ready = false;
         mutable bool residual_2bit_lut_ready = false;
     };
@@ -109,6 +138,7 @@ class RaBitQSpace : public SpaceInterface<float> {
         const float *raw_query = nullptr;
         double raw_query_norm_sqr = 0.0;
         size_t active_centroid_count = 0;
+        QueryCoarseCodec query_coarse_codec{QueryCoarseCodec::Full};
     };
 
     struct LongCodeIps {
@@ -160,6 +190,7 @@ class RaBitQSpace : public SpaceInterface<float> {
     bool legacy_payload_without_centroid_{false};
     CentroidQueryMode centroid_query_mode_{CentroidQueryMode::Eager};
     RaBitQCodeLayout code_layout_{RaBitQCodeLayout::SequentialNibble};
+    QueryCoarseCodec query_coarse_codec_{QueryCoarseCodec::Full};
 
     DISTFUNC<float> fstdistfunc_{nullptr};
 
@@ -2754,6 +2785,38 @@ class RaBitQSpace : public SpaceInterface<float> {
         return distanceBetweenEncodedScalarReference(
             static_cast<const char *>(lhs), static_cast<const char *>(rhs));
     }
+
+    float b1_signed_dot_for_test(
+        const void *prepared_query,
+        const uint8_t *msb_code) const {
+        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        uint64_t mismatches = 0;
+        const size_t bytes = (code_dim_ + 7U) / 8U;
+        for (size_t j = 0; j < bytes; ++j) {
+            mismatches += static_cast<uint64_t>(__builtin_popcountll(
+                static_cast<uint64_t>(query.b1_code[j]) ^
+                static_cast<uint64_t>(msb_code[j])));
+        }
+        return static_cast<float>(code_dim_) - 2.0f * static_cast<float>(mismatches);
+    }
+
+    float b1_short_scale_for_test(const void *prepared_query) const {
+        return static_cast<const PreparedQuery *>(prepared_query)
+            ->centroid_queries[0].b1_short_scale;
+    }
+
+    float int_scale_for_test(const void *prepared_query, bool int8_mode) const {
+        const QueryContext &query =
+            static_cast<const PreparedQuery *>(prepared_query)->centroid_queries[0];
+        return int8_mode ? query.int8_scale : query.int4_scale;
+    }
+
+    int64_t int_code_sum_for_test(const void *prepared_query, bool int8_mode) const {
+        const QueryContext &query =
+            static_cast<const PreparedQuery *>(prepared_query)->centroid_queries[0];
+        return int8_mode ? query.int8_code_sum : query.int4_code_sum;
+    }
 #endif
 
     explicit RaBitQSpace(
@@ -3357,8 +3420,24 @@ class RaBitQSpace : public SpaceInterface<float> {
         return prepared.centroid_queries[id];
     }
 
+    static bool optimizedIntQueryPreparationEnabled() {
+        static const bool enabled =
+            std::getenv("RABITQ_DISABLE_SIMD_INT_PREP") == nullptr;
+        return enabled;
+    }
+
     void buildCentroidQuery(PreparedQuery &prepared, size_t centroid_id) const {
         QueryContext &query = prepared.centroid_queries[centroid_id];
+        query.b1_signed_sum = 0;
+        query.b1_short_scale = 0.0f;
+        query.b1_error_scale = 0.0f;
+        query.b1_alpha = 0.0f;
+        query.int8_scale = 1.0f;
+        query.int4_scale = 1.0f;
+        query.int8_error_norm = 0.0f;
+        query.int4_error_norm = 0.0f;
+        query.int8_code_sum = 0;
+        query.int4_code_sum = 0;
         query.rotated_residual.assign(code_dim_, 0.0f);
         const float *rotated_centroid = rotated_centroids_.data() + centroid_id * code_dim_;
         for (size_t i = 0; i < code_dim_; ++i) {
@@ -3382,6 +3461,13 @@ class RaBitQSpace : public SpaceInterface<float> {
         query.positive_sum_residual = 0.0f;
         query.residual_nibble_lut_ready = false;
         query.residual_2bit_lut_ready = false;
+        const QueryCoarseCodec codec = prepared.query_coarse_codec;
+        const bool need_b1 =
+            codec == QueryCoarseCodec::B1 ||
+            codec == QueryCoarseCodec::B1Main;
+        const bool need_int4 = codec == QueryCoarseCodec::Int4;
+        const bool need_int8 = codec == QueryCoarseCodec::Int8;
+        float int_max_abs = 0.0f;
         for (size_t pair = 0; pair < pair_count; ++pair) {
             const float even_value = query.rotated_residual[pair << 1U];
             const float odd_value = query.rotated_residual[(pair << 1U) + 1U];
@@ -3391,9 +3477,187 @@ class RaBitQSpace : public SpaceInterface<float> {
             query.rotated_residual_sum += even_value + odd_value;
             query.positive_sum_residual += std::max(0.0f, even_value) +
                 std::max(0.0f, odd_value);
+            if (need_int4 || need_int8) {
+                int_max_abs = std::max(
+                    int_max_abs,
+                    std::max(std::fabs(even_value), std::fabs(odd_value)));
+            }
         }
         query.half_sum_residual *= 0.5f;
         query.query_norm = std::sqrt(query.query_norm_sqr);
+
+        // Build only the representation selected for this query.  The formal
+        // Full path needs the rotated FP32 residual only; constructing B1,
+        // INT4 and INT8 codes here used to waste a full hash/RNG/quantization
+        // pass on every query.
+        if (need_b1) {
+            const size_t b1_bytes = (code_dim_ + 7U) / 8U;
+            query.b1_code.assign(b1_bytes, 0);
+            query.b1_signed.assign(code_dim_, 0);
+            float abs_sum = 0.0f;
+            for (size_t i = 0; i < code_dim_; ++i) {
+                const float r = query.rotated_residual[i];
+                abs_sum += std::fabs(r);
+                if (r > 0.0f) {
+                    query.b1_code[i >> 3U] = static_cast<uint8_t>(
+                        query.b1_code[i >> 3U] |
+                        static_cast<uint8_t>(1U << (i & 7U)));
+                    query.b1_signed[i] = 1;
+                    query.b1_signed_sum += 1;
+                } else {
+                    query.b1_signed[i] = -1;
+                    query.b1_signed_sum -= 1;
+                }
+            }
+            if (query.query_norm > 0.0f && abs_sum > 0.0f && code_dim_ > 1) {
+                const float a_q = abs_sum / query.query_norm;
+                const float alpha_q = std::min(
+                    1.0f, a_q / std::sqrt(static_cast<float>(code_dim_)));
+                const float alpha2 = alpha_q * alpha_q;
+                query.b1_alpha = alpha_q;
+                query.b1_short_scale = 4.0f * query.query_norm / a_q;
+                query.b1_error_scale =
+                    2.0f * query.query_norm *
+                    std::sqrt(std::max(0.0f, (1.0f - alpha2) / alpha2)) /
+                    std::sqrt(static_cast<float>(code_dim_ - 1));
+            }
+        }
+        if (need_int4 || need_int8) {
+            if (need_int4) query.int4_code.assign(code_dim_, 0);
+            if (need_int8) query.int8_code.assign(code_dim_, 0);
+            float max_abs = int_max_abs;
+            if (!optimizedIntQueryPreparationEnabled()) {
+                // Diagnostic legacy path: retain the separate max pass so the
+                // environment switch isolates the complete preparation
+                // optimization, including pass fusion and buffer reuse.
+                max_abs = 0.0f;
+                for (size_t i = 0; i < code_dim_; ++i) {
+                    max_abs = std::max(
+                        max_abs, std::fabs(query.rotated_residual[i]));
+                }
+            }
+            if (max_abs > 0.0f) {
+                query.int8_scale = max_abs / 128.0f;
+                query.int4_scale = max_abs / 8.0f;
+            // RaBitQ 3.3.1 randomized scalar quantization: x = floor(v + u)
+            // with u ~ U[0,1) makes E[q_hat] = q exactly, so per-coordinate
+            // query-quantization errors cancel across dimensions (Thm 3.3)
+            // and need no explicit term in the coarse bound. The dither is
+            // seeded deterministically from the raw query bytes and centroid
+            // id, so batch/legacy parity and cross-run reproducibility hold
+            // while still drawing pseudo-random u_i in [0,1).
+            uint64_t dither_seed = 1469598103934665603ULL;  // FNV-1a basis
+            const uint8_t *raw_bytes =
+                reinterpret_cast<const uint8_t *>(prepared.raw_query);
+            for (size_t i = 0; i < dim_ * sizeof(float); ++i) {
+                dither_seed ^= raw_bytes[i];
+                dither_seed *= 1099511628211ULL;
+            }
+            dither_seed ^= static_cast<uint64_t>(centroid_id) +
+                0x9E3779B97F4A7C15ULL +
+                (dither_seed << 6U) + (dither_seed >> 2U);
+            std::mt19937_64 dither_rng(dither_seed);
+            std::uniform_real_distribution<double> u01(0.0, 1.0);
+            double err8_sqr = 0.0;
+            double err4_sqr = 0.0;
+#if defined(__AVX512F__)
+            const bool use_simd_int_prep =
+                optimizedIntQueryPreparationEnabled();
+#else
+            const bool use_simd_int_prep = false;
+#endif
+            size_t i = 0;
+#if defined(__AVX512F__)
+            if (use_simd_int_prep) {
+                const float scale = need_int8
+                    ? query.int8_scale : query.int4_scale;
+                const __m512d scale8 = _mm512_set1_pd(
+                    static_cast<double>(scale));
+                const __m256i minimum = _mm256_set1_epi32(
+                    need_int8 ? -128 : -8);
+                const __m256i maximum = _mm256_set1_epi32(
+                    need_int8 ? 127 : 7);
+                alignas(64) double dithers[8];
+                alignas(32) int32_t codes[8];
+                for (; i + 8U <= code_dim_; i += 8U) {
+                    for (size_t lane = 0; lane < 8U; ++lane) {
+                        // Consume both values in the original order. This
+                        // keeps the optimized code bit-identical to the
+                        // scalar preparation path and makes the env switch a
+                        // clean performance-only ablation.
+                        const double u8 = u01(dither_rng);
+                        const double u4 = u01(dither_rng);
+                        dithers[lane] = need_int8 ? u8 : u4;
+                    }
+                    const __m256 residual8 = _mm256_loadu_ps(
+                        query.rotated_residual.data() + i);
+                    const __m512d residual8d =
+                        _mm512_cvtps_pd(residual8);
+                    const __m512d quantized = _mm512_floor_pd(
+                        _mm512_add_pd(
+                            _mm512_div_pd(residual8d, scale8),
+                            _mm512_load_pd(dithers)));
+                    __m256i values = _mm512_cvttpd_epi32(quantized);
+                    values = _mm256_max_epi32(
+                        minimum, _mm256_min_epi32(maximum, values));
+                    _mm256_store_si256(
+                        reinterpret_cast<__m256i *>(codes), values);
+                    for (size_t lane = 0; lane < 8U; ++lane) {
+                        const int32_t x = codes[lane];
+                        const float r = query.rotated_residual[i + lane];
+                        const double error = static_cast<double>(r) -
+                            static_cast<double>(scale) *
+                            static_cast<double>(x);
+                        if (need_int8) {
+                            err8_sqr += error * error;
+                            query.int8_code[i + lane] =
+                                static_cast<int8_t>(x);
+                            query.int8_code_sum += x;
+                        } else {
+                            err4_sqr += error * error;
+                            query.int4_code[i + lane] =
+                                static_cast<int8_t>(x);
+                            query.int4_code_sum += x;
+                        }
+                    }
+                }
+            }
+#endif
+            for (; i < code_dim_; ++i) {
+                const float r = query.rotated_residual[i];
+                // Draw both dithers to preserve the pre-optimization code
+                // stream for each codec exactly.
+                const double u8 = u01(dither_rng);
+                const double u4 = u01(dither_rng);
+                if (need_int8) {
+                    int32_t x8 = static_cast<int32_t>(std::floor(
+                        static_cast<double>(r) / query.int8_scale + u8));
+                    x8 = std::max(-128, std::min(127, x8));
+                    const double e8 = static_cast<double>(r) -
+                        static_cast<double>(query.int8_scale) *
+                        static_cast<double>(x8);
+                    err8_sqr += e8 * e8;
+                    query.int8_code[i] = static_cast<int8_t>(x8);
+                    query.int8_code_sum += x8;
+                }
+                if (need_int4) {
+                    int32_t x4 = static_cast<int32_t>(std::floor(
+                        static_cast<double>(r) / query.int4_scale + u4));
+                    x4 = std::max(-8, std::min(7, x4));
+                    const double e4 = static_cast<double>(r) -
+                        static_cast<double>(query.int4_scale) *
+                        static_cast<double>(x4);
+                    err4_sqr += e4 * e4;
+                    query.int4_code[i] = static_cast<int8_t>(x4);
+                    query.int4_code_sum += x4;
+                }
+            }
+            if (need_int8)
+                query.int8_error_norm = static_cast<float>(std::sqrt(err8_sqr));
+            if (need_int4)
+                query.int4_error_norm = static_cast<float>(std::sqrt(err4_sqr));
+            }
+        }
         prepared.ready[centroid_id] = 1;
         ++prepared.active_centroid_count;
     }
@@ -3404,10 +3668,19 @@ class RaBitQSpace : public SpaceInterface<float> {
         bool build_eager_centroids) const {
         if (raw_query == nullptr)
             throw std::invalid_argument("RaBitQ query preparation received null data");
-        prepared.centroid_queries.assign(centroid_count_, QueryContext{});
+        // The public query object is thread-local. Preserve each centroid's
+        // vector capacity across queries instead of destroying and allocating
+        // rotated/query-code/LUT buffers for every search.
+        if (optimizedIntQueryPreparationEnabled()) {
+            prepared.centroid_queries.resize(centroid_count_);
+        } else {
+            prepared.centroid_queries.assign(
+                centroid_count_, QueryContext{});
+        }
         prepared.ready.assign(centroid_count_, 0);
         prepared.raw_query = raw_query;
         prepared.active_centroid_count = 0;
+        prepared.query_coarse_codec = query_coarse_codec_;
         rotate(raw_query, prepared.rotated_query);
 
         double raw_query_norm_sqr = 0.0;
@@ -3444,6 +3717,14 @@ class RaBitQSpace : public SpaceInterface<float> {
         return centroid_query_mode_;
     }
 
+    void set_query_coarse_codec(QueryCoarseCodec codec) {
+        query_coarse_codec_ = codec;
+    }
+
+    QueryCoarseCodec get_query_coarse_codec() const {
+        return query_coarse_codec_;
+    }
+
     void release_query(const void *prepared_query) override {
         (void) prepared_query;
     }
@@ -3451,6 +3732,25 @@ class RaBitQSpace : public SpaceInterface<float> {
     float query_distance(const void *prepared_query, const void *data_point) override {
         const QueryContext &query = queryForEncoded(prepared_query, data_point);
         return queryDistanceLong(query, data_point);
+    }
+
+    // 4-bit data x 1-bit query main distance: the query residual is reduced to
+    // its sign code and substituted into the existing long-distance estimator
+    // (signed_long_ip = <c - 7.5, q_hat>), with all dots evaluated as integer
+    // dot products against the +/-1 query code. Top-k full-precision rerank
+    // (residual distance) is applied by the caller.
+    float query_distance_b1(const void *prepared_query, const void *data_point) const {
+        const QueryContext &query = queryForEncoded(prepared_query, data_point);
+        const EncodedHeader header = loadHeader(data_point);
+        if (!(header.long_scale > 0.0f) || !std::isfinite(header.long_scale)) {
+            return header.norm_sqr + query.query_norm_sqr;
+        }
+        const int64_t dot_cq = quantizedLongCodeDotDispatch(
+            codeBytes(data_point), query.b1_signed.data());
+        const double signed_long_ip =
+            static_cast<double>(dot_cq) - 7.5 * static_cast<double>(query.b1_signed_sum);
+        const double est_ip = static_cast<double>(header.long_scale) * signed_long_ip;
+        return header.norm_sqr + query.query_norm_sqr - static_cast<float>(est_ip);
     }
 
     float asymmetric_build_distance(
@@ -3666,6 +3966,397 @@ class RaBitQSpace : public SpaceInterface<float> {
         return queryDistanceLongWithShortIp(query, data_point, loadHeader(data_point), short_ip);
     }
 
+    // FP32 traversal after the fixed-1-bit DB gate. Interleave eight random
+    // candidates so each pair of 16-wide even/odd query vectors is loaded once
+    // and reused by eight independent remaining-3-bit accumulators.
+    void query_distance_with_paper_msb_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const void *records_base,
+        size_t record_stride,
+        const float *short_ips,
+        float *out_distances) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const bool simd_ok =
+            centroid_count_ == 1 &&
+            code_layout_ == RaBitQCodeLayout::SequentialNibble &&
+            (code_dim_ % 32U == 0U) &&
+            (prepared.query_coarse_codec == QueryCoarseCodec::Full ||
+             prepared.query_coarse_codec == QueryCoarseCodec::FullStaged ||
+             prepared.query_coarse_codec == QueryCoarseCodec::FullRerankScalar);
+#else
+        const bool simd_ok = false;
+#endif
+        const char *record_bytes = static_cast<const char *>(records_base);
+        if (!simd_ok) {
+            for (size_t c = 0; c < count; ++c) {
+                const void *record = record_bytes +
+                    static_cast<size_t>(ids[c]) * record_stride;
+                const QueryContext &query =
+                    queryForEncoded(prepared_query, record);
+                out_distances[c] = queryDistanceLongWithShortIp(
+                    query, record, loadHeader(record), short_ips[c]);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const QueryContext &query = prepared.centroid_queries[0];
+        const __m128i remaining_mask = _mm_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const size_t pair_count = code_dim_ >> 1U;
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const void *records[8] = {};
+            const uint8_t *codes[8] = {};
+            __m512 acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            for (size_t lane = 0; lane < lanes; ++lane) {
+#if defined(__GNUC__) || defined(__clang__)
+                const size_t pf = group + lane + 8U;
+                if (pf < count) {
+                    __builtin_prefetch(
+                        record_bytes + static_cast<size_t>(ids[pf]) *
+                            record_stride,
+                        0, 3);
+                }
+#endif
+                records[lane] = record_bytes +
+                    static_cast<size_t>(ids[group + lane]) * record_stride;
+                codes[lane] = codeBytes(records[lane]);
+            }
+            for (size_t pair = 0; pair < pair_count; pair += 16U) {
+                const __m512 even_q = _mm512_loadu_ps(
+                    query.rotated_residual_even.data() + pair);
+                const __m512 odd_q = _mm512_loadu_ps(
+                    query.rotated_residual_odd.data() + pair);
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    const __m128i packed = _mm_loadu_si128(
+                        reinterpret_cast<const __m128i *>(
+                            codes[lane] + pair));
+                    const __m128i lo = _mm_and_si128(
+                        packed, remaining_mask);
+                    const __m128i hi = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), remaining_mask);
+                    acc[lane] = _mm512_add_ps(
+                        acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(lo)),
+                            even_q));
+                    acc[lane] = _mm512_add_ps(
+                        acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(hi)),
+                            odd_q));
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const EncodedHeader header = loadHeader(records[lane]);
+                if (!(header.long_scale > 0.0f) ||
+                    !std::isfinite(header.long_scale)) {
+                    out_distances[group + lane] =
+                        header.norm_sqr + query.query_norm_sqr;
+                    continue;
+                }
+                out_distances[group + lane] = queryDistanceLongWithIps(
+                    query, header, short_ips[group + lane],
+                    _mm512_reduce_add_ps(acc[lane]));
+            }
+        }
+#endif
+    }
+
+    // Complete FP32-query 4-bit distance for random graph candidates. This is
+    // the mode-0 path used by B1 traversal and by the final full-query restore
+    // for INT4/INT8. Interleave eight records so the even/odd query vectors are
+    // loaded once while both the MSB and remaining-three-bit products are
+    // accumulated for every candidate.
+    void query_distance_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const void *records_base,
+        size_t record_stride,
+        float *out_distances) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const bool simd_ok =
+            centroid_count_ == 1 &&
+            code_layout_ == RaBitQCodeLayout::SequentialNibble &&
+            (code_dim_ % 32U == 0U);
+#else
+        const bool simd_ok = false;
+#endif
+        const char *record_bytes = static_cast<const char *>(records_base);
+        if (!simd_ok) {
+            for (size_t c = 0; c < count; ++c) {
+                const void *record = record_bytes +
+                    static_cast<size_t>(ids[c]) * record_stride;
+                out_distances[c] = queryDistanceLong(
+                    queryForEncoded(prepared_query, record), record);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const QueryContext &query = prepared.centroid_queries[0];
+        const __m128i remaining_mask = _mm_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const __m128i nibble_mask = _mm_set1_epi8(0x0F);
+        const __m128i selected_threshold = _mm_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const size_t pair_count = code_dim_ >> 1U;
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const void *records[8] = {};
+            const uint8_t *codes[8] = {};
+            __m512 short_acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            __m512 remaining_acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            for (size_t lane = 0; lane < lanes; ++lane) {
+#if defined(__GNUC__) || defined(__clang__)
+                const size_t pf = group + lane + 8U;
+                if (pf < count) {
+                    __builtin_prefetch(
+                        record_bytes + static_cast<size_t>(ids[pf]) *
+                            record_stride,
+                        0, 3);
+                }
+#endif
+                records[lane] = record_bytes +
+                    static_cast<size_t>(ids[group + lane]) * record_stride;
+                codes[lane] = codeBytes(records[lane]);
+            }
+            for (size_t pair = 0; pair < pair_count; pair += 16U) {
+                const __m512 even_q = _mm512_loadu_ps(
+                    query.rotated_residual_even.data() + pair);
+                const __m512 odd_q = _mm512_loadu_ps(
+                    query.rotated_residual_odd.data() + pair);
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    const __m128i packed = _mm_loadu_si128(
+                        reinterpret_cast<const __m128i *>(
+                            codes[lane] + pair));
+                    const __m128i lo = _mm_and_si128(
+                        packed, remaining_mask);
+                    const __m128i hi = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), remaining_mask);
+                    const __m128i raw_lo = _mm_and_si128(
+                        packed, nibble_mask);
+                    const __m128i raw_hi = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), nibble_mask);
+                    const __mmask16 lo_selected = static_cast<__mmask16>(
+                        _mm_movemask_epi8(
+                            _mm_cmpgt_epi8(raw_lo, selected_threshold)));
+                    const __mmask16 hi_selected = static_cast<__mmask16>(
+                        _mm_movemask_epi8(
+                            _mm_cmpgt_epi8(raw_hi, selected_threshold)));
+                    remaining_acc[lane] = _mm512_add_ps(
+                        remaining_acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(lo)),
+                            even_q));
+                    remaining_acc[lane] = _mm512_add_ps(
+                        remaining_acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(hi)),
+                            odd_q));
+                    short_acc[lane] = _mm512_mask_add_ps(
+                        short_acc[lane], lo_selected,
+                        short_acc[lane], even_q);
+                    short_acc[lane] = _mm512_mask_add_ps(
+                        short_acc[lane], hi_selected,
+                        short_acc[lane], odd_q);
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const EncodedHeader header = loadHeader(records[lane]);
+                if (!(header.long_scale > 0.0f) ||
+                    !std::isfinite(header.long_scale)) {
+                    out_distances[group + lane] =
+                        header.norm_sqr + query.query_norm_sqr;
+                    continue;
+                }
+                out_distances[group + lane] = queryDistanceLongWithIps(
+                    query, header,
+                    _mm512_reduce_add_ps(short_acc[lane]) -
+                        query.half_sum_residual,
+                    _mm512_reduce_add_ps(remaining_acc[lane]));
+            }
+        }
+#endif
+    }
+
+    // INT4/INT8 traversal distance after the fixed-1-bit DB gate. short_ip is
+    // the quantized-query dot against the DB MSB plane computed by that gate,
+    // so only the remaining three DB bits need to be decoded here.
+    float query_distance_with_quantized_paper_msb(
+        const void *prepared_query,
+        const void *data_point,
+        float short_ip) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = queryForEncoded(prepared_query, data_point);
+        const EncodedHeader header = loadHeader(data_point);
+        if (!(header.long_scale > 0.0f) || !std::isfinite(header.long_scale)) {
+            return header.norm_sqr + query.query_norm_sqr;
+        }
+        const bool int8_mode =
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x =
+            int8_mode ? query.int8_code.data() : query.int4_code.data();
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        const int64_t code_sum =
+            int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const int64_t remaining_dot = quantizedRemainingCodeDotDispatch(
+            codeBytes(data_point), x);
+        return finishQuantizedTraversalDistance(
+            query, header, scale, code_sum, short_ip, remaining_dot);
+    }
+
+    // Common INT4/INT8 traversal case: every item in the bridge batch has a
+    // valid 1-bit-gate short_ip. Interleave eight independent accumulators so
+    // one 64-byte query load is reused across eight random DB records.
+    void query_distance_with_quantized_paper_msb_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const void *records_base,
+        size_t record_stride,
+        const float *short_ips,
+        float *out_distances) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const bool simd_ok =
+            centroid_count_ == 1 &&
+            code_layout_ == RaBitQCodeLayout::SequentialNibble &&
+            (code_dim_ % 64U == 0U) &&
+            code_dim_ <= static_cast<size_t>(
+                std::numeric_limits<int32_t>::max() /
+                (static_cast<int32_t>(kRemainingMax) * 128)) &&
+            (prepared.query_coarse_codec == QueryCoarseCodec::Int4 ||
+             prepared.query_coarse_codec == QueryCoarseCodec::Int8);
+#else
+        const bool simd_ok = false;
+#endif
+        const char *record_bytes = static_cast<const char *>(records_base);
+        if (!simd_ok) {
+            for (size_t c = 0; c < count; ++c) {
+                out_distances[c] = query_distance_with_quantized_paper_msb(
+                    prepared_query,
+                    record_bytes + static_cast<size_t>(ids[c]) * record_stride,
+                    short_ips[c]);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const QueryContext &query = prepared.centroid_queries[0];
+        const bool int8_mode =
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x =
+            int8_mode ? query.int8_code.data() : query.int4_code.data();
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        const int64_t code_sum =
+            int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const __m256i remaining_mask = _mm256_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const __m512i ones16 = _mm512_set1_epi16(1);
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const void *records[8] = {};
+            const uint8_t *codes[8] = {};
+            __m512i acc[8] = {
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+            };
+            for (size_t lane = 0; lane < lanes; ++lane) {
+#if defined(__GNUC__) || defined(__clang__)
+                const size_t pf = group + lane + 8U;
+                if (pf < count) {
+                    __builtin_prefetch(
+                        record_bytes + static_cast<size_t>(ids[pf]) *
+                            record_stride,
+                        0, 3);
+                }
+#endif
+                records[lane] = record_bytes +
+                    static_cast<size_t>(ids[group + lane]) * record_stride;
+                codes[lane] = codeBytes(records[lane]);
+            }
+            for (size_t offset = 0; offset < code_dim_; offset += 64U) {
+                const __m512i qbytes = _mm512_loadu_si512(
+                    reinterpret_cast<const void *>(x + offset));
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    const __m256i packed = _mm256_loadu_si256(
+                        reinterpret_cast<const __m256i *>(
+                            codes[lane] + (offset >> 1U)));
+                    const __m256i lo = _mm256_and_si256(
+                        packed, remaining_mask);
+                    const __m256i hi = _mm256_and_si256(
+                        _mm256_srli_epi16(packed, 4), remaining_mask);
+                    const __m256i interleave_lo =
+                        _mm256_unpacklo_epi8(lo, hi);
+                    const __m256i interleave_hi =
+                        _mm256_unpackhi_epi8(lo, hi);
+                    const __m256i db_low = _mm256_permute2x128_si256(
+                        interleave_lo, interleave_hi, 0x20);
+                    const __m256i db_high = _mm256_permute2x128_si256(
+                        interleave_lo, interleave_hi, 0x31);
+                    __m512i db_values = _mm512_castsi256_si512(db_low);
+                    db_values = _mm512_inserti64x4(
+                        db_values, db_high, 1);
+                    const __m512i pair_sums =
+                        _mm512_maddubs_epi16(db_values, qbytes);
+                    acc[lane] = _mm512_add_epi32(
+                        acc[lane], _mm512_madd_epi16(pair_sums, ones16));
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const int64_t remaining_dot = static_cast<int64_t>(
+                    _mm512_reduce_add_epi32(acc[lane]));
+                out_distances[group + lane] = finishQuantizedTraversalDistance(
+                    query, loadHeader(records[lane]), scale, code_sum,
+                    short_ips[group + lane], remaining_dot);
+            }
+        }
+#endif
+    }
+
+    float finishQuantizedTraversalDistance(
+        const QueryContext &query,
+        const EncodedHeader &header,
+        float scale,
+        int64_t code_sum,
+        float short_ip,
+        int64_t remaining_dot) const {
+        const double centered_remaining = static_cast<double>(scale) * (
+            static_cast<double>(remaining_dot) -
+            0.5 * static_cast<double>(kRemainingMax) *
+                static_cast<double>(code_sum));
+        const double signed_long_ip =
+            static_cast<double>(kMsbWeight) * static_cast<double>(short_ip) +
+            centered_remaining;
+        return header.norm_sqr + query.query_norm_sqr - static_cast<float>(
+            static_cast<double>(header.long_scale) * signed_long_ip);
+    }
+
     size_t paper_msb_code_bytes() const override {
         return (code_dim_ + 7U) / 8U;
     }
@@ -3700,15 +4391,16 @@ class RaBitQSpace : public SpaceInterface<float> {
         return out;
     }
 
-    PaperPruneEstimate<float> compute_paper_prune_estimate_sidecar(
-        const void *prepared_query,
+    // Full-precision-query 1-bit gate: masked-load dot of the FP32 query
+    // residual over the MSB plane, closed with the RaBitQ 1-bit bound. Used
+    // by the full codec.
+    PaperPruneEstimate<float> computeFullGateEstimate(
+        const QueryContext &query,
         const uint8_t *msb_code,
         const PaperPruneFactors<float> &factors,
-        float epsilon0) const override {
+        float epsilon0) const {
         PaperPruneEstimate<float> result;
         if (!factors.valid || !msb_code) return result;
-        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
-        const QueryContext &query = prepared.centroid_queries[0];
         float selected_sum = 0.0f;
 #if defined(__AVX512F__)
         __m512 sum = _mm512_setzero_ps();
@@ -3728,8 +4420,117 @@ class RaBitQSpace : public SpaceInterface<float> {
         return finish_paper_prune_estimate_sidecar(short_ip, factors, query, epsilon0);
     }
 
+    // Full-query gate for random graph candidates.  Process eight candidate
+    // sidecars directly by id: every FP32 query block is loaded once and fed
+    // to eight independent accumulators.  Unlike the older 32-candidate path,
+    // this performs no heap allocation, staging copy, or scalar tail pass.
+    void compute_full_paper_prune_estimate_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const uint8_t *msb_base,
+        size_t msb_stride,
+        const void *factors_base,
+        size_t factors_stride,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const char *factor_bytes = static_cast<const char *>(factors_base);
+#if defined(__AVX512F__)
+        const bool simd_ok = (code_dim_ % 16U) == 0U;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t position = 0; position < count; ++position) {
+                const size_t id = static_cast<size_t>(ids[position]);
+                PaperPruneFactors<float> factors;
+                std::memcpy(
+                    &factors, factor_bytes + id * factors_stride,
+                    sizeof(factors));
+                out[position] = computeFullGateEstimate(
+                    query, msb_base + id * msb_stride, factors, epsilon0);
+            }
+            return;
+        }
+#if defined(__AVX512F__)
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const uint8_t *codes[8] = {};
+            __m512 acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                codes[lane] = msb_base + id * msb_stride;
+#if defined(__GNUC__) || defined(__clang__)
+                for (size_t offset = 0; offset < msb_stride; offset += 64U) {
+                    __builtin_prefetch(codes[lane] + offset, 0, 1);
+                }
+                __builtin_prefetch(
+                    factor_bytes + id * factors_stride, 0, 1);
+#endif
+            }
+            for (size_t dim = 0; dim < code_dim_; dim += 16U) {
+                const __m512 qvec = _mm512_loadu_ps(
+                    query.rotated_residual.data() + dim);
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    uint16_t bits = 0;
+                    std::memcpy(
+                        &bits, codes[lane] + (dim >> 3U), sizeof(bits));
+                    acc[lane] = _mm512_add_ps(
+                        acc[lane],
+                        _mm512_maskz_mov_ps(
+                            static_cast<__mmask16>(bits), qvec));
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                PaperPruneFactors<float> factors;
+                std::memcpy(
+                    &factors, factor_bytes + id * factors_stride,
+                    sizeof(factors));
+                const float selected_sum =
+                    _mm512_reduce_add_ps(acc[lane]);
+                out[position] = finish_paper_prune_estimate_sidecar(
+                    selected_sum - query.half_sum_residual,
+                    factors, query, epsilon0);
+            }
+        }
+#endif
+    }
+
+    PaperPruneEstimate<float> compute_paper_prune_estimate_sidecar(
+        const void *prepared_query,
+        const uint8_t *msb_code,
+        const PaperPruneFactors<float> &factors,
+        float epsilon0) const override {
+        PaperPruneEstimate<float> result;
+        if (!factors.valid || !msb_code) return result;
+        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        if (prepared.query_coarse_codec == QueryCoarseCodec::B1) {
+            return compute_b1_paper_prune_estimate(query, msb_code, factors, epsilon0);
+        }
+        if (prepared.query_coarse_codec == QueryCoarseCodec::Int4 ||
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8) {
+            // Query-codec comparisons keep the database side fixed at the
+            // same 1-bit MSB sidecar. Only the query representation changes.
+            return compute_paper_prune_estimate_int_msb_gate(
+                prepared_query, msb_code, factors, epsilon0);
+        }
+        return computeFullGateEstimate(query, msb_code, factors, epsilon0);
+    }
+
 #if defined(__AVX512F__) && defined(__AVX512BW__)
-    // 16-candidate lane-parallel paper estimate. Each candidate accumulates
+    // 32-candidate lane-parallel paper estimate. Each candidate accumulates
     // over chunks in the exact same order as the single-candidate AVX-512
     // path (chunk ascending, 16 masked lanes added per chunk, one final
     // horizontal reduce), so short_ip / lower_bound are bit-identical.
@@ -3741,27 +4542,46 @@ class RaBitQSpace : public SpaceInterface<float> {
         PaperPruneEstimate<float> *out) const {
         const PreparedQuery &prepared =
             *static_cast<const PreparedQuery *>(prepared_query);
+        if (prepared.query_coarse_codec == QueryCoarseCodec::B1) {
+            compute_b1_paper_prune_estimate_batch(
+                prepared_query, msb_codes, factors, epsilon0, out);
+            return;
+        }
+        if (prepared.query_coarse_codec == QueryCoarseCodec::Int4 ||
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8) {
+            compute_paper_prune_estimate_int_msb_gate_batch(
+                prepared_query, msb_codes, factors, epsilon0, out);
+            return;
+        }
         const QueryContext &query = prepared.centroid_queries[0];
-        __m512 acc[16];
-        for (size_t c = 0; c < 16; ++c) {
-            acc[c] = _mm512_setzero_ps();
-        }
-        for (size_t i = 0; i < code_dim_; i += 16U) {
-            const __m512 qvec =
-                _mm512_loadu_ps(query.rotated_residual.data() + i);
+        // 32 candidates = two 16-lane AVX-512 passes; only 16 accumulators are
+        // live at a time so the zmm register file does not spill. Each
+        // candidate keeps the same chunk-ascending accumulation order as the
+        // single-candidate path, so results are bit-identical.
+        for (size_t group = 0; group < 2; ++group) {
+            __m512 acc[16];
             for (size_t c = 0; c < 16; ++c) {
-                uint16_t bits = 0;
-                std::memcpy(&bits, msb_codes[c] + (i >> 3U), sizeof(bits));
-                const __m512 sel =
-                    _mm512_maskz_mov_ps(static_cast<__mmask16>(bits), qvec);
-                acc[c] = _mm512_add_ps(acc[c], sel);
+                acc[c] = _mm512_setzero_ps();
             }
-        }
-        for (size_t c = 0; c < 16; ++c) {
-            const float selected_sum = _mm512_reduce_add_ps(acc[c]);
-            const float short_ip = selected_sum - query.half_sum_residual;
-            out[c] = finish_paper_prune_estimate_sidecar(
-                short_ip, factors[c], query, epsilon0);
+            for (size_t i = 0; i < code_dim_; i += 16U) {
+                const __m512 qvec =
+                    _mm512_loadu_ps(query.rotated_residual.data() + i);
+                for (size_t c = 0; c < 16; ++c) {
+                    const size_t cc = group * 16U + c;
+                    uint16_t bits = 0;
+                    std::memcpy(&bits, msb_codes[cc] + (i >> 3U), sizeof(bits));
+                    const __m512 sel =
+                        _mm512_maskz_mov_ps(static_cast<__mmask16>(bits), qvec);
+                    acc[c] = _mm512_add_ps(acc[c], sel);
+                }
+            }
+            for (size_t c = 0; c < 16; ++c) {
+                const size_t cc = group * 16U + c;
+                const float selected_sum = _mm512_reduce_add_ps(acc[c]);
+                const float short_ip = selected_sum - query.half_sum_residual;
+                out[cc] = finish_paper_prune_estimate_sidecar(
+                    short_ip, factors[cc], query, epsilon0);
+            }
         }
     }
 #else
@@ -3771,12 +4591,108 @@ class RaBitQSpace : public SpaceInterface<float> {
         const PaperPruneFactors<float> *factors,
         float epsilon0,
         PaperPruneEstimate<float> *out) const {
-        for (size_t c = 0; c < 16; ++c) {
+        for (size_t c = 0; c < kPaperBatch; ++c) {
             out[c] = compute_paper_prune_estimate_sidecar(
                 prepared_query, msb_codes[c], factors[c], epsilon0);
         }
     }
 #endif
+
+    // B1 gate for random graph candidates. The old 32-lane path first copied
+    // every sidecar into a temporary matrix and then used AVX-512 gathers plus
+    // a nibble popcount LUT. On CPUs without AVX-512 VPOPCNTDQ, eight
+    // interleaved scalar POPCNT streams are cheaper: the query word is loaded
+    // once, candidate words are prefetched/directly loaded by id, and no
+    // staging allocation or copy is required.
+    void compute_b1_paper_prune_estimate_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const uint8_t *msb_base,
+        size_t msb_stride,
+        const void *factors_base,
+        size_t factors_stride,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const char *factor_bytes = static_cast<const char *>(factors_base);
+        const size_t msb_bytes = (code_dim_ + 7U) / 8U;
+        const size_t word_count = msb_bytes / sizeof(uint64_t);
+        const size_t tail_offset = word_count * sizeof(uint64_t);
+        const bool query_valid =
+            query.b1_short_scale > 0.0f &&
+            std::isfinite(query.b1_short_scale) &&
+            query.query_norm > 0.0f;
+
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const uint8_t *codes[8] = {};
+            uint64_t mismatches[8] = {};
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                codes[lane] = msb_base + id * msb_stride;
+#if defined(__GNUC__) || defined(__clang__)
+                const size_t pf = position + 8U;
+                if (pf < count) {
+                    const size_t next_id = static_cast<size_t>(ids[pf]);
+                    __builtin_prefetch(msb_base + next_id * msb_stride, 0, 3);
+                    __builtin_prefetch(
+                        factor_bytes + next_id * factors_stride, 0, 3);
+                }
+#endif
+            }
+            for (size_t word = 0; word < word_count; ++word) {
+                uint64_t query_word = 0;
+                std::memcpy(
+                    &query_word,
+                    query.b1_code.data() + word * sizeof(uint64_t),
+                    sizeof(query_word));
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    uint64_t db_word = 0;
+                    std::memcpy(
+                        &db_word,
+                        codes[lane] + word * sizeof(uint64_t),
+                        sizeof(db_word));
+                    mismatches[lane] += static_cast<uint64_t>(
+                        __builtin_popcountll(query_word ^ db_word));
+                }
+            }
+            for (size_t byte = tail_offset; byte < msb_bytes; ++byte) {
+                const uint8_t query_byte = query.b1_code[byte];
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    mismatches[lane] += static_cast<uint64_t>(
+                        __builtin_popcount(
+                            static_cast<unsigned int>(
+                                query_byte ^ codes[lane][byte])));
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                PaperPruneFactors<float> factors;
+                std::memcpy(
+                    &factors,
+                    factor_bytes + id * factors_stride,
+                    sizeof(factors));
+                if (!query_valid || !factors.valid ||
+                    factors.cross_scale <= 0.0f ||
+                    !std::isfinite(factors.cross_scale) ||
+                    factors.data_norm <= 0.0f) {
+                    out[position] = PaperPruneEstimate<float>{};
+                    continue;
+                }
+                const float signed_dot = static_cast<float>(code_dim_) -
+                    2.0f * static_cast<float>(mismatches[lane]);
+                const float short_ip_sym =
+                    signed_dot * query.b1_short_scale / 8.0f;
+                out[position] = finish_b1_paper_prune_estimate(
+                    short_ip_sym, factors, query, epsilon0);
+            }
+        }
+    }
 
     // Tail of the sidecar paper estimate: turns a computed short-code inner
     // product into the prune lower bound using the pre-extracted factors.
@@ -3802,6 +4718,563 @@ class RaBitQSpace : public SpaceInterface<float> {
             ? epsilon0 * factors.error_cross_scale * query.query_norm / max_cross : 0.0f;
         result.valid = std::isfinite(result.lower_bound);
         return result;
+    }
+
+    // Symmetric 1-bit coarse bound: both query and database are reduced to
+    // sign codes; the sign-code inner product is popcount-accelerated and
+    // rescaled by each side's self-dot correction factor, mirroring the
+    // DB-side short_scale machinery on the query side.
+    PaperPruneEstimate<float> finish_b1_paper_prune_estimate(
+        float short_ip_sym,
+        const PaperPruneFactors<float> &factors,
+        const QueryContext &query,
+        float epsilon0) const {
+        PaperPruneEstimate<float> result;
+        if (!factors.valid) return result;
+        const float cross_estimate = short_ip_sym * factors.cross_scale;
+        const float max_cross = 2.0f * factors.data_norm * query.query_norm;
+        // Symmetric 1-bit bound: the RaBitQ-form error bound applies to each
+        // side (the x2 squared-L2 conversion is already inside both scale
+        // terms), and the two sides are added so the query-side error of the
+        // 1-bit sign code is covered. Dropping the query term makes the bound
+        // unsafe (unit test: 9/64 bounds exceed the true distance).
+        const float db_err = factors.error_cross_scale * query.query_norm;
+        const float query_err = query.b1_error_scale * factors.data_norm;
+        const float upper_cross = std::max(-max_cross, std::min(
+            max_cross, cross_estimate + epsilon0 * (db_err + query_err)));
+        result.lower_bound = factors.norm_sqr + query.query_norm_sqr - upper_cross;
+        result.short_ip = short_ip_sym;
+        result.alpha = query.b1_alpha;
+        result.ip_hat = max_cross > 0.0f ? cross_estimate / max_cross : 0.0f;
+        result.error_bound = max_cross > 0.0f
+            ? epsilon0 * (db_err + query_err) / max_cross : 0.0f;
+        result.valid = std::isfinite(result.lower_bound);
+        return result;
+    }
+
+    PaperPruneEstimate<float> compute_b1_paper_prune_estimate(
+        const QueryContext &query,
+        const uint8_t *msb_code,
+        const PaperPruneFactors<float> &factors,
+        float epsilon0) const {
+        PaperPruneEstimate<float> result;
+        if (!factors.valid || !msb_code) return result;
+        if (query.b1_short_scale <= 0.0f || !std::isfinite(query.b1_short_scale) ||
+            query.query_norm <= 0.0f || factors.cross_scale <= 0.0f ||
+            !std::isfinite(factors.cross_scale) || factors.data_norm <= 0.0f)
+            return result;
+        uint64_t mismatches = 0;
+        const size_t bytes = (code_dim_ + 7U) / 8U;
+        for (size_t j = 0; j < bytes; ++j) {
+            mismatches += static_cast<uint64_t>(__builtin_popcountll(
+                static_cast<uint64_t>(query.b1_code[j]) ^
+                static_cast<uint64_t>(msb_code[j])));
+        }
+        const float signed_dot =
+            static_cast<float>(code_dim_) - 2.0f * static_cast<float>(mismatches);
+        // cross_estimate feeds the same finish as the full path, which works
+        // in the "2 * inner product" convention, so the /16 here must be /8.
+        const float short_ip_sym = signed_dot * query.b1_short_scale / 8.0f;
+        return finish_b1_paper_prune_estimate(short_ip_sym, factors, query, epsilon0);
+    }
+
+    // True 32-lane popcount batch for the B1 symmetric bound: per 64-bit word,
+    // gather the 32 candidates' MSB words, xor with the query word and popcount
+    // each 64-bit lane via nibble-LUT + vpsadbw (no VPOPCNTDQ on this CPU).
+    // Mismatch totals are accumulated in 32 u16 lanes (safe while code_dim_
+    // fits in u16; otherwise fall back to per-candidate scalar).
+    void compute_b1_paper_prune_estimate_batch(
+        const void *prepared_query,
+        const uint8_t *const *msb_codes,
+        const PaperPruneFactors<float> *factors,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const size_t msb_bytes = (code_dim_ + 7U) / 8U;
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const bool simd_ok =
+            code_dim_ <= 65535 && (msb_bytes % 8U == 0U) &&
+            query.b1_short_scale > 0.0f && std::isfinite(query.b1_short_scale) &&
+            query.query_norm > 0.0f;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t c = 0; c < kPaperBatch; ++c) {
+                out[c] = compute_b1_paper_prune_estimate(
+                    query, msb_codes[c], factors[c], epsilon0);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const __m512i nibble_mask = _mm512_set1_epi8(0x0F);
+        const __m512i zero = _mm512_setzero_si512();
+        // 16-entry byte-popcount LUT repeated in each 128-bit lane (vpshufb
+        // selects within its own 128-bit lane).
+        // vpshufb LUT per 128-bit lane; set_epi8 lists bytes high-to-low, so
+        // each lane repeats [v15..v0] = [4,3,3,2,3,2,2,1,3,2,2,1,2,1,1,0].
+        const __m512i popcnt_lut = _mm512_set_epi8(
+            4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
+            4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
+            4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
+            4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0);
+        __m128i acc[4] = {
+            _mm_setzero_si128(), _mm_setzero_si128(),
+            _mm_setzero_si128(), _mm_setzero_si128(),
+        };
+        const size_t words = msb_bytes / 8U;
+        for (size_t j = 0; j < words; ++j) {
+            uint64_t query_word = 0;
+            std::memcpy(&query_word, query.b1_code.data() + 8U * j, sizeof(query_word));
+            const __m512i qb = _mm512_set1_epi64(static_cast<long long>(query_word));
+            for (size_t g = 0; g < 4; ++g) {
+                const long long stride = static_cast<long long>(msb_bytes);
+                const __m512i idx = _mm512_set_epi64(
+                    stride * static_cast<long long>(8 * g + 7),
+                    stride * static_cast<long long>(8 * g + 6),
+                    stride * static_cast<long long>(8 * g + 5),
+                    stride * static_cast<long long>(8 * g + 4),
+                    stride * static_cast<long long>(8 * g + 3),
+                    stride * static_cast<long long>(8 * g + 2),
+                    stride * static_cast<long long>(8 * g + 1),
+                    stride * static_cast<long long>(8 * g + 0));
+                const __m512i gathered = _mm512_i64gather_epi64(
+                    idx, msb_codes[0] + 8U * j, 1);
+                const __m512i x = _mm512_xor_si512(gathered, qb);
+                const __m512i lo = _mm512_and_si512(x, nibble_mask);
+                const __m512i hi = _mm512_and_si512(
+                    _mm512_srli_epi16(x, 4), nibble_mask);
+                __m512i pc = _mm512_shuffle_epi8(popcnt_lut, lo);
+                pc = _mm512_add_epi8(pc, _mm512_shuffle_epi8(popcnt_lut, hi));
+                const __m512i sums = _mm512_sad_epu8(pc, zero);
+                const __m128i c16 = _mm512_cvtepi64_epi16(sums);
+                acc[g] = _mm_add_epi16(acc[g], c16);
+            }
+        }
+        for (size_t g = 0; g < 4; ++g) {
+            uint16_t lanes[8];
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(lanes), acc[g]);
+            for (size_t k = 0; k < 8; ++k) {
+                const size_t c = 8U * g + k;
+                const float signed_dot =
+                    static_cast<float>(code_dim_) - 2.0f * static_cast<float>(lanes[k]);
+                const float short_ip_sym = signed_dot * query.b1_short_scale / 8.0f;
+                out[c] = finish_b1_paper_prune_estimate(
+                    short_ip_sym, factors[c], query, epsilon0);
+            }
+        }
+#endif
+    }
+
+    // Asymmetric fixed-1-bit-DB gate for INT4/INT8. Since the DB operand is a
+    // mask, sum the selected signed query bytes directly instead of evaluating
+    // 4/8 separate query bit planes.
+    PaperPruneEstimate<float> compute_paper_prune_estimate_int_msb_gate(
+        const void *prepared_query,
+        const uint8_t *msb_code,
+        const PaperPruneFactors<float> &factors,
+        float epsilon0) const {
+        PaperPruneEstimate<float> result;
+        if (!factors.valid || !msb_code) return result;
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        if (query.query_norm <= 0.0f || factors.cross_scale <= 0.0f ||
+            !std::isfinite(factors.cross_scale)) {
+            return result;
+        }
+        const bool int8_mode =
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x =
+            int8_mode ? query.int8_code.data() : query.int4_code.data();
+        const int64_t code_sum =
+            int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        const int64_t selected = maskedQuantizedQuerySum(msb_code, x);
+        const float short_ip = 0.5f * scale * static_cast<float>(
+            static_cast<int64_t>(2) * selected - code_sum);
+        return finish_paper_prune_estimate_sidecar(
+            short_ip, factors, query, epsilon0);
+    }
+
+    // Direct 32-candidate INT4/INT8 gate. For each 64-dimensional chunk, one
+    // query-byte vector is shared by eight candidates; each candidate's 1-bit
+    // DB word becomes an AVX-512 byte mask, followed by two horizontal integer
+    // multiply-adds. This removes all 4/8 query-plane popcounts.
+    void compute_paper_prune_estimate_int_msb_gate_batch(
+        const void *prepared_query,
+        const uint8_t *const *msb_codes,
+        const PaperPruneFactors<float> *factors,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const size_t msb_bytes = (code_dim_ + 7U) / 8U;
+        const bool int8_mode =
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x =
+            int8_mode ? query.int8_code.data() : query.int4_code.data();
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        bool contiguous = true;
+        for (size_t c = 1; c < kPaperBatch; ++c) {
+            if (msb_codes[c] != msb_codes[0] + c * msb_bytes) {
+                contiguous = false;
+                break;
+            }
+        }
+        const bool simd_ok =
+            contiguous && (code_dim_ % 64U == 0U) &&
+            code_dim_ <= static_cast<size_t>(
+                std::numeric_limits<int32_t>::max() / 128) &&
+            query.query_norm > 0.0f;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t c = 0; c < kPaperBatch; ++c) {
+                out[c] = compute_paper_prune_estimate_int_msb_gate(
+                    prepared_query, msb_codes[c], factors[c], epsilon0);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const __m512i ones8 = _mm512_set1_epi8(1);
+        const __m512i ones16 = _mm512_set1_epi16(1);
+        int64_t selected[kPaperBatch] = {};
+        for (size_t group = 0; group < 4U; ++group) {
+            __m512i acc[8] = {
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+            };
+            for (size_t offset = 0; offset < code_dim_; offset += 64U) {
+                const __m512i qbytes = _mm512_loadu_si512(
+                    reinterpret_cast<const void *>(x + offset));
+                for (size_t lane = 0; lane < 8U; ++lane) {
+                    const size_t candidate = 8U * group + lane;
+                    uint64_t bits = 0;
+                    std::memcpy(
+                        &bits, msb_codes[candidate] + (offset >> 3U),
+                        sizeof(bits));
+                    const __m512i chosen = _mm512_maskz_mov_epi8(
+                        static_cast<__mmask64>(bits), qbytes);
+                    const __m512i pair_sums =
+                        _mm512_maddubs_epi16(ones8, chosen);
+                    acc[lane] = _mm512_add_epi32(
+                        acc[lane], _mm512_madd_epi16(pair_sums, ones16));
+                }
+            }
+            for (size_t lane = 0; lane < 8U; ++lane) {
+                selected[8U * group + lane] = static_cast<int64_t>(
+                    _mm512_reduce_add_epi32(acc[lane]));
+            }
+        }
+        const int64_t code_sum =
+            int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        for (size_t c = 0; c < kPaperBatch; ++c) {
+            const float short_ip = 0.5f * scale * static_cast<float>(
+                static_cast<int64_t>(2) * selected[c] - code_sum);
+            out[c] = finish_paper_prune_estimate_sidecar(
+                short_ip, factors[c], query, epsilon0);
+        }
+#endif
+    }
+
+    // INT4/INT8 fixed-1-bit gate for random graph candidates. Read sidecars
+    // directly by id and share each 64-byte signed-query vector across eight
+    // candidates. This preserves the integer gate arithmetic while removing
+    // the old 32-record staging allocation and copy.
+    void compute_int_paper_prune_estimate_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const uint8_t *msb_base,
+        size_t msb_stride,
+        const void *factors_base,
+        size_t factors_stride,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const bool int8_mode =
+            prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x =
+            int8_mode ? query.int8_code.data() : query.int4_code.data();
+        const char *factor_bytes = static_cast<const char *>(factors_base);
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const bool simd_ok =
+            (prepared.query_coarse_codec == QueryCoarseCodec::Int4 ||
+             prepared.query_coarse_codec == QueryCoarseCodec::Int8) &&
+            (code_dim_ % 64U == 0U) &&
+            code_dim_ <= static_cast<size_t>(
+                std::numeric_limits<int32_t>::max() / 128) &&
+            query.query_norm > 0.0f;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t position = 0; position < count; ++position) {
+                const size_t id = static_cast<size_t>(ids[position]);
+                PaperPruneFactors<float> factors;
+                std::memcpy(
+                    &factors, factor_bytes + id * factors_stride,
+                    sizeof(factors));
+                out[position] = compute_paper_prune_estimate_int_msb_gate(
+                    prepared_query, msb_base + id * msb_stride,
+                    factors, epsilon0);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const __m512i ones8 = _mm512_set1_epi8(1);
+        const __m512i ones16 = _mm512_set1_epi16(1);
+        const int64_t code_sum =
+            int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const uint8_t *codes[8] = {};
+            __m512i acc[8] = {
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+                _mm512_setzero_si512(), _mm512_setzero_si512(),
+            };
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                codes[lane] = msb_base + id * msb_stride;
+#if defined(__GNUC__) || defined(__clang__)
+                for (size_t offset = 0; offset < msb_stride; offset += 64U) {
+                    __builtin_prefetch(codes[lane] + offset, 0, 1);
+                }
+                __builtin_prefetch(
+                    factor_bytes + id * factors_stride, 0, 1);
+#endif
+            }
+            for (size_t offset = 0; offset < code_dim_; offset += 64U) {
+                const __m512i qbytes = _mm512_loadu_si512(
+                    reinterpret_cast<const void *>(x + offset));
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    uint64_t bits = 0;
+                    std::memcpy(
+                        &bits, codes[lane] + (offset >> 3U),
+                        sizeof(bits));
+                    const __m512i chosen = _mm512_maskz_mov_epi8(
+                        static_cast<__mmask64>(bits), qbytes);
+                    const __m512i pair_sums =
+                        _mm512_maddubs_epi16(ones8, chosen);
+                    acc[lane] = _mm512_add_epi32(
+                        acc[lane],
+                        _mm512_madd_epi16(pair_sums, ones16));
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const size_t id = static_cast<size_t>(ids[position]);
+                PaperPruneFactors<float> factors;
+                std::memcpy(
+                    &factors, factor_bytes + id * factors_stride,
+                    sizeof(factors));
+                const int64_t selected = static_cast<int64_t>(
+                    _mm512_reduce_add_epi32(acc[lane]));
+                const float short_ip = 0.5f * scale * static_cast<float>(
+                    static_cast<int64_t>(2) * selected - code_sum);
+                out[position] = finish_paper_prune_estimate_sidecar(
+                    short_ip, factors, query, epsilon0);
+            }
+        }
+#endif
+    }
+    // INT4/INT8 asymmetric coarse bound: the query residual is quantized to a
+    // centered global-scale integer code and substituted into the existing
+    // long-distance estimator (signed_long_ip = <c - 7.5, q_hat>), i.e. the
+    // estimation formula is unchanged and the quantized query is treated as
+    // the original vector. Requires the full encoded record for the DB code.
+    int64_t quantizedCodeDotDispatch(
+        const uint8_t *code,
+        const int8_t *x,
+        uint8_t value_mask) const {
+#if defined(__AVX2__)
+        if (code_layout_ == RaBitQCodeLayout::SequentialNibble) {
+            __m128i acc = _mm_setzero_si128();
+            const __m128i low_mask = _mm_set1_epi8(
+                static_cast<char>(value_mask));
+            const __m128i shuf = _mm_setr_epi8(
+                0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15);
+            const size_t pair_count = code_dim_ >> 1U;
+            size_t pair = 0;
+            for (; pair + 16U <= pair_count; pair += 16U) {
+                const __m128i packed = _mm_loadu_si128(
+                    reinterpret_cast<const __m128i *>(code + pair));
+                const __m128i lo = _mm_and_si128(packed, low_mask);
+                const __m128i hi = _mm_and_si128(
+                    _mm_srli_epi16(packed, 4), low_mask);
+                const __m128i xl = _mm_loadu_si128(
+                    reinterpret_cast<const __m128i *>(x + (pair << 1U)));
+                const __m128i xh = _mm_loadu_si128(
+                    reinterpret_cast<const __m128i *>(x + (pair << 1U) + 16U));
+                const __m128i dl = _mm_shuffle_epi8(xl, shuf);
+                const __m128i dh = _mm_shuffle_epi8(xh, shuf);
+                const __m128i x_even = _mm_unpacklo_epi64(dl, dh);
+                const __m128i x_odd = _mm_unpackhi_epi64(dl, dh);
+                __m128i d = _mm_maddubs_epi16(lo, x_even);
+                d = _mm_add_epi16(d, _mm_maddubs_epi16(hi, x_odd));
+                // Widen every chunk: 32 dims -> up to 16 * 15 * 127 products.
+                __m128i lo32 = _mm_cvtepi16_epi32(d);
+                __m128i hi32 = _mm_cvtepi16_epi32(_mm_srli_si128(d, 8));
+                acc = _mm_add_epi32(acc, _mm_add_epi32(lo32, hi32));
+            }
+            int64_t total = 0;
+            int32_t lanes[4];
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(lanes), acc);
+            for (int32_t lane : lanes) total += lane;
+            for (; pair < pair_count; ++pair) {
+                total += static_cast<int64_t>(
+                    codeValue(code, pair << 1U) & value_mask) *
+                    static_cast<int64_t>(x[pair << 1U]);
+                total += static_cast<int64_t>(
+                    codeValue(code, (pair << 1U) + 1U) & value_mask) *
+                    static_cast<int64_t>(x[(pair << 1U) + 1U]);
+            }
+            return total;
+        }
+#endif
+        int64_t dot = 0;
+        for (size_t i = 0; i < code_dim_; ++i) {
+            dot += static_cast<int64_t>(
+                primaryCodeValue(code, i) & value_mask) *
+                static_cast<int64_t>(x[i]);
+        }
+        return dot;
+    }
+
+    int64_t quantizedLongCodeDotDispatch(
+        const uint8_t *code,
+        const int8_t *x) const {
+        return quantizedCodeDotDispatch(code, x, 0x0FU);
+    }
+
+    int64_t quantizedRemainingCodeDotDispatch(
+        const uint8_t *code,
+        const int8_t *x) const {
+        return quantizedCodeDotDispatch(code, x, kRemainingMax);
+    }
+
+    int64_t maskedQuantizedQuerySum(
+        const uint8_t *msb_code,
+        const int8_t *x) const {
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+        const __m512i ones8 = _mm512_set1_epi8(1);
+        const __m512i ones16 = _mm512_set1_epi16(1);
+        int64_t total = 0;
+        size_t offset = 0;
+        for (; offset + 64U <= code_dim_; offset += 64U) {
+            uint64_t bits = 0;
+            std::memcpy(&bits, msb_code + (offset >> 3U), sizeof(bits));
+            const __m512i qbytes = _mm512_loadu_si512(
+                reinterpret_cast<const void *>(x + offset));
+            const __m512i chosen = _mm512_maskz_mov_epi8(
+                static_cast<__mmask64>(bits), qbytes);
+            const __m512i pair_sums =
+                _mm512_maddubs_epi16(ones8, chosen);
+            total += static_cast<int64_t>(_mm512_reduce_add_epi32(
+                _mm512_madd_epi16(pair_sums, ones16)));
+        }
+        for (; offset < code_dim_; ++offset) {
+            if (((msb_code[offset >> 3U] >> (offset & 7U)) & 1U) != 0)
+                total += static_cast<int64_t>(x[offset]);
+        }
+        return total;
+#else
+        int64_t total = 0;
+        for (size_t i = 0; i < code_dim_; ++i) {
+            if (((msb_code[i >> 3U] >> (i & 7U)) & 1U) != 0)
+                total += static_cast<int64_t>(x[i]);
+        }
+        return total;
+#endif
+    }
+
+    PaperPruneEstimate<float> compute_paper_prune_estimate_int_codec(
+        const void *prepared_query,
+        const void *data_point,
+        const PaperPruneFactors<float> &factors,
+        float epsilon0) const {
+        PaperPruneEstimate<float> result;
+        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const bool int8_mode = prepared.query_coarse_codec == QueryCoarseCodec::Int8;
+        const int8_t *x = int8_mode ? query.int8_code.data() : query.int4_code.data();
+        const float scale = int8_mode ? query.int8_scale : query.int4_scale;
+        const int64_t code_sum = int8_mode ? query.int8_code_sum : query.int4_code_sum;
+        const EncodedHeader header = loadHeader(data_point);
+        if (!(header.long_scale > 0.0f) || !std::isfinite(header.long_scale) ||
+            !(scale > 0.0f) || !std::isfinite(scale) || query.query_norm <= 0.0f) {
+            result.lower_bound = header.norm_sqr + query.query_norm_sqr;
+            result.valid = std::isfinite(result.lower_bound);
+            return result;
+        }
+        const uint8_t *code = codeBytes(data_point);
+        const int64_t dot_cx = quantizedLongCodeDotDispatch(code, x);
+        // ExRaBitQ 4-bit error bound for the DB side (tight for the long
+        // estimator), replacing the looser 1-bit sidecar error_cross_scale.
+        const float db_error_scale = shortFactors(data_point)->error_scale;
+        return finish_int_paper_prune_estimate(
+            query, header, db_error_scale, dot_cx, scale, code_sum, epsilon0);
+    }
+
+    PaperPruneEstimate<float> finish_int_paper_prune_estimate(
+        const QueryContext &query,
+        const EncodedHeader &header,
+        float db_error_scale,
+        int64_t dot_cx,
+        float scale,
+        int64_t code_sum,
+        float epsilon0) const {
+        PaperPruneEstimate<float> result;
+        const double centered =
+            static_cast<double>(dot_cx) - 7.5 * static_cast<double>(code_sum);
+        const double signed_long_ip = static_cast<double>(scale) * centered;
+        const double est_ip = static_cast<double>(header.long_scale) * signed_long_ip;
+        const float est =
+            header.norm_sqr + query.query_norm_sqr - static_cast<float>(est_ip);
+        // DB-side ExRaBitQ 4-bit bound in the distance domain (its 2 * norm
+        // factor is the x2 from d^2 = ||x||^2 + ||q||^2 - 2<x,q>). The query
+        // side contributes no explicit term: with RaBitQ-style randomized
+        // rounding (3.3.1) the query-quantization error is unbiased and
+        // negligible (Thm 3.3), so it is absorbed into the DB-side bound.
+        const double db_err = static_cast<double>(db_error_scale) *
+            static_cast<double>(query.query_norm);
+        result.lower_bound = est - static_cast<float>(epsilon0 * db_err);
+        result.short_ip = static_cast<float>(signed_long_ip);
+        result.ip_hat = 0.0f;
+        result.error_bound = est - result.lower_bound;
+        result.valid = std::isfinite(result.lower_bound);
+        return result;
+    }
+
+    // INT4/INT8 32-candidate batch. A 32-lane transpose-based integer kernel
+    // was measured slower than the per-candidate AVX2 dot (the 32 x (D/2) byte
+    // transpose cost dominates), so the batch keeps one FFI per 32 candidates
+    // and reuses the fast per-candidate integer dot. Results are bit-identical
+    // to the single-candidate path by construction.
+    void compute_paper_prune_estimate_int_codec_batch(
+        const void *prepared_query,
+        const uint8_t *records_base,
+        size_t record_stride,
+        const PaperPruneFactors<float> *factors,
+        float epsilon0,
+        PaperPruneEstimate<float> *out) const {
+        for (size_t c = 0; c < kPaperBatch; ++c) {
+            out[c] = compute_paper_prune_estimate_int_codec(
+                prepared_query, records_base + c * record_stride, factors[c], epsilon0);
+        }
     }
 
     static uint8_t primaryTopTwoBits(uint8_t value) {
@@ -3949,6 +5422,359 @@ class RaBitQSpace : public SpaceInterface<float> {
         float long_distance) {
         const QueryContext &query = queryForEncoded(prepared_query, data_point);
         return computeResidualDistanceIntervalFromRecord(query, record, long_distance);
+    }
+
+    // Residual rerank for random graph candidates.  Interleave eight records
+    // so the query's even/odd AVX2 vectors are loaded once per 16 dimensions,
+    // while each candidate keeps its own accumulator.  This also folds the
+    // error-bound scale pass into the dot-product pass and avoids reading the
+    // unused ResidualCodeFactors stored at the start of every record.
+    void compute_residual_distance_intervals_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const void *encoded_base,
+        size_t encoded_stride,
+        const void *residual_base,
+        size_t residual_stride,
+        const float *long_distances,
+        DistanceInterval *out) const {
+        const char *encoded_bytes = static_cast<const char *>(encoded_base);
+        const char *residual_bytes = static_cast<const char *>(residual_base);
+#if defined(__AVX2__)
+        const bool simd_ok =
+            centroid_count_ == 1U && residual_bits_ == 4U &&
+            residual_block_size_ == kResidualBlockSize &&
+            (code_dim_ % kResidualBlockSize) == 0U;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t position = 0; position < count; ++position) {
+                const size_t id = static_cast<size_t>(ids[position]);
+                const void *encoded = encoded_bytes + id * encoded_stride;
+                const void *record = residual_bytes + id * residual_stride;
+                out[position] = computeResidualDistanceIntervalFromRecord(
+                    queryForEncoded(prepared_query, encoded),
+                    record,
+                    long_distances[position]);
+            }
+            return;
+        }
+#if defined(__AVX2__)
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const __m128i low_mask = _mm_set1_epi8(0x0F);
+        const __m256i seven = _mm256_set1_epi32(7);
+        const __m256i sixteen = _mm256_set1_epi32(16);
+        alignas(32) float product_lanes[8];
+        for (size_t group = 0; group < count; group += 8U) {
+            const size_t lanes = std::min<size_t>(8U, count - group);
+            const void *scale_storage[8] = {};
+            const uint8_t *codes[8] = {};
+            float ips[8] = {};
+            double error_norm_sqr[8] = {};
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t id = static_cast<size_t>(ids[group + lane]);
+                const void *record = residual_bytes + id * residual_stride;
+                scale_storage[lane] = residualScalesFromRecord(record);
+                codes[lane] = residualCodeBytesFromRecord(record);
+#if defined(__GNUC__) || defined(__clang__)
+                __builtin_prefetch(scale_storage[lane], 0, 1);
+                for (size_t offset = 0; offset < residual_code_bytes_; offset += 64U) {
+                    __builtin_prefetch(codes[lane] + offset, 0, 1);
+                }
+#endif
+            }
+            for (size_t block = 0; block < residual_block_count_; ++block) {
+                const size_t pair = block * (kResidualBlockSize >> 1U);
+                const __m256 query_even = _mm256_loadu_ps(
+                    query.rotated_residual_even.data() + pair);
+                const __m256 query_odd = _mm256_loadu_ps(
+                    query.rotated_residual_odd.data() + pair);
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    const float scale = loadResidualScale(
+                        scale_storage[lane], block);
+                    if (scale == 0.0f || !std::isfinite(scale)) {
+                        continue;
+                    }
+                    const __m128i packed = _mm_loadl_epi64(
+                        reinterpret_cast<const __m128i *>(codes[lane] + pair));
+                    const __m128i lo8 = _mm_and_si128(packed, low_mask);
+                    const __m128i hi8 = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), low_mask);
+                    __m256i lo32 = _mm256_cvtepu8_epi32(lo8);
+                    __m256i hi32 = _mm256_cvtepu8_epi32(hi8);
+                    lo32 = _mm256_sub_epi32(
+                        lo32,
+                        _mm256_and_si256(
+                            _mm256_cmpgt_epi32(lo32, seven), sixteen));
+                    hi32 = _mm256_sub_epi32(
+                        hi32,
+                        _mm256_and_si256(
+                            _mm256_cmpgt_epi32(hi32, seven), sixteen));
+                    __m256 products = _mm256_mul_ps(
+                        _mm256_cvtepi32_ps(lo32), query_even);
+                    products = _mm256_add_ps(
+                        products,
+                        _mm256_mul_ps(
+                            _mm256_cvtepi32_ps(hi32), query_odd));
+                    _mm256_store_ps(product_lanes, products);
+                    float block_ip = 0.0f;
+                    for (float value : product_lanes) {
+                        block_ip += value;
+                    }
+                    ips[lane] += scale * block_ip;
+                    const double per_dim_error =
+                        residual_coordinate_error_bound(scale, residual_bits_);
+                    error_norm_sqr[lane] +=
+                        static_cast<double>(kResidualBlockSize) *
+                        per_dim_error * per_dim_error;
+                }
+            }
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t position = group + lane;
+                const float distance =
+                    long_distances[position] - 2.0f * ips[lane];
+                const float err = static_cast<float>(
+                    2.0 * static_cast<double>(query.query_norm) *
+                    std::sqrt(error_norm_sqr[lane]));
+                out[position] = DistanceInterval{
+                    distance, distance - err, distance + err};
+            }
+        }
+#endif
+    }
+
+    // Final INT4/INT8 rerank: restore the complete FP32-query 4-bit base
+    // distance and apply the residual correction in one eight-candidate
+    // kernel.  A 32-dimensional query tile is loaded once and shared by the
+    // base-code and the two 16-dimensional residual blocks.  Accumulation
+    // order intentionally matches query_distance_batch_by_id followed by
+    // compute_residual_distance_intervals_batch_by_id, keeping the fused and
+    // legacy results bit-identical.
+    void compute_full_residual_distance_intervals_batch_by_id(
+        const void *prepared_query,
+        const uint32_t *ids,
+        size_t count,
+        const void *encoded_base,
+        size_t encoded_stride,
+        const void *residual_base,
+        size_t residual_stride,
+        DistanceInterval *out) const {
+        const char *encoded_bytes = static_cast<const char *>(encoded_base);
+        const char *residual_bytes = static_cast<const char *>(residual_base);
+#if defined(__AVX512F__) && defined(__AVX512BW__) && defined(__AVX512DQ__)
+        const bool simd_ok =
+            centroid_count_ == 1U &&
+            code_layout_ == RaBitQCodeLayout::SequentialNibble &&
+            residual_bits_ == 4U &&
+            residual_block_size_ == kResidualBlockSize &&
+            (code_dim_ % 32U) == 0U;
+#else
+        const bool simd_ok = false;
+#endif
+        if (!simd_ok) {
+            for (size_t position = 0; position < count; ++position) {
+                const size_t id = static_cast<size_t>(ids[position]);
+                const void *encoded = encoded_bytes + id * encoded_stride;
+                const void *record = residual_bytes + id * residual_stride;
+                const QueryContext &query =
+                    queryForEncoded(prepared_query, encoded);
+                const float long_distance = queryDistanceLong(query, encoded);
+                out[position] = computeResidualDistanceIntervalFromRecord(
+                    query, record, long_distance);
+            }
+            return;
+        }
+#if defined(__AVX512F__) && defined(__AVX512BW__) && defined(__AVX512DQ__)
+        const PreparedQuery &prepared =
+            *static_cast<const PreparedQuery *>(prepared_query);
+        const QueryContext &query = prepared.centroid_queries[0];
+        const __m128i base_remaining_mask = _mm_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const __m128i base_nibble_mask = _mm_set1_epi8(0x0F);
+        const __m128i selected_threshold = _mm_set1_epi8(
+            static_cast<char>(kRemainingMax));
+        const __m128i residual_low_mask = _mm_set1_epi8(0x0F);
+        const __m256i seven = _mm256_set1_epi32(7);
+        const __m256i sixteen = _mm256_set1_epi32(16);
+        const size_t pair_count = code_dim_ >> 1U;
+        alignas(32) float product_lanes[8];
+
+        // Four lanes keep the eight long-code accumulators plus residual
+        // temporaries resident in registers. Eight fused lanes caused spills
+        // even though each standalone base/residual kernel favored eight.
+        for (size_t group = 0; group < count; group += 4U) {
+            const size_t lanes = std::min<size_t>(4U, count - group);
+            const void *encoded_records[8] = {};
+            const uint8_t *base_codes[8] = {};
+            const void *residual_scales[8] = {};
+            const uint8_t *residual_codes[8] = {};
+            __m512 short_acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            __m512 remaining_acc[8] = {
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+                _mm512_setzero_ps(), _mm512_setzero_ps(),
+            };
+            float residual_ips[8] = {};
+            double error_norm_sqr[8] = {};
+
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const size_t id = static_cast<size_t>(ids[group + lane]);
+                encoded_records[lane] =
+                    encoded_bytes + id * encoded_stride;
+                base_codes[lane] = codeBytes(encoded_records[lane]);
+                const void *residual_record =
+                    residual_bytes + id * residual_stride;
+                residual_scales[lane] =
+                    residualScalesFromRecord(residual_record);
+                residual_codes[lane] =
+                    residualCodeBytesFromRecord(residual_record);
+#if defined(__GNUC__) || defined(__clang__)
+                __builtin_prefetch(encoded_records[lane], 0, 1);
+                __builtin_prefetch(residual_scales[lane], 0, 1);
+                for (size_t offset = 0; offset < residual_code_bytes_;
+                     offset += 64U) {
+                    __builtin_prefetch(
+                        residual_codes[lane] + offset, 0, 1);
+                }
+#endif
+            }
+
+            for (size_t pair = 0; pair < pair_count; pair += 16U) {
+                const __m512 even_q = _mm512_loadu_ps(
+                    query.rotated_residual_even.data() + pair);
+                const __m512 odd_q = _mm512_loadu_ps(
+                    query.rotated_residual_odd.data() + pair);
+                const __m256 even_q_half[2] = {
+                    _mm512_castps512_ps256(even_q),
+                    _mm512_extractf32x8_ps(even_q, 1),
+                };
+                const __m256 odd_q_half[2] = {
+                    _mm512_castps512_ps256(odd_q),
+                    _mm512_extractf32x8_ps(odd_q, 1),
+                };
+
+                for (size_t lane = 0; lane < lanes; ++lane) {
+                    const __m128i packed = _mm_loadu_si128(
+                        reinterpret_cast<const __m128i *>(
+                            base_codes[lane] + pair));
+                    const __m128i lo = _mm_and_si128(
+                        packed, base_remaining_mask);
+                    const __m128i hi = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), base_remaining_mask);
+                    const __m128i raw_lo = _mm_and_si128(
+                        packed, base_nibble_mask);
+                    const __m128i raw_hi = _mm_and_si128(
+                        _mm_srli_epi16(packed, 4), base_nibble_mask);
+                    const __mmask16 lo_selected = static_cast<__mmask16>(
+                        _mm_movemask_epi8(
+                            _mm_cmpgt_epi8(raw_lo, selected_threshold)));
+                    const __mmask16 hi_selected = static_cast<__mmask16>(
+                        _mm_movemask_epi8(
+                            _mm_cmpgt_epi8(raw_hi, selected_threshold)));
+                    remaining_acc[lane] = _mm512_add_ps(
+                        remaining_acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(lo)),
+                            even_q));
+                    remaining_acc[lane] = _mm512_add_ps(
+                        remaining_acc[lane],
+                        _mm512_mul_ps(
+                            _mm512_cvtepi32_ps(_mm512_cvtepu8_epi32(hi)),
+                            odd_q));
+                    short_acc[lane] = _mm512_mask_add_ps(
+                        short_acc[lane], lo_selected,
+                        short_acc[lane], even_q);
+                    short_acc[lane] = _mm512_mask_add_ps(
+                        short_acc[lane], hi_selected,
+                        short_acc[lane], odd_q);
+
+                    for (size_t half = 0; half < 2U; ++half) {
+                        const size_t block = (pair >> 3U) + half;
+                        const float scale = loadResidualScale(
+                            residual_scales[lane], block);
+                        if (scale == 0.0f || !std::isfinite(scale)) {
+                            continue;
+                        }
+                        const __m128i residual_packed = _mm_loadl_epi64(
+                            reinterpret_cast<const __m128i *>(
+                                residual_codes[lane] + pair + half * 8U));
+                        const __m128i residual_lo8 = _mm_and_si128(
+                            residual_packed, residual_low_mask);
+                        const __m128i residual_hi8 = _mm_and_si128(
+                            _mm_srli_epi16(residual_packed, 4),
+                            residual_low_mask);
+                        __m256i residual_lo32 =
+                            _mm256_cvtepu8_epi32(residual_lo8);
+                        __m256i residual_hi32 =
+                            _mm256_cvtepu8_epi32(residual_hi8);
+                        residual_lo32 = _mm256_sub_epi32(
+                            residual_lo32,
+                            _mm256_and_si256(
+                                _mm256_cmpgt_epi32(residual_lo32, seven),
+                                sixteen));
+                        residual_hi32 = _mm256_sub_epi32(
+                            residual_hi32,
+                            _mm256_and_si256(
+                                _mm256_cmpgt_epi32(residual_hi32, seven),
+                                sixteen));
+                        __m256 products = _mm256_mul_ps(
+                            _mm256_cvtepi32_ps(residual_lo32),
+                            even_q_half[half]);
+                        products = _mm256_add_ps(
+                            products,
+                            _mm256_mul_ps(
+                                _mm256_cvtepi32_ps(residual_hi32),
+                                odd_q_half[half]));
+                        _mm256_store_ps(product_lanes, products);
+                        float block_ip = 0.0f;
+                        for (float value : product_lanes) {
+                            block_ip += value;
+                        }
+                        residual_ips[lane] += scale * block_ip;
+                        const double per_dim_error =
+                            residual_coordinate_error_bound(
+                                scale, residual_bits_);
+                        error_norm_sqr[lane] +=
+                            static_cast<double>(kResidualBlockSize) *
+                            per_dim_error * per_dim_error;
+                    }
+                }
+            }
+
+            for (size_t lane = 0; lane < lanes; ++lane) {
+                const EncodedHeader header =
+                    loadHeader(encoded_records[lane]);
+                float long_distance;
+                if (!(header.long_scale > 0.0f) ||
+                    !std::isfinite(header.long_scale)) {
+                    long_distance = header.norm_sqr + query.query_norm_sqr;
+                } else {
+                    long_distance = queryDistanceLongWithIps(
+                        query, header,
+                        _mm512_reduce_add_ps(short_acc[lane]) -
+                            query.half_sum_residual,
+                        _mm512_reduce_add_ps(remaining_acc[lane]));
+                }
+                const float distance =
+                    long_distance - 2.0f * residual_ips[lane];
+                const float err = static_cast<float>(
+                    2.0 * static_cast<double>(query.query_norm) *
+                    std::sqrt(error_norm_sqr[lane]));
+                out[group + lane] = DistanceInterval{
+                    distance, distance - err, distance + err};
+            }
+        }
+#endif
     }
 
     void batch_compute_residual_distance_intervals_by_id(

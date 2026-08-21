@@ -1,6 +1,6 @@
 use std::cell::UnsafeCell;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use diskann::error::IntoANNResult;
@@ -22,6 +22,8 @@ use diskann_providers::model::graph::provider::async_::inmem::{
 use diskann_utils::views::Matrix;
 use diskann_vector::DistanceFunction;
 use diskann_vector::distance::Metric;
+
+use crate::config::QueryCoarseCodec;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -117,16 +119,39 @@ unsafe extern "C" {
     ) -> bool;
     fn rabitq_paper_msb_code_bytes(space: *const std::ffi::c_void) -> usize;
     fn rabitq_paper_factor_bytes() -> usize;
+    fn rabitq_export_paper_sidecar(
+        space: *const std::ffi::c_void,
+        compact_records: *const std::ffi::c_void,
+        record_count: usize,
+        compact_stride: usize,
+        msb_out: *mut u8,
+        factors_out: *mut std::ffi::c_void,
+    ) -> bool;
     fn rabitq_prepare_query(
         space: *const std::ffi::c_void,
         query: *const f32,
     ) -> *const std::ffi::c_void;
+    fn rabitq_set_query_coarse_codec(space: *mut std::ffi::c_void, codec: i32);
     fn rabitq_release_query(space: *const std::ffi::c_void, prepared: *const std::ffi::c_void);
     fn rabitq_query_distance(
         space: *const std::ffi::c_void,
         prepared: *const std::ffi::c_void,
         encoded: *const std::ffi::c_void,
     ) -> f32;
+    fn rabitq_query_distance_b1(
+        space: *const std::ffi::c_void,
+        prepared: *const std::ffi::c_void,
+        encoded: *const std::ffi::c_void,
+    ) -> f32;
+    fn rabitq_query_distance_b1_batch(
+        space: *const std::ffi::c_void,
+        prepared: *const std::ffi::c_void,
+        ids: *const u32,
+        count: usize,
+        encoded_base: *const std::ffi::c_void,
+        encoded_stride: usize,
+        out_distances: *mut f32,
+    ) -> bool;
     fn rabitq_paper_estimate(
         space: *const std::ffi::c_void,
         prepared: *const std::ffi::c_void,
@@ -141,6 +166,12 @@ unsafe extern "C" {
         epsilon0: f32,
     ) -> RabitqPaperEstimate;
     fn rabitq_query_distance_with_paper(
+        space: *const std::ffi::c_void,
+        prepared: *const std::ffi::c_void,
+        encoded: *const std::ffi::c_void,
+        short_ip: f32,
+    ) -> f32;
+    fn rabitq_query_distance_with_quantized_paper(
         space: *const std::ffi::c_void,
         prepared: *const std::ffi::c_void,
         encoded: *const std::ffi::c_void,
@@ -198,6 +229,17 @@ unsafe extern "C" {
         long_distances: *const f32,
         out: *mut RabitqDistanceInterval,
     ) -> bool;
+    fn rabitq_full_residual_distance_batch(
+        space: *const std::ffi::c_void,
+        prepared: *const std::ffi::c_void,
+        ids: *const u32,
+        count: usize,
+        encoded_base: *const std::ffi::c_void,
+        encoded_stride: usize,
+        residual_base: *const std::ffi::c_void,
+        residual_stride: usize,
+        out: *mut RabitqDistanceInterval,
+    ) -> bool;
 }
 
 pub struct RabitqSpace {
@@ -249,6 +291,21 @@ impl RabitqSpace {
             return Err("failed to set ExRaBitQ centroids".to_string());
         }
         Ok(Arc::new(Self { ptr, dim, centroid_count }))
+    }
+
+    pub fn set_query_coarse_codec(&self, codec: QueryCoarseCodec) {
+        // FullScalar is a Rust-side second-stage execution switch only.  Its
+        // prepared query remains byte-for-byte the normal C++ Full codec.
+        let native_codec = match codec {
+            QueryCoarseCodec::Full | QueryCoarseCodec::FullScalar => 0,
+            QueryCoarseCodec::B1 => 1,
+            QueryCoarseCodec::Int4 => 2,
+            QueryCoarseCodec::Int8 => 3,
+            QueryCoarseCodec::B1Main => 4,
+            QueryCoarseCodec::FullStaged => 5,
+            QueryCoarseCodec::FullRerankScalar => 6,
+        };
+        unsafe { rabitq_set_query_coarse_codec(self.ptr, native_codec) }
     }
 
     pub fn train_kmeans(
@@ -507,6 +564,26 @@ impl OursStore {
         }
     }
 
+    fn export_paper_sidecar(&self, record_count: usize) -> ANNResult<()> {
+        let mut msb = vec![0_u8; record_count * self.msb_bytes];
+        let mut factors = vec![0_u8; record_count * self.factor_bytes];
+        let ok = unsafe {
+            rabitq_export_paper_sidecar(
+                self.space.ptr,
+                self.records_ptr().cast::<std::ffi::c_void>(),
+                record_count,
+                self.record_bytes,
+                msb.as_mut_ptr(),
+                factors.as_mut_ptr().cast::<std::ffi::c_void>(),
+            )
+        };
+        if !ok {
+            return Err(ANNError::message("native ExRaBitQ paper sidecar export failed"));
+        }
+        self.install_paper_sidecar(msb, factors, record_count);
+        Ok(())
+    }
+
     fn set_vector<T>(&self, id: usize, raw: &[T]) -> ANNResult<()>
     where
         T: VectorRepr,
@@ -601,6 +678,47 @@ impl QueryComputer {
         }
     }
 
+    fn distance_b1(&self, encoded: &[u8]) -> f32 {
+        unsafe {
+            rabitq_query_distance_b1(
+                self.space.ptr,
+                self.prepared,
+                encoded.as_ptr().cast::<std::ffi::c_void>(),
+            )
+        }
+    }
+
+    fn distance_b1_batch(
+        &self,
+        ids: &[u32],
+        encoded_base: *const std::ffi::c_void,
+        encoded_stride: usize,
+        out_distances: &mut [f32],
+    ) -> ANNResult<()> {
+        if ids.len() != out_distances.len() {
+            return Err(ANNError::message("ExRaBitQ b1 distance batch size mismatch"));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let ok = unsafe {
+            rabitq_query_distance_b1_batch(
+                self.space.ptr,
+                self.prepared,
+                ids.as_ptr(),
+                ids.len(),
+                encoded_base,
+                encoded_stride,
+                out_distances.as_mut_ptr(),
+            )
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(ANNError::message("ExRaBitQ b1 distance batch failed"))
+        }
+    }
+
     fn paper_estimate(&self, encoded: &[u8], epsilon0: f32) -> RabitqPaperEstimate {
         unsafe {
             rabitq_paper_estimate(
@@ -632,6 +750,17 @@ impl QueryComputer {
     fn distance_with_paper(&self, encoded: &[u8], short_ip: f32) -> f32 {
         unsafe {
             rabitq_query_distance_with_paper(
+                self.space.ptr,
+                self.prepared,
+                encoded.as_ptr().cast::<std::ffi::c_void>(),
+                short_ip,
+            )
+        }
+    }
+
+    fn distance_with_quantized_paper(&self, encoded: &[u8], short_ip: f32) -> f32 {
+        unsafe {
+            rabitq_query_distance_with_quantized_paper(
                 self.space.ptr,
                 self.prepared,
                 encoded.as_ptr().cast::<std::ffi::c_void>(),
@@ -797,6 +926,45 @@ impl QueryComputer {
             Err(ANNError::message("ExRaBitQ residual distance batch failed"))
         }
     }
+
+    fn full_residual_distance_batch(
+        &self,
+        ids: &[u32],
+        encoded_base: *const std::ffi::c_void,
+        encoded_stride: usize,
+        residual_base: *const std::ffi::c_void,
+        residual_stride: usize,
+        out: &mut [RabitqDistanceInterval],
+    ) -> ANNResult<()> {
+        if ids.len() != out.len() {
+            return Err(ANNError::message(
+                "ExRaBitQ fused full/residual batch size mismatch",
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let ok = unsafe {
+            rabitq_full_residual_distance_batch(
+                self.space.ptr,
+                self.prepared,
+                ids.as_ptr(),
+                ids.len(),
+                encoded_base,
+                encoded_stride,
+                residual_base,
+                residual_stride,
+                out.as_mut_ptr(),
+            )
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(ANNError::message(
+                "ExRaBitQ fused full/residual batch failed",
+            ))
+        }
+    }
 }
 
 impl Drop for QueryComputer {
@@ -907,6 +1075,18 @@ thread_local! {
 }
 
 const DIST_BATCH_SIZE: usize = 64;
+const DIST_MODE_RECOMPUTE_FULL: u8 = 0;
+const DIST_MODE_REUSE_FULL_MSB: u8 = 1;
+const DIST_MODE_REUSE_QUANTIZED_MSB: u8 = 2;
+const DIST_MODE_REUSE_FULL_MSB_SCALAR: u8 = 3;
+
+fn fused_int_rerank_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    // The fused kernel is retained for ablation, but AG News shows that its
+    // extra register pressure offsets the saved query loads/FFI call. Keep the
+    // faster two-kernel path as the formal default.
+    *ENABLED.get_or_init(|| std::env::var_os("RABITQ_ENABLE_FUSED_INT_RERANK").is_some())
+}
 
 pub fn search_ours_paper_active<D, Ctx>(
     provider: &FullPrecisionProvider<f32, OursStore, D, Ctx>,
@@ -915,9 +1095,11 @@ pub fn search_ours_paper_active<D, Ctx>(
     l_value: usize,
     beam_width: usize,
     paper_epsilon0: f32,
+    b1_epsilon: f32,
     rerank_candidates: usize,
     early_stop_hops: usize,
     kth_stop: bool,
+    codec: QueryCoarseCodec,
     verify: bool,
 ) -> ANNResult<OursPaperSearchResult>
 where
@@ -933,9 +1115,11 @@ where
             l_value,
             beam_width,
             paper_epsilon0,
+            b1_epsilon,
             rerank_candidates,
             early_stop_hops,
             kth_stop,
+            codec,
             &mut scratch,
         )?;
         if verify {
@@ -946,9 +1130,11 @@ where
                 l_value,
                 beam_width,
                 paper_epsilon0,
+                b1_epsilon,
                 rerank_candidates,
                 early_stop_hops,
                 kth_stop,
+                codec,
                 &mut scratch,
             )?;
             verify_search_parity(&batched, &legacy)?;
@@ -964,9 +1150,11 @@ fn search_ours_paper_active_legacy<D, Ctx>(
     mut l_value: usize,
     beam_width: usize,
     paper_epsilon0: f32,
+    b1_epsilon: f32,
     rerank_candidates: usize,
     early_stop_hops: usize,
     kth_stop: bool,
+    codec: QueryCoarseCodec,
     visited_scratch: &mut VisitedScratch,
 ) -> ANNResult<OursPaperSearchResult>
 where
@@ -1068,34 +1256,65 @@ where
             }
             stats.visited_nodes += fresh.len() as u64;
 
+            if codec == QueryCoarseCodec::B1Main {
+                // Main-distance mode: traverse entirely with the cheap
+                // 4-bit-data x 1-bit-query distance; the final top-k is
+                // refined to full precision by the residual rerank below.
+                let mut b1_distances = vec![0.0_f32; fresh.len()];
+                let t_b1 = Instant::now();
+                computer.distance_b1_batch(
+                    &fresh,
+                    provider.aux_vectors.records_ptr().cast::<std::ffi::c_void>(),
+                    provider.aux_vectors.record_bytes,
+                    &mut b1_distances,
+                )?;
+                stats.paper_batch_ns += t_b1.elapsed().as_nanos() as u64;
+                stats.ffi_calls += 1;
+                stats.distance_computations += fresh.len() as u64;
+                stats.paper_remaining_kernel_calls += fresh.len() as u64;
+                for (slot, candidate_id) in fresh.iter().copied().enumerate() {
+                    insert_candidate_sorted(
+                        &mut pool,
+                        SearchCandidate {
+                            distance: b1_distances[slot],
+                            id: candidate_id,
+                            expanded: false,
+                            lower_bound: f32::MAX,
+                        },
+                        l_value,
+                    );
+                }
+                continue;
+            }
+
             paper_estimates.clear();
             paper_estimates.reserve(fresh.len());
             for candidate in fresh.iter().copied() {
                 let id = candidate.into_usize();
-                paper_estimates.push(computer.paper_estimate_sidecar(
-                    provider.aux_vectors.get_msb_code(id),
-                    provider.aux_vectors.get_factors(id),
-                    paper_epsilon0,
-                ));
+                let msb = provider.aux_vectors.get_msb_code(id);
+                let factors = provider.aux_vectors.get_factors(id);
+                // The query-codec sweep fixes the database coarse payload to
+                // the same 1-bit MSB sidecar for full/b1/int4/int8. The codec
+                // changes only the prepared query and the sidecar kernel.
+                let estimate = computer.paper_estimate_sidecar(
+                    msb,
+                    factors,
+                    if codec == QueryCoarseCodec::B1 {
+                        b1_epsilon
+                    } else {
+                        paper_epsilon0
+                    },
+                );
+                paper_estimates.push(estimate);
             }
             stats.paper_msb_kernel_calls += fresh.len() as u64;
 
-            let lookahead = provider.aux_vectors.prefetch_lookahead;
-            for candidate in fresh.iter().take(lookahead) {
-                provider.aux_vectors.prefetch_hint(candidate.into_usize());
-                stats.prefetch_issued += 1;
-            }
-
             for (slot, candidate_id) in fresh.iter().copied().enumerate() {
-                if lookahead > 0 && slot + lookahead < fresh.len() {
-                    provider
-                        .aux_vectors
-                        .prefetch_hint(fresh[slot + lookahead].into_usize());
-                    stats.prefetch_issued += 1;
-                }
                 let pool_full = pool.len() >= l_value;
                 let lower_bound = if pool_full {
-                    pool.last().map(|candidate| candidate.distance).unwrap_or(f32::MAX)
+                    pool.last()
+                        .map(|candidate| candidate.distance)
+                        .unwrap_or(f32::MAX)
                 } else {
                     f32::MAX
                 };
@@ -1110,9 +1329,28 @@ where
                     stats.paper_not_pruned += 1;
                 }
 
+                // Do not touch the 4-bit record until the candidate survives
+                // the fixed-1-bit-DB coarse gate.
+                provider
+                    .aux_vectors
+                    .prefetch_hint(candidate_id.into_usize());
+                stats.prefetch_issued += 1;
                 let encoded = provider.aux_vectors.get_vector(candidate_id.into_usize());
-                let distance = if paper.valid != 0 {
+                let distance = if paper.valid == 0 {
+                    computer.distance(encoded)
+                } else if matches!(
+                    codec,
+                    QueryCoarseCodec::Full
+                        | QueryCoarseCodec::FullScalar
+                        | QueryCoarseCodec::FullStaged
+                        | QueryCoarseCodec::FullRerankScalar
+                ) {
                     computer.distance_with_paper(encoded, paper.short_ip)
+                } else if matches!(
+                    codec,
+                    QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8
+                ) {
+                    computer.distance_with_quantized_paper(encoded, paper.short_ip)
                 } else {
                     computer.distance(encoded)
                 };
@@ -1175,8 +1413,14 @@ where
             let residual_record = provider
                 .aux_vectors
                 .get_residual_record(candidate.id.into_usize());
+            let long_distance =
+                if matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8) {
+                    computer.distance(encoded)
+                } else {
+                    candidate.distance
+                };
             (
-                computer.residual_distance(encoded, residual_record, candidate.distance),
+                computer.residual_distance(encoded, residual_record, long_distance),
                 candidate.id,
             )
         })
@@ -1208,9 +1452,11 @@ fn search_ours_paper_active_inner<D, Ctx>(
     mut l_value: usize,
     beam_width: usize,
     paper_epsilon0: f32,
+    b1_epsilon: f32,
     rerank_candidates: usize,
     early_stop_hops: usize,
     kth_stop: bool,
+    codec: QueryCoarseCodec,
     visited_scratch: &mut VisitedScratch,
 ) -> ANNResult<OursPaperSearchResult>
 where
@@ -1316,9 +1562,38 @@ where
             }
             stats.visited_nodes += fresh.len() as u64;
 
+            if codec == QueryCoarseCodec::B1Main {
+                for candidate in fresh.iter().copied() {
+                    let id = candidate.into_usize();
+                    let distance = computer.distance_b1(
+                        provider.aux_vectors.get_vector(id));
+                    stats.ffi_calls += 1;
+                    stats.distance_computations += 1;
+                    stats.paper_remaining_kernel_calls += 1;
+                    insert_candidate_sorted(
+                        &mut pool,
+                        SearchCandidate {
+                            distance,
+                            id: candidate,
+                            expanded: false,
+                            lower_bound: f32::MAX,
+                        },
+                        l_value,
+                    );
+                }
+                continue;
+            }
+
             paper_estimates.clear();
             paper_estimates.resize(fresh.len(), RabitqPaperEstimate::default());
             let t_paper = Instant::now();
+            // Keep the DB operand fixed at one bit for every coarse-query
+            // codec. INT4/INT8 are query precisions, not DB payload variants.
+            let eps = if codec == QueryCoarseCodec::B1 {
+                b1_epsilon
+            } else {
+                paper_epsilon0
+            };
             computer.paper_estimate_batch_sidecar(
                 &fresh,
                 provider.aux_vectors.msb_ptr(),
@@ -1328,26 +1603,14 @@ where
                     .factors_ptr()
                     .cast::<std::ffi::c_void>(),
                 provider.aux_vectors.factor_bytes,
-                paper_epsilon0,
+                eps,
                 &mut paper_estimates,
             )?;
+            stats.ffi_calls += 1;
             stats.paper_batch_ns += t_paper.elapsed().as_nanos() as u64;
             stats.paper_msb_kernel_calls += fresh.len() as u64;
-            stats.ffi_calls += 1;
-
-            let lookahead = provider.aux_vectors.prefetch_lookahead;
-            for candidate in fresh.iter().take(lookahead) {
-                provider.aux_vectors.prefetch_hint(candidate.into_usize());
-                stats.prefetch_issued += 1;
-            }
 
             for (slot, candidate_id) in fresh.iter().copied().enumerate() {
-                if lookahead > 0 && slot + lookahead < fresh.len() {
-                    provider
-                        .aux_vectors
-                        .prefetch_hint(fresh[slot + lookahead].into_usize());
-                    stats.prefetch_issued += 1;
-                }
                 let paper = paper_estimates[slot];
                 let pool_full = pool.len() >= l_value;
                 let lower_bound = if pool_full {
@@ -1359,19 +1622,39 @@ where
                 };
                 if pool_full && paper.valid != 0 {
                     if paper.lower_bound > lower_bound {
-                        // The pool can only get stricter within this frontier, so this
-                        // candidate is definitely pruned and never needs a full distance.
                         stats.paper_checked += 1;
                         stats.paper_would_prune += 1;
                         stats.paper_full_saved += 1;
                         continue;
                     }
-                    // Not definitely pruned: the final decision is made in
-                    // flush_distance_batch against the exact evolving pool.
                 }
+                // The full 4-bit payload is prefetched only after the
+                // candidate survives the 1-bit DB coarse filter.
+                provider
+                    .aux_vectors
+                    .prefetch_hint(candidate_id.into_usize());
+                stats.prefetch_issued += 1;
                 batch_ids.push(candidate_id);
                 batch_slots.push(slot);
-                batch_modes.push(if paper.valid != 0 { 1 } else { 0 });
+                batch_modes.push(if paper.valid == 0 {
+                    DIST_MODE_RECOMPUTE_FULL
+                } else if matches!(
+                    codec,
+                    QueryCoarseCodec::Full
+                        | QueryCoarseCodec::FullStaged
+                        | QueryCoarseCodec::FullRerankScalar
+                ) {
+                    DIST_MODE_REUSE_FULL_MSB
+                } else if codec == QueryCoarseCodec::FullScalar {
+                    DIST_MODE_REUSE_FULL_MSB_SCALAR
+                } else if matches!(
+                    codec,
+                    QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8
+                ) {
+                    DIST_MODE_REUSE_QUANTIZED_MSB
+                } else {
+                    DIST_MODE_RECOMPUTE_FULL
+                });
                 batch_short_ips.push(paper.short_ip);
                 if batch_ids.len() >= DIST_BATCH_SIZE {
                     flush_distance_batch(
@@ -1451,22 +1734,59 @@ where
     }
     let mut rerank_intervals = vec![RabitqDistanceInterval::default(); rerank_ids.len()];
     if !rerank_ids.is_empty() {
-        computer.residual_distance_batch(
-            &rerank_ids,
-            provider
-                .aux_vectors
-                .records_ptr()
-                .cast::<std::ffi::c_void>(),
-            provider.aux_vectors.record_bytes,
-            provider
-                .aux_vectors
-                .residual_ptr()
-                .cast::<std::ffi::c_void>(),
-            provider.aux_vectors.residual_record_bytes,
-            &rerank_long_distances,
-            &mut rerank_intervals,
-        )?;
-        stats.ffi_calls += 1;
+        let int_query = matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8);
+        if int_query && fused_int_rerank_enabled() {
+            computer.full_residual_distance_batch(
+                &rerank_ids,
+                provider
+                    .aux_vectors
+                    .records_ptr()
+                    .cast::<std::ffi::c_void>(),
+                provider.aux_vectors.record_bytes,
+                provider
+                    .aux_vectors
+                    .residual_ptr()
+                    .cast::<std::ffi::c_void>(),
+                provider.aux_vectors.residual_record_bytes,
+                &mut rerank_intervals,
+            )?;
+            stats.ffi_calls += 1;
+        } else {
+            if int_query {
+                // Traversal used the quantized query. Recompute only the small
+                // rerank set with the full query before applying its residual.
+                let modes = vec![DIST_MODE_RECOMPUTE_FULL; rerank_ids.len()];
+                let short_ips = vec![0.0_f32; rerank_ids.len()];
+                computer.distance_batch(
+                    &rerank_ids,
+                    &modes,
+                    provider
+                        .aux_vectors
+                        .records_ptr()
+                        .cast::<std::ffi::c_void>(),
+                    provider.aux_vectors.record_bytes,
+                    &short_ips,
+                    &mut rerank_long_distances,
+                )?;
+                stats.ffi_calls += 1;
+            }
+            computer.residual_distance_batch(
+                &rerank_ids,
+                provider
+                    .aux_vectors
+                    .records_ptr()
+                    .cast::<std::ffi::c_void>(),
+                provider.aux_vectors.record_bytes,
+                provider
+                    .aux_vectors
+                    .residual_ptr()
+                    .cast::<std::ffi::c_void>(),
+                provider.aux_vectors.residual_record_bytes,
+                &rerank_long_distances,
+                &mut rerank_intervals,
+            )?;
+            stats.ffi_calls += 1;
+        }
     }
     let mut reranked: Vec<_> = rerank_intervals
         .iter()
@@ -1769,10 +2089,24 @@ where
         }
     });
     if let Some(err) = first_error.into_inner().unwrap() {
-        Err(ANNError::message(err))
-    } else {
-        Ok(())
+        return Err(ANNError::message(err));
     }
+    Ok(())
+}
+
+/// Recompute the paper-prune sidecar (1-bit MSB codes + prune factors) from
+/// the already-encoded compact records. Used when a previously built Vamana
+/// graph is loaded instead of rebuilt: the graph is identical for every
+/// query-coarse codec, so only the query-side behavior differs.
+pub fn export_ours_paper_sidecar<D, Ctx>(
+    provider: &FullPrecisionProvider<f32, OursStore, D, Ctx>,
+    record_count: usize,
+) -> ANNResult<()>
+where
+    D: Send + Sync,
+    Ctx: ExecutionContext,
+{
+    provider.aux_vectors.export_paper_sidecar(record_count)
 }
 
 pub struct PruneAccessor<'a> {

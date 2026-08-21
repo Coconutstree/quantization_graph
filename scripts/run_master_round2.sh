@@ -41,7 +41,7 @@ run_01() {
     echo "${ds}: reuse ${workdir}/fixed_candidates_k${CANDIDATE_SIZE}.bin"
   else
     "${BIN01_CAND}" \
-      --dataset "${ds}" --data-root data --out-root "${OUT}" \
+      --dataset "${ds}" --data-root "${ROOT}/data" --out-root "${OUT}" \
       --candidate-root work --candidate-size "${CANDIDATE_SIZE}" \
       --search-k "${HARD_NEGATIVE_SEARCH_K}" --hnsw-M "${HARD_NEGATIVE_HNSW_M}" \
       --efConstruction "${HARD_NEGATIVE_EF_CONSTRUCTION}" \
@@ -53,7 +53,7 @@ run_01() {
   local one_logs="${OUT}/01_quantizer_fair/${ds}/logs"
   mkdir -p "${one_logs}"
   "${BIN01}" \
-    --dataset "${ds}" --data-root data --out-root "${OUT}" \
+    --dataset "${ds}" --data-root "${ROOT}/data" --out-root "${OUT}" \
     --candidate-root work --candidate-size "${CANDIDATE_SIZE}" \
     --max-train "${MAX_TRAIN}" --max-queries "${MAX_QUERIES}" \
     --methods PQ,SQ,Ours_RaBitQ_K1 --rerank-candidates "${RERANK}" \
@@ -108,17 +108,18 @@ run_02() {
   log "== 02 ${ds}: per-method quantized graphs R=${M}/L=${L} (PQ,SQ,SAQ,Ours) =="
   local split_root="results/03_system_fair/${ds}/csv/_query_splits"
   mkdir -p "${split_root}"
-  "${PY}" - "${ds}" "${valq}" <<'EOF'
+  "${PY}" - "${ds}" "${valq}" "${ROOT}/data" <<'EOF'
 import sys
 from pathlib import Path
 from Ours.experiments.run_ours import prepare_query_splits
 
-ds, valq = sys.argv[1], int(sys.argv[2])
-prepare_query_splits(ds, Path("data"), Path("results"), valq)
+ds, valq, data_root = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+prepare_query_splits(ds, Path(data_root), Path("results"), valq)
 print(f"query splits ready: {ds} val={valq}")
 EOF
   "${BIN02}" \
     --dataset "${ds}" --methods PQ,SQ,SAQ,Ours --max-degree "${M}" --build-beam "${L}" \
+    --query-coarse-codec int8 \
     --out-root "${OUT}" --repeats 1 --threads 64 --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
     --query-path "${split_root}/test_query.fvecs" \
     --gt-path "${split_root}/test_gt.ivecs" \
@@ -148,6 +149,7 @@ fixed = {
         "config_id": f"OursDiskANN_M{m}",
         "M": m, "R": m, "L_build": l, "alpha": 1.2,
         "rerank_candidates": 100, "residual_bits": 4, "centroid_count": 1,
+        "query_coarse_codec": "int8",
         "selection_note": f"fixed M={m}/L={l}",
     },
     "SymphonyQG": {

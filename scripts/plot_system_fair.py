@@ -15,6 +15,27 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker as mticker  # noqa: E402
+
+plt.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "DejaVu Sans", "Liberation Sans"],
+    "svg.fonttype": "none",
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    "figure.facecolor": "#FCFCFD",
+    "axes.facecolor": "#FCFCFD",
+    "savefig.facecolor": "#FCFCFD",
+    "text.color": "#202124",
+    "axes.labelcolor": "#202124",
+    "axes.edgecolor": "#7A7F87",
+    "xtick.color": "#62666D",
+    "ytick.color": "#62666D",
+    "axes.spines.right": False,
+    "axes.spines.top": False,
+    "axes.linewidth": 0.8,
+    "legend.frameon": False,
+})
 
 if "systemfair" not in sys.modules:
     _pkg = types.ModuleType("systemfair")
@@ -43,6 +64,34 @@ PLANNED = {
     "system_qps_recall_logy_highrecall.png",
     "system_p95latency_recall_logy_highrecall.png",
 }
+
+METHOD_COLORS = {
+    "Ours": "#C2417A",
+    "SymphonyQG": "#0F766E",
+    "OG-LVQ": "#6B8E23",
+    "Glass-NSG": "#7A6FA6",
+}
+METHOD_MARKERS = {
+    "Ours": "o",
+    "SymphonyQG": "x",
+    "OG-LVQ": "+",
+    "Glass-NSG": "v",
+}
+METHOD_LINESTYLES = {
+    "Ours": "-",
+    "SymphonyQG": "--",
+    "OG-LVQ": "-.",
+    "Glass-NSG": ":",
+}
+GRID = "#DDE1E6"
+
+
+def save_outputs(fig, fig_dir: Path, png_name: str) -> None:
+    stem = Path(png_name).stem
+    fig.savefig(fig_dir / f"{stem}.svg", bbox_inches="tight")
+    fig.savefig(fig_dir / f"{stem}.pdf", bbox_inches="tight")
+    fig.savefig(fig_dir / f"{stem}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(fig_dir / f"{stem}.tiff", dpi=600, bbox_inches="tight")
 
 
 def main() -> int:
@@ -94,8 +143,11 @@ def main() -> int:
         raise SystemExit("no median rows left after exclusion")
 
     methods = sorted({r["method"] for r in rows})
-    colors = plt.cm.tab10.colors[: len(methods)]
-    style = {m: colors[i] for i, m in enumerate(methods)}
+    fallback_colors = plt.cm.tab10.colors[: len(methods)]
+    style = {
+        m: METHOD_COLORS.get(m, fallback_colors[i])
+        for i, m in enumerate(methods)
+    }
 
     def draw(
         xkey,
@@ -111,41 +163,67 @@ def main() -> int:
     ):
         if fname not in PLANNED:
             return
-        plt.figure(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(7.2, 4.8))
         for m in methods:
             pts = [r for r in rows if r["method"] == m]
             pts.sort(key=lambda r: _param_num(r["search_param"]))
             x = [float(r[xkey]) for r in pts]
             y = [float(r[ykey]) for r in pts]
-            plt.plot(x, y, "-o", ms=3, color=style[m], label=m)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
+            ax.plot(
+                x,
+                y,
+                marker=METHOD_MARKERS.get(m, "o"),
+                markersize=3.8 if m == "Ours" else 2.8,
+                linewidth=2.0 if m == "Ours" else 1.0,
+                linestyle=METHOD_LINESTYLES.get(m, "-"),
+                alpha=1.0 if m == "Ours" else 0.8,
+                color=style[m],
+                label=m,
+                zorder=5 if m == "Ours" else 2,
+            )
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
         if title:
-            plt.title(title)
+            ax.set_title(title)
         if logx:
-            plt.xscale("log")
+            if any(value <= 0 for value in x):
+                raise ValueError(f"log-x values must be positive for {fname}")
+            ax.set_xscale("log")
         if logy:
-            plt.yscale("log")
+            if any(value <= 0 for value in y):
+                raise ValueError(f"log-y values must be positive for {fname}")
+            ax.set_yscale("log")
+            # Avoid mathtext exponent glyphs shrinking below the 5 pt PDF
+            # floor at the final 183 mm figure width.
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda y, _: f"{y:g}"))
+            ax.yaxis.set_minor_formatter(mticker.NullFormatter())
         if xlim:
-            plt.xlim(*xlim)
+            ax.set_xlim(*xlim)
         for r in ref_recalls or []:
-            plt.axvline(r, color="grey", linestyle=":", linewidth=1.0, alpha=0.8)
-            plt.text(
+            ax.axvline(r, color="grey", linestyle=":", linewidth=1.0, alpha=0.8)
+            ax.text(
                 r,
-                plt.ylim()[1],
+                ax.get_ylim()[1],
                 f" R@10={r:.2f}",
                 ha="left",
                 va="top",
                 fontsize=8,
                 color="grey",
             )
-        plt.grid(alpha=0.3)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(fig_dir / fname, dpi=150)
-        plt.close()
+        ax.grid(axis="y", color=GRID, linewidth=0.7, zorder=0)
+        if logy:
+            legend_loc = "lower left" if ykey == "qps" else "upper left"
+            ax.legend(loc=legend_loc, bbox_to_anchor=(0.01, 0.99), borderaxespad=0.0)
+        else:
+            ax.legend(loc="upper right")
+        fig.tight_layout()
+        save_outputs(fig, fig_dir, fname)
+        plt.close(fig)
 
-    draw("recall", "qps", "Recall@10", "QPS", "system_qps_recall.png", "System QPS-Recall")
+    draw(
+        "recall", "qps", "Recall@10", "QPS", "system_qps_recall.png",
+        "Recall@10 vs QPS · Ours uses DB1 × INT8 query",
+    )
     draw(
         "recall",
         "index_size_mb",
@@ -160,7 +238,7 @@ def main() -> int:
         "Recall@10",
         "P95 latency (us)",
         "system_p95latency_recall.png",
-        "System P95-Latency",
+        "Recall@10 vs P95 latency · Ours uses DB1 × INT8 query",
     )
     draw(
         "recall",
@@ -168,7 +246,7 @@ def main() -> int:
         "Recall@10",
         "QPS",
         "system_qps_recall_logy_highrecall.png",
-        "System QPS-Recall (high-recall zoom, log scale)",
+        "High-recall QPS · Ours uses DB1 × INT8 query",
         logy=True,
         xlim=(0.80, 1.0),
         ref_recalls=[0.90, 0.95],
@@ -179,7 +257,7 @@ def main() -> int:
         "Recall@10",
         "P95 latency (us)",
         "system_p95latency_recall_logy_highrecall.png",
-        "System P95-Latency (high-recall zoom, log scale)",
+        "High-recall P95 latency · Ours uses DB1 × INT8 query",
         logy=True,
         xlim=(0.80, 1.0),
         ref_recalls=[0.90, 0.95],
@@ -204,25 +282,25 @@ def main() -> int:
 
     # QPS at 95% recall vs index size
     at95 = [r for r in interp_rows if abs(float(r.get("recall_target", 0)) - 0.95) < 1e-9]
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
     for m in methods:
         pt = next((r for r in at95 if r["method"] == m), None)
         if pt is None:
             continue
-        plt.scatter(
+        ax.scatter(
             float(pt["index_size_mb"]),
             float(pt["qps"]),
             color=style[m],
-            s=80,
+            s=90 if m == "Ours" else 60,
             label=f"{m} (qps={float(pt['qps']):.0f})",
         )
-    plt.xlabel("Index size (MB) at Recall@10=0.95")
-    plt.ylabel("QPS at Recall@10=0.95")
-    plt.grid(alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(fig_dir / "system_qps_memory_at_95recall.png", dpi=150)
-    plt.close()
+    ax.set_xlabel("Index size (MB) at Recall@10=0.95")
+    ax.set_ylabel("QPS at Recall@10=0.95")
+    ax.grid(axis="both", color=GRID, linewidth=0.7, zorder=0)
+    ax.legend()
+    fig.tight_layout()
+    save_outputs(fig, fig_dir, "system_qps_memory_at_95recall.png")
+    plt.close(fig)
 
     print(f"figures written to {fig_dir}")
     return 0

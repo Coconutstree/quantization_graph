@@ -37,6 +37,15 @@ fn run() -> Result<(), String> {
     println!("max_degree={}", ctx.config.max_degree);
     println!("build_beam={}", ctx.config.build_beam);
     println!("methods={}", args.methods.join(","));
+    println!(
+        "query_coarse_codecs={}",
+        ctx.config
+            .query_coarse_codecs
+            .iter()
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     for method in &args.methods {
         let adapter = adapter_for(method)?;

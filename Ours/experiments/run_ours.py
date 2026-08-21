@@ -7,12 +7,14 @@ rerank. It is measured once per dataset at M=32 and M=64 (degree-matched
 comparison in experiment 02 and the full-system configuration in experiment
 03). This entry invokes the repository-root Ours-DiskANN binary with the
 shared 03 test-subset query/GT files and archives the raw logs under
-Ours/logs/.
+Ours/logs/. The formal search path uses an INT8 query against the fixed
+database 1-bit gate; other query codecs are kept only for ablations.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import shutil
 import subprocess
 import sys
@@ -99,6 +101,44 @@ def prepare_query_splits(
     )
 
 
+def keep_only_formal_int8_rows(csv_path: Path, degree: int) -> None:
+    """Keep baselines and the latest formal INT8 Ours row per search point."""
+    if not csv_path.exists():
+        return
+    with csv_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = list(reader.fieldnames or [])
+        rows = list(reader)
+    if not rows:
+        return
+
+    preserved: list[dict[str, str]] = []
+    latest_int8: dict[int, dict[str, str]] = {}
+    for row in rows:
+        target_ours = (
+            row.get("method") == "Ours"
+            and int(row.get("max_degree", 0) or 0) == degree
+        )
+        if not target_ours:
+            preserved.append(row)
+            continue
+        if row.get("query_coarse_codec", "").strip('"').lower() == "int8":
+            latest_int8[int(row.get("search_param_value", 0) or 0)] = row
+
+    if not latest_int8:
+        raise RuntimeError(
+            f"formal INT8 run produced no Ours rows with max_degree={degree}: "
+            f"{csv_path}"
+        )
+    tmp = csv_path.with_suffix(csv_path.suffix + ".tmp")
+    with tmp.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(preserved)
+        writer.writerows(row for _, row in sorted(latest_int8.items()))
+    tmp.replace(csv_path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
@@ -161,15 +201,36 @@ def main() -> int:
             "--out-root", str(args.out_root),
             "--repeats", str(args.repeats),
             "--threads", str(args.threads),
+            # Formal method: INT8 query, while the database gate remains 1 bit.
+            "--query-coarse-codec", "int8",
             "--query-path", str(test_q),
             "--gt-path", str(test_gt),
         ]
+        graph_name = f"{args.dataset}_Ours_R{degree}_Lbuild400.graph.bin"
+        graph_candidates = [
+            Path(args.out_root) / "02_diskann_fair" / args.dataset
+            / "indexes" / "Ours" / graph_name,
+            # Backward-compatible pre-suite-first layout.
+            Path(args.out_root) / args.dataset / "indexes" / "02_diskann_fair"
+            / "Ours" / graph_name,
+        ]
+        graph = next((path for path in graph_candidates if path.exists()), None)
+        if graph is not None:
+            # Reuse the already frozen formal graph: this reruns only payload
+            # preparation and search, so query-kernel changes cannot alter
+            # graph quality or topology.
+            cmd.extend(["--graph-file", str(graph)])
         print("$ " + " ".join(cmd))
         rc = subprocess.run(cmd, cwd=_REPO).returncode
         if rc != 0:
             return rc
+        keep_only_formal_int8_rows(
+            Path(args.out_root) / "02_diskann_fair" / args.dataset
+            / "csv" / "diskann_fair_raw.csv",
+            degree,
+        )
         raw = (
-            Path(args.out_root) / args.dataset / "raw" / "02_diskann_fair" / "Ours"
+            Path(args.out_root) / "02_diskann_fair" / args.dataset / "logs" / "Ours"
             / f"{args.dataset}_Ours_R{degree}_Lbuild400.log"
         )
         if raw.exists():

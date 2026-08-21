@@ -5,6 +5,12 @@ The repository root is the **core code directory**; this folder is the
 symmetric Vamana construction inside the DiskANN3 framework, paper-pruned
 search, residual4 rerank.
 
+The formal search configuration keeps the database coarse plane at **1 bit**
+and quantizes the query once to **INT8**. The same INT8 representation is used
+by the batched first-stage gate and reused by the residual rerank. Full, b1,
+and INT4 query codecs remain available only in the separate codec-ablation
+tests; they are not formal-method rows.
+
 **Measurement rule:** Ours-DiskANN is always measured at **M=32 and M=64**
 for every dataset (two symmetric 4-bit Vamana constructions). Experiment 02
 reports **M=32** (degree-matched with the R=32 shared graph), experiment 03
@@ -37,7 +43,7 @@ Ours/
 python Ours/experiments/run_ours.py --dataset dbpedia --M 32,64
 python Ours/experiments/run_ours.py --dataset dbpedia --M 32
 
-# experiment 03 (Ours is included via its adapter at M=32/M=64)
+# experiment 03 (Ours is included via its adapter at M=64, DB1 x INT8 query)
 python experiments/03_system_fair/run_system_fair.py \
   --dataset dbpedia --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG \
   --validate --run --repeats 1 --threads 64

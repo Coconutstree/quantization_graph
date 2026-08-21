@@ -2,7 +2,7 @@
 """VLDB 2027 draft figures for the ExRaBitQ experiments.
 
 Reads the canonical per-suite CSVs under results/<dataset>/csv/ and the
-codebook-size (K) ablation summary, and renders seven publication figures as a
+codebook-size (K) ablation summary, and renders eleven publication figures as a
 3-panel-per-dataset quantitative grid (DBpedia-1M / GIST-1M / AGNews):
 
   fig01_quantizer_fair_recall_qps        -- 01 QPS at matched recall bars
@@ -47,6 +47,14 @@ plt.rcParams.update({
     "svg.fonttype": "none",
     "pdf.fonttype": 42,
     "font.size": 7,
+    "figure.facecolor": "#FCFCFD",
+    "axes.facecolor": "#FCFCFD",
+    "savefig.facecolor": "#FCFCFD",
+    "text.color": "#202124",
+    "axes.labelcolor": "#202124",
+    "axes.edgecolor": "#7A7F87",
+    "xtick.color": "#62666D",
+    "ytick.color": "#62666D",
     "axes.spines.right": False,
     "axes.spines.top": False,
     "axes.linewidth": 0.8,
@@ -74,17 +82,24 @@ DATASETS = [
     ("AGNews", "agnews"),
 ]
 
-# Unified method families (kept identical across every figure).
-# Ours is the hero series: vivid red-orange, heaviest weight, sole saturated
-# warm series; every competitor is muted so the hero stays the most salient.
+# Unified method families, matching the compact SVG benchmark report. Ours is
+# the magenta hero series; competitors use restrained, distinguishable colors.
+INK = "#202124"
+MUTED = "#62666D"
+GRID = "#DDE1E6"
+AXIS = "#7A7F87"
+BG = "#FCFCFD"
+
 COLORS = {
-    "Ours": "#FF4D00",        # hero: vivid red-orange (eye-catching)
-    "PQ": "#8C8C8C",          # neutral grey
-    "SQ": "#BDBDBD",          # light grey
-    "SAQ": "#C78A2E",         # muted amber
-    "SymphonyQG": "#A64D45",  # muted brick
-    "OG-LVQ": "#7A6FA6",      # muted violet
-    "Glass-NSG": "#5B8CA6",   # slate blue
+    # The formal method now uses the INT8 query codec, so it inherits the
+    # report's magenta hero color throughout the paper.
+    "Ours": "#C2417A",
+    "PQ": "#2563EB",
+    "SQ": "#7A7F87",
+    "SAQ": "#D97706",
+    "SymphonyQG": "#0F766E",
+    "OG-LVQ": "#6B8E23",
+    "Glass-NSG": "#7A6FA6",
 }
 
 MARKERS = {
@@ -97,6 +112,16 @@ MARKERS = {
     "Glass-NSG": "v",
 }
 
+LINESTYLES = {
+    "Ours": "-",
+    "PQ": "--",
+    "SQ": ":",
+    "SAQ": "-.",
+    "SymphonyQG": "--",
+    "OG-LVQ": "-.",
+    "Glass-NSG": ":",
+}
+
 Q01_METHODS = [
     ("Ours", "Ours (ExRaBitQ-4bit, K=1)", "Ours_RaBitQ_K1"),
     ("PQ", "PQ-4bit", "PQ_4bit"),
@@ -105,7 +130,7 @@ Q01_METHODS = [
 ]
 
 Q03_METHODS = [
-    ("Ours", "Ours (ExRaBitQ-4bit)"),
+    ("Ours", "Ours (DB1 × INT8 query)"),
     ("Glass-NSG", "Glass-NSG"),
     ("OG-LVQ", "OG-LVQ"),
     ("SymphonyQG", "SymphonyQG"),
@@ -167,50 +192,17 @@ def hero_style(key: str) -> dict:
         "markersize": 3.4 if key == "Ours" else 2.4,
         "alpha": 1.0 if key == "Ours" else 0.8,
         "zorder": 5 if key == "Ours" else 2,
+        "linestyle": LINESTYLES.get(key, "-"),
     }
 
 
-def _isotonic_decreasing(y: list[float]) -> list[float]:
-    """PAVA isotonic fit with y non-increasing (QPS must not rise with ef)."""
-    n = len(y)
-    if n == 0:
-        return []
-    sums = [float(y[0])]
-    cnt = [1]
-    for i in range(1, n):
-        sums.append(float(y[i]))
-        cnt.append(1)
-        while len(sums) > 1 and sums[-2] / cnt[-2] < sums[-1] / cnt[-1]:
-            s = sums[-2] + sums[-1]
-            c = cnt[-2] + cnt[-1]
-            sums[-2] = s
-            cnt[-2] = c
-            sums.pop()
-            cnt.pop()
-    out: list[float] = []
-    for s, c in zip(sums, cnt):
-        out.extend([s / c] * c)
-    return out
-
-
 def clean_qps_envelope(points: list[tuple[float, float, int]]) -> list[tuple[float, float, int]]:
-    """Remove isolated timing spikes, then force QPS monotone in ef.
+    """Return measured points unchanged; line order is already efSearch.
 
-    Each point is (recall, qps, ef), sorted by ef. Larger ef must not be
-    faster, so any rise is single-repeat timing noise. We replace isolated
-    spikes with a local mean and run an isotonic (non-increasing) fit.
+    Earlier drafts replaced timing spikes and forced monotonic QPS. Formal
+    figures must preserve every observation, even when a single run is noisy.
     """
-    if len(points) < 3:
-        return list(points)
-    qps = [q for _, q, _ in points]
-    # isolated spike removal (a middle point far from both neighbours)
-    for i in range(1, len(qps) - 1):
-        lo = min(qps[i - 1], qps[i + 1])
-        hi = max(qps[i - 1], qps[i + 1])
-        if qps[i] < 0.5 * lo or qps[i] > 2.0 * hi:
-            qps[i] = 0.5 * (qps[i - 1] + qps[i + 1])
-    qps = _isotonic_decreasing(qps)
-    return [(r, q, e) for (r, _, e), q in zip(points, qps)]
+    return list(points)
 
 
 def _ef_of(r: dict[str, str]) -> int:
@@ -226,6 +218,23 @@ def star_marker(ax, x: float, y: float, color: str) -> None:
             zorder=6, clip_on=False)
 
 
+def representative_marker_indices(n: int, target: int = 9) -> list[int]:
+    """Evenly distribute visible markers while retaining the full measured line.
+
+    Dense sweeps remain fully represented by the line.  Showing a marker at
+    every setting, however, turns the high-recall saturation region into an
+    unreadable solid band at final paper size.
+    """
+    if n <= target:
+        return list(range(n))
+    return sorted({int(round(i * (n - 1) / (target - 1))) for i in range(target)})
+
+
+def format_recall(value: float) -> str:
+    """Avoid rounding a measured sub-unity recall to a displayed 1.000."""
+    return f"{value:.4f}" if value >= 0.995 else f"{value:.3f}"
+
+
 def plain_log_formatter():
     """Log-axis tick labels as plain digits (avoids small mathtext superscripts)."""
     return mticker.FuncFormatter(lambda x, _pos: f"{x:g}")
@@ -235,6 +244,8 @@ def style_log_y(ax) -> None:
     """Log y-axis with 1/2/5 x 10^k ticks confined to the visible range."""
     ax.set_yscale("log")
     ymin, ymax = ax.get_ylim()
+    if ymin <= 0 or ymax <= 0:
+        raise ValueError(f"log-y range must be positive, got {(ymin, ymax)}")
     ticks: list[float] = []
     for mantissas in ((1.0, 2.0, 5.0), (1.0, 5.0), (1.0,)):
         cands: list[float] = []
@@ -359,7 +370,7 @@ def fig01_quantizer_fair() -> None:
         ax.set_xticks(range(len(methods)))
         ax.set_xticklabels(methods, fontsize=6)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[i])
     axes[0].set_ylabel("QPS (matched recall)", fontsize=7)
     for ax in axes:
@@ -389,11 +400,17 @@ def fig02_quantizer_error() -> None:
             ip[j] = fnum_opt(r, "mean_ip_relative_error")
         for j, (key, _, _) in enumerate(Q01_METHODS):
             color = to_rgba(COLORS[key], 1.0 if key == "Ours" else 0.55)
+            has_ip = not np.isnan(ip[j]) and ip[j] > 0
+            labels_are_close = has_ip and 0.75 <= l2[j] / ip[j] <= 1.33
             if not np.isnan(l2[j]):
                 ax.bar(x[j] - bar_width / 2, l2[j], bar_width, color=color, zorder=3)
-                ax.text(x[j] - bar_width / 2, l2[j] * 1.18, f"{l2[j]:.4f}",
-                        ha="center", va="bottom", fontsize=5, color=COLORS[key])
-            if not np.isnan(ip[j]) and ip[j] > 0:
+                ax.text(
+                        x[j] - bar_width / 2,
+                        l2[j] * (1.9 if labels_are_close else 1.18),
+                        f"{l2[j]:.4f}",
+                        ha="center", va="bottom",
+                        fontsize=5, color=COLORS[key])
+            if has_ip:
                 ax.bar(x[j] + bar_width / 2, ip[j], bar_width, color=color,
                        hatch="//", edgecolor="white", linewidth=0.4, zorder=3)
                 ax.text(x[j] + bar_width / 2, ip[j] * 1.18, f"{ip[j]:.4f}",
@@ -404,7 +421,7 @@ def fig02_quantizer_error() -> None:
         ax.set_xticks(x)
         ax.set_xticklabels([m for m, _, _ in Q01_METHODS], fontsize=6)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[i])
     axes[0].set_ylabel("Mean relative error (L2 / IP)", fontsize=7)
     for ax in axes:
@@ -461,13 +478,15 @@ def fig03_quantizer_error_qps() -> None:
             ax.set_xscale("log")
             ax.set_yscale("log")
             ax.set_xlim(90, 3000)
-            ax.set_ylim(1e-3, 0.6)
+            # Leave room below the best ~1e-3 observations so markers are not
+            # clipped by the bottom axis.
+            ax.set_ylim(7e-4, 0.6)
             style_log_y(ax)
             ax.set_xticks([200, 500, 1000, 2000])
             ax.xaxis.set_major_formatter(plain_log_formatter())
             ax.xaxis.set_minor_formatter(mticker.NullFormatter())
             ax.tick_params(labelsize=6.5)
-            ax.grid(axis="both", color="#E8E8E8", lw=0.5, zorder=0)
+            ax.grid(axis="both", color=GRID, lw=0.5, zorder=0)
             if row_idx == 0:
                 ax.set_title(label, fontsize=7.5, pad=4)
             panel_label(ax, chr(ord("a") + row_idx * 3 + i))
@@ -488,7 +507,7 @@ def fig03_quantizer_error_qps() -> None:
 def fig04_diskann_fair_recall_qps() -> None:
     xlims = {"dbpedia": (0.80, 1.0), "gist": (0.65, 1.0), "agnews": (0.88, 1.0)}
     methods = [
-        ("Ours", "Ours (ExRaBitQ-4bit)"),
+        ("Ours", "Ours (DB1 × INT8 query)"),
         ("PQ", "PQ-4bit"),
         ("SQ", "SQ-4bit"),
         ("SAQ", "SAQ (B=4)"),
@@ -500,6 +519,11 @@ def fig04_diskann_fair_recall_qps() -> None:
         )
         for key, disp in methods:
             sub = [r for r in rows if r["method"] == key and r.get("status") == "done"]
+            if key == "Ours":
+                sub = [
+                    r for r in sub
+                    if r.get("query_coarse_codec", "").strip('"').lower() == "int8"
+                ]
             if not sub:
                 continue
             pts = clean_qps_envelope(sorted(
@@ -516,12 +540,12 @@ def fig04_diskann_fair_recall_qps() -> None:
             if key == "Ours" and pts:
                 p95 = min(pts, key=lambda p: abs(p[0] - 0.95))
                 star_marker(ax, p95[0], p95[1], COLORS["Ours"])
-        ax.axvline(0.95, color="#BFBFBF", linestyle=":", linewidth=0.8, zorder=0)
+        ax.axvline(0.95, color=AXIS, linestyle=":", linewidth=0.8, zorder=0)
         ax.set_title(label, fontsize=7.5, pad=4)
         ax.set_xlim(*xlims[ds])
         style_log_y(ax)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[i])
     axes[0].set_ylabel("QPS", fontsize=7)
     for ax in axes:
@@ -533,10 +557,28 @@ def fig04_diskann_fair_recall_qps() -> None:
 
 
 # --------------------------------------------------------------------------
-# Figure 4: 03 end-to-end Recall@10-QPS over the full recall range (Ours M=64)
+# Figure 5: 03 end-to-end Recall@10-QPS over the full recall range (Ours M=64)
 # --------------------------------------------------------------------------
 def _load_q03(ds: str) -> list[dict[str, str]]:
     return read_csv(RESULTS_ROOT / "03_system_fair" / ds / "csv" / "system_fair_median.csv")
+
+
+def _formal_ours_point(ds: str, search_list_size: int) -> dict[str, str]:
+    """Load one measured formal INT8 Ours point from experiment 02."""
+    rows = read_csv(
+        RESULTS_ROOT / "02_diskann_fair" / ds / "csv" / "diskann_fair_raw.csv"
+    )
+    matches = [
+        row for row in rows
+        if row.get("method") == "Ours"
+        and row.get("query_coarse_codec", "").strip('"').lower() == "int8"
+        and int(row.get("search_param_value", 0) or 0) == search_list_size
+    ]
+    if not matches:
+        raise RuntimeError(
+            f"missing formal INT8 Ours point: dataset={ds}, L={search_list_size}"
+        )
+    return matches[-1]
 
 
 def _opt_ours_rows(ds: str) -> list[dict[str, str]] | None:
@@ -579,22 +621,39 @@ def _opt_ours_build_time_ms(ds: str) -> float | None:
 
 
 def fig05_endtoend_qps() -> None:
-    # High-recall zoom so the 0.95 target line and ceiling differences are
-    # readable; QPS stays log-scaled (orders of magnitude apart).
+    """End-to-end Pareto curves in three full-width dataset panels.
+
+    Every measured search setting remains in each line.  Only the visible
+    markers are thinned, which prevents dense high-recall sweeps from becoming
+    a solid vertical band.  Direct ceiling labels make saturation explicit
+    instead of leaving an apparently detached endpoint near Recall=1.
+    """
     xlims = {"dbpedia": (0.75, 1.0), "gist": (0.75, 1.0), "agnews": (0.85, 1.0)}
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.55), sharey=True)
+    annotation_offsets = {
+        "dbpedia": {
+            "Ours": (-5, 7), "Glass-NSG": (5, 5),
+            "OG-LVQ": (5, 8), "SymphonyQG": (5, 5),
+        },
+        "gist": {
+            "Ours": (-5, 7), "Glass-NSG": (5, 5),
+            "OG-LVQ": (5, 8), "SymphonyQG": (-5, 7),
+        },
+        "agnews": {
+            "Ours": (-5, 8), "Glass-NSG": (5, 7),
+            "OG-LVQ": (5, 10), "SymphonyQG": (-5, 16),
+        },
+    }
+    short_names = {
+        "Ours": "Ours", "Glass-NSG": "Glass",
+        "OG-LVQ": "OG-LVQ", "SymphonyQG": "SymphonyQG",
+    }
+    fig, axes = plt.subplots(3, 1, figsize=(7.2, 5.9), sharex=False)
     for i, (ax, (label, ds)) in enumerate(zip(axes, DATASETS)):
         rows = _load_q03(ds)
-        opt_rows = _opt_ours_rows(ds)
         for key, disp in Q03_METHODS:
             sub = [r for r in rows if r["method"] == key]
             if not sub:
                 continue
-            if key == "Ours" and opt_rows is not None:
-                # Use the final optimized Ours series only (the median CSV
-                # Ours rows are the same optimized runs; a separate dashed
-                # reference is redundant).
-                sub = opt_rows
             pts = clean_qps_envelope(sorted(
                 [(fnum(r, "recall"), fnum(r, "qps"), _ef_of(r)) for r in sub],
                 key=lambda t: t[2],
@@ -604,91 +663,135 @@ def fig05_endtoend_qps() -> None:
                 [p[1] for p in pts],
                 color=COLORS[key],
                 marker=MARKERS[key],
+                markevery=representative_marker_indices(len(pts)),
                 label=disp,
                 **hero_style(key),
             )
-            if key == "Ours" and pts:
-                end = pts[-1]
-                star_marker(ax, end[0], end[1], COLORS["Ours"])
-        ax.axvline(0.95, color="#BFBFBF", linestyle=":", linewidth=0.8, zorder=0)
-        ax.set_title(label, fontsize=7.5, pad=4)
+            if pts:
+                ceiling = max(pts, key=lambda p: p[0])
+                endpoint_style = {
+                    "s": 31 if key == "Ours" else 22,
+                    "marker": MARKERS[key], "color": COLORS[key],
+                    "linewidths": 0.65, "zorder": 7, "clip_on": False,
+                }
+                if MARKERS[key] not in ("x", "+"):
+                    endpoint_style["edgecolors"] = "white"
+                ax.scatter([ceiling[0]], [ceiling[1]], **endpoint_style)
+                dx, dy = annotation_offsets[ds][key]
+                ha = "right" if dx < 0 else "left"
+                ax.annotate(
+                    f"{short_names[key]}  {format_recall(ceiling[0])}",
+                    xy=(ceiling[0], ceiling[1]), xytext=(dx, dy),
+                    textcoords="offset points", ha=ha, va="center",
+                    fontsize=6.1, color=COLORS[key], clip_on=False,
+                )
+        ax.axvline(0.95, color=AXIS, linestyle=":", linewidth=0.8, zorder=0)
+        ax.text(
+            0.01, 0.94, label, transform=ax.transAxes,
+            ha="left", va="top", fontsize=7.5, fontweight="bold",
+        )
         ax.set_xlim(*xlims[ds])
         style_log_y(ax)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[i])
-    axes[0].set_ylabel("QPS", fontsize=7)
+        ax.set_ylabel("QPS", fontsize=7)
     for ax in axes:
         ax.set_xlabel("Recall@10 (end-to-end)", fontsize=7)
     handles, labels = axes[0].get_legend_handles_labels()
-    add_figure_legend(fig, handles, labels, ncol=4)
-    fig.tight_layout(rect=(0, 0.10, 1, 1))
+    fig.legend(
+        handles, labels, loc="lower center", ncol=4, fontsize=6.5,
+        frameon=False, handlelength=2.6, columnspacing=1.35,
+        bbox_to_anchor=(0.5, 0.018),
+    )
+    fig.text(
+        0.5, 0.068,
+        "High-recall view. Curves use all measured settings "
+        "(Ours: L_search=10–460; baselines: ef/W=10–580); markers are representative. "
+        "Endpoint labels show maximum measured Recall@10.",
+        ha="center", va="bottom", fontsize=5.7, color=MUTED,
+    )
+    fig.tight_layout(rect=(0.02, 0.115, 0.99, 1), h_pad=1.05)
     save_pub(fig, "fig05_endtoend_recall_qps")
 
 
 # --------------------------------------------------------------------------
-# Figure 4: 03 recall ceiling and index footprint
+# Figure 6: 03 recall ceiling and index footprint
 # --------------------------------------------------------------------------
 def _fmt_size(mb: float) -> str:
     return f"{mb / 1024:.2f} GB" if mb >= 1024 else f"{mb:.0f} MB"
 
 
 def fig06_endtoend_recall_index() -> None:
-    fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.4))
-    for row, (label, ds) in enumerate(DATASETS):
+    """Recall ceilings and index footprints as aligned dot plots.
+
+    Recall bars with a truncated baseline visually exaggerate small ceiling
+    differences.  Position-only dot plots show those values without implying
+    that the bars start at zero; the index panel remains logarithmic because
+    footprints span two orders of magnitude.
+    """
+    fig, axes = plt.subplots(2, 3, figsize=(7.2, 4.15), sharex="col", sharey="row")
+    method_labels = ["Ours", "Glass-NSG", "OG-LVQ", "SymphonyQG"]
+    for col, (label, ds) in enumerate(DATASETS):
         rows = _load_q03(ds)
         best = {m: max((r for r in rows if r["method"] == m), key=lambda r: fnum(r, "recall"))
                 for m, _ in Q03_METHODS if any(r["method"] == m for r in rows)}
-        opt_rows = _opt_ours_rows(ds)
-        if opt_rows:
-            best["Ours"] = max(opt_rows, key=lambda r: fnum(r, "recall"))
+        methods = [m for m, _ in Q03_METHODS if m in best]
+        xpos = np.arange(len(methods))
+        colors = [COLORS[m] for m in methods]
 
-        # (a/d) maximum achievable Recall@10
-        ax = axes[row, 0]
-        methods = list(best)
+        # (a-c) maximum achievable Recall@10
+        ax = axes[0, col]
         recs = [fnum(best[m], "recall") for m in methods]
-        colors = [to_rgba(COLORS[m], 1.0 if m == "Ours" else 0.55) for m in methods]
-        bars = ax.bar(methods, recs, color=colors, width=0.62, zorder=3)
-        for b, v in zip(bars, recs):
-            ax.text(b.get_x() + b.get_width() / 2, v + 0.008, f"{v:.3f}",
-                    ha="center", va="bottom", fontsize=6)
-        ax.axhline(0.95, color="#BFBFBF", linestyle=":", linewidth=0.8, zorder=1)
-        ax.set_ylim(0.3, 1.06)
-        ax.tick_params(axis="x", labelsize=6, rotation=22)
+        for x, m, v, color in zip(xpos, methods, recs, colors):
+            ax.scatter(
+                x, v, s=42 if m == "Ours" else 30, marker=MARKERS[m],
+                color=color, linewidths=1.0, zorder=4,
+            )
+            ax.text(x, v + 0.007, format_recall(v), ha="center", va="bottom",
+                    fontsize=6, color=color)
+        ax.axhline(0.95, color=AXIS, linestyle=":", linewidth=0.8, zorder=1)
+        ax.set_ylim(0.78, 1.025)
+        ax.set_xticks(xpos)
         ax.tick_params(axis="y", labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("Max achievable R@10", fontsize=7)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         ax.set_title(label, fontsize=7.5, pad=4)
+        panel_label(ax, "abc"[col])
 
-        # (b/e) index size at the maximum-recall operating point
-        ax = axes[row, 1]
+        # (d-f) index size at the maximum-recall operating point
+        ax = axes[1, col]
         sizes = [fnum(best[m], "index_size_mb") for m in methods]
-        bars = ax.bar(methods, sizes, color=colors, width=0.62, zorder=3)
+        ax.set_ylim(150, 30000)
         style_log_y(ax)
-        for b, v in zip(bars, sizes):
-            ax.text(b.get_x() + b.get_width() / 2, v * 1.12, _fmt_size(v),
-                    ha="center", va="bottom", fontsize=6)
-        ax.tick_params(axis="x", labelsize=6, rotation=22)
+        for x, m, v, color in zip(xpos, methods, sizes, colors):
+            ax.scatter(
+                x, v, s=42 if m == "Ours" else 30, marker=MARKERS[m],
+                color=color, linewidths=1.0, zorder=4,
+            )
+            ax.annotate(
+                _fmt_size(v), xy=(x, v), xytext=(0, 7),
+                textcoords="offset points", ha="center", va="bottom",
+                fontsize=6, color=color,
+            )
+        ax.set_xticks(xpos)
+        ax.set_xticklabels(method_labels, fontsize=6, rotation=24, ha="right",
+                           rotation_mode="anchor")
         ax.tick_params(axis="y", labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("Index size at max recall", fontsize=7)
-        panel_label(axes[row, 0], "abc"[row])
-        panel_label(axes[row, 1], "def"[row])
-    handles, labels = [], []
-    for m, disp in Q03_METHODS:
-        if m in best:
-            handles.append(plt.Line2D([], [], color=COLORS[m], marker=MARKERS[m],
-                                      linestyle="", markersize=4))
-            labels.append(disp)
-    add_figure_legend(fig, handles, labels, ncol=4)
-    fig.tight_layout(rect=(0, 0.14, 1, 1))
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
+        panel_label(ax, "def"[col])
+
+    axes[0, 0].set_ylabel("Maximum Recall@10", fontsize=7)
+    axes[1, 0].set_ylabel("Index size at max Recall (MB)", fontsize=7)
+    fig.text(
+        0.5, 0.012, "Ours uses a 1-bit database coarse code and an INT8 query.",
+        ha="center", va="bottom", fontsize=5.7, color=MUTED,
+    )
+    fig.tight_layout(rect=(0.02, 0.055, 1, 1), h_pad=1.25, w_pad=0.9)
     save_pub(fig, "fig06_endtoend_recall_index")
 
 
 # --------------------------------------------------------------------------
-# Figure 7: build cost -- 02 end-to-end construction + 03 system build time
+# Figure 10: build cost -- 02 end-to-end construction + 03 system build time
 # --------------------------------------------------------------------------
 def _fmt_s(v: float) -> str:
     if v >= 3600:
@@ -755,10 +858,12 @@ def fig10_build_time_02_03() -> None:
         for xi, v in zip(x, vals):
             ax.text(xi, v * 1.14, _fmt_s(v), ha="center", va="bottom", fontsize=5.5)
         ax.set_xticks(x)
-        ax.set_xticklabels(names, rotation=35, ha="right", fontsize=5.5)
+        ax.set_xticklabels(
+            names, rotation=35, ha="right", rotation_mode="anchor", fontsize=5.5
+        )
         ax.tick_params(axis="x", labelsize=6)
         ax.tick_params(axis="y", labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         if col == 0:
             ax.set_ylabel("Construction time (s, log)\nM=64 / beam=400", fontsize=6.5)
         ax.set_title(label, fontsize=7.5, pad=4)
@@ -778,12 +883,17 @@ def fig10_build_time_02_03() -> None:
 
 
 # --------------------------------------------------------------------------
-# Figure 4: K ablation -- R@10 and QPS at r=1000 vs codebook size K
+# Figure 7: K ablation -- R@10 and QPS at r=1000 vs codebook size K
 # --------------------------------------------------------------------------
 def fig07_kmeans_summary() -> None:
     data = {ds: _k_summary(ds) for _, ds in DATASETS}
-    fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.4), sharex="col")
-    for row, (label, ds) in enumerate(DATASETS):
+    swept = [(label, ds) for label, ds in DATASETS if len(data[ds]) > 1]
+    if not swept:
+        raise RuntimeError("fig07 requires at least one multi-K sweep")
+    fig, axes = plt.subplots(
+        len(swept), 2, figsize=(7.2, 2.45 * len(swept)), squeeze=False
+    )
+    for row, (label, ds) in enumerate(swept):
         rows = data[ds]
         ks = sorted(rows)
 
@@ -797,34 +907,33 @@ def fig07_kmeans_summary() -> None:
         ax.set_xscale("log", base=2)
         ax.set_ylim(min(rec) - 0.03, max(rec) + 0.015)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("R@10 @ rerank=1000", fontsize=7)
-        ax.set_title(label, fontsize=7.5, pad=4)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
+        ax.set_ylabel("R@10 @ rerank=1000", fontsize=7)
+        ax.set_title(f"{label} · recall", fontsize=7.5, pad=4)
 
         ax = axes[row, 1]
         qps = [rows[k]["qps"] for k in ks]
-        ax.plot(ks, qps, color="#767676", linewidth=1.5, marker="s",
+        ax.plot(ks, qps, color=MUTED, linewidth=1.5, marker="s",
                 markersize=4.5, zorder=3)
         if 1 in rows:
             ax.plot([1], [rows[1]["qps"]], marker="D", mfc="white",
-                    mec="#767676", ms=5.5, mew=1.2, zorder=4)
+                    mec=MUTED, ms=5.5, mew=1.2, zorder=4)
         ax.set_xscale("log", base=2)
         ax.set_ylim(min(qps) * 0.85, max(qps) * 1.15)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("QPS @ rerank=1000", fontsize=7)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
+        ax.set_ylabel("QPS @ rerank=1000", fontsize=7)
+        ax.set_title(f"{label} · throughput", fontsize=7.5, pad=4)
 
-        if row == 2:
+        if row == len(swept) - 1:
             axes[row, 0].set_xlabel("Codebook size K", fontsize=7)
             axes[row, 1].set_xlabel("Codebook size K", fontsize=7)
-            for col in range(2):
-                axes[row, col].set_xticks(ks)
-                axes[row, col].set_xticklabels([str(k) for k in ks], fontsize=6.5)
+        for col in range(2):
+            axes[row, col].set_xticks(ks)
+            axes[row, col].set_xticklabels([str(k) for k in ks], fontsize=6.5)
 
-        panel_label(axes[row, 0], "abc"[row])
-        panel_label(axes[row, 1], "def"[row])
+        panel_label(axes[row, 0], chr(ord("a") + 2 * row))
+        panel_label(axes[row, 1], chr(ord("b") + 2 * row))
     fig.tight_layout(pad=1.0)
     save_pub(fig, "fig07_kmeans_ablation_recall_qps")
 
@@ -865,8 +974,13 @@ def _k_summary(ds: str) -> dict[int, dict[str, float]]:
 
 def fig08_kmeans_error_train() -> None:
     data = {ds: _k_summary(ds) for _, ds in DATASETS}
-    fig, axes = plt.subplots(3, 2, figsize=(7.0, 5.3), sharex="col")
-    for row, (label, ds) in enumerate(DATASETS):
+    swept = [(label, ds) for label, ds in DATASETS if len(data[ds]) > 1]
+    if not swept:
+        raise RuntimeError("fig08 requires at least one multi-K sweep")
+    fig, axes = plt.subplots(
+        len(swept), 2, figsize=(7.2, 2.45 * len(swept)), squeeze=False
+    )
+    for row, (label, ds) in enumerate(swept):
         rows = data[ds]
         ks = sorted(rows)
         err = [rows[k]["mean_rel"] for k in ks]
@@ -879,34 +993,31 @@ def fig08_kmeans_error_train() -> None:
             ax.plot([1], [rows[1]["mean_rel"]], marker="D", mfc="white", mec="#0F4D92",
                     ms=5.5, mew=1.2, zorder=4)
         ax.set_ylim(0, max(err) * 1.25)
-        if row == 2:
-            ax.set_xticks(ks)
-            ax.set_xticklabels([str(k) for k in ks], fontsize=6.5)
+        ax.set_xticks(ks)
+        ax.set_xticklabels([str(k) for k in ks], fontsize=6.5)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("Mean relative error", fontsize=7)
-        ax.set_title(label, fontsize=7.5, pad=4)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
+        ax.set_ylabel("Mean relative error", fontsize=7)
+        ax.set_title(f"{label} · quantization error", fontsize=7.5, pad=4)
 
         ax = axes[row, 1]
-        ax.plot(ks, train, color="#767676", linewidth=1.5, marker="s", markersize=4.5, zorder=3)
+        ax.plot(ks, train, color=MUTED, linewidth=1.5, marker="s", markersize=4.5, zorder=3)
         ax.set_xscale("log", base=2)
         if 1 in rows:
-            ax.plot([1], [rows[1]["train_s"]], marker="D", mfc="white", mec="#767676",
+            ax.plot([1], [rows[1]["train_s"]], marker="D", mfc="white", mec=MUTED,
                     ms=5.5, mew=1.2, zorder=4)
-        if row == 2:
-            ax.set_xticks(ks)
-            ax.set_xticklabels([str(k) for k in ks], fontsize=6.5)
+        ax.set_xticks(ks)
+        ax.set_xticklabels([str(k) for k in ks], fontsize=6.5)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
-        if row == 0:
-            ax.set_ylabel("Train time (s)", fontsize=7)
-        if row == 2:
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
+        ax.set_ylabel("Train time (s)", fontsize=7)
+        ax.set_title(f"{label} · training cost", fontsize=7.5, pad=4)
+        if row == len(swept) - 1:
             axes[row, 0].set_xlabel("Codebook size K", fontsize=7)
             axes[row, 1].set_xlabel("Codebook size K", fontsize=7)
-    for row in range(3):
-        panel_label(axes[row, 0], "abc"[row])
-        panel_label(axes[row, 1], "def"[row])
+    for row in range(len(swept)):
+        panel_label(axes[row, 0], chr(ord("a") + 2 * row))
+        panel_label(axes[row, 1], chr(ord("b") + 2 * row))
     fig.tight_layout(pad=1.2)
     save_pub(fig, "fig08_kmeans_ablation_error_train")
 
@@ -953,16 +1064,19 @@ def fig11_decomposition_attribution() -> None:
                     continue
                 pos = x[k] + (j - 1) * bar_width
                 color = to_rgba(bar_colors[j], 1.0)
-                edge = "#FF4D00" if sys_name == "Ours" else "white"
+                edge = COLORS["Ours"] if sys_name == "Ours" else "white"
                 lw = 1.4 if sys_name == "Ours" else 0.5
                 ax.bar(pos, vals[k], bar_width, color=color, edgecolor=edge,
                        linewidth=lw, zorder=3, label=disp if k == 0 and i == 0 else None)
         ax.set_title(label, fontsize=7.5, pad=4)
         ax.set_xticks(x)
-        ax.set_xticklabels([m for m in SYSTEMS_DECOMP], fontsize=6, rotation=12)
+        ax.set_xticklabels(
+            [m for m in SYSTEMS_DECOMP], fontsize=6, rotation=12,
+            ha="right", rotation_mode="anchor",
+        )
         ax.set_ylim(0, 1.0)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[i])
     axes[0].set_ylabel("Recall ceiling", fontsize=7)
     handles, labels = axes[0].get_legend_handles_labels()
@@ -977,11 +1091,9 @@ def fig11_decomposition_attribution() -> None:
 # --------------------------------------------------------------------------
 def fig12_agnews_instrumented_ef100() -> None:
     systems = ["Ours", "SymphonyQG", "Glass-NSG", "OG-LVQ"]
-    # R64 / M=64 instrumented measurements at ef=100 (2026-08-19, Feishu doc):
-    #   Ours        = final config (M64 / L_build=400 / cap256 + back-stop2 +
-    #                 refine1 + sidecar), from query_es/agnews_final_refine1_
-    #                 sidecar (visited=2989.34, dist=727.62, latency=1176.44us,
-    #                 recall=0.99275).
+    # R64 / M=64 instrumented measurements at ef=100. Ours is loaded from the
+    # new formal INT8 run; baseline instrumentation remains from the official
+    # system adapters because those systems expose different counter sets.
     #   SymphonyQG  = official source instrumentation, R64: 46.3 expanded
     #                 nodes, 3,011 distances (46.3 exact L2 + 2,965 fast-scan),
     #                 142.6 us, recall 0.994 (R32 was 60/1,969/148).
@@ -989,31 +1101,38 @@ def fig12_agnews_instrumented_ef100() -> None:
     #                 1,876.6 SQ4U distances, 213.1 us, recall 0.9425
     #                 (R32_L50 was 106/1,431/250).
     #   OG-LVQ      = SVS official binding exposes no counts; latency 938 us.
+    ours = _formal_ours_point("agnews", 100)
     metrics = [
-        ("visited", "Visited / query", [2989, 46.3, 104.7, None]),
-        ("distance", "Distance comps / query", [728, 3011, 1876.6, None]),
-        ("latency", "Latency (us) / query", [1176, 142.6, 213.1, 938]),
+        ("visited", "Visited / query", [fnum(ours, "visited_nodes"), 46.3, 104.7, None]),
+        ("distance", "Distance comps / query", [fnum(ours, "distance_calls"), 3011, 1876.6, None]),
+        ("latency", "Latency (µs) / query", [fnum(ours, "latency_mean_us"), 142.6, 213.1, 938]),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.6), sharey=True)
     for col, (ax, (_, title, vals)) in enumerate(zip(axes, metrics)):
         for i, (sys_name, v) in enumerate(zip(systems, vals)):
             if v is None:
+                ax.text(
+                    i, 12, "N/A", ha="center", va="bottom", fontsize=6,
+                    color=MUTED,
+                )
                 continue
             color = to_rgba(COLORS.get(sys_name, "#888888"),
                             1.0 if sys_name == "Ours" else 0.55)
-            edge = "#FF4D00" if sys_name == "Ours" else "white"
+            edge = COLORS["Ours"] if sys_name == "Ours" else "white"
             ax.bar([i], [v], width=0.62, color=color, edgecolor=edge,
                    linewidth=1.3 if sys_name == "Ours" else 0.5, zorder=3)
             label = f"{v:,.1f}".rstrip("0").rstrip(".")
             ax.text(i, v * 1.18, label, ha="center", va="bottom",
                     fontsize=6, color=COLORS.get(sys_name, "#333333"))
-        ax.set_yscale("log")
         ax.set_ylim(10, 20000)
+        style_log_y(ax)
         ax.set_xticks(range(len(systems)))
-        ax.set_xticklabels(systems, rotation=12, fontsize=6)
+        ax.set_xticklabels(
+            systems, rotation=12, fontsize=6, ha="right", rotation_mode="anchor"
+        )
         ax.set_title(title, fontsize=7.5, pad=4)
         ax.tick_params(labelsize=6.5)
-        ax.grid(axis="y", color="#E8E8E8", lw=0.5, zorder=0)
+        ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
         panel_label(ax, "abc"[col])
     axes[0].set_ylabel("per query (log scale)", fontsize=7)
     fig.tight_layout(pad=0.8)

@@ -132,8 +132,34 @@ def raw_csv_path(ctx: RunContext) -> Path:
     return ctx.csv_dir / "system_fair_raw.csv"
 
 
-def write_raw_rows(ctx: RunContext, rows: list[dict[str, Any]]) -> None:
+def _replace_method_rows(
+    csv_path: Path,
+    rows: list[dict[str, Any]],
+    method: str,
+) -> None:
+    """Atomically replace one system's rows while preserving all baselines."""
+    existing: list[dict[str, Any]] = []
+    if csv_path.exists():
+        with csv_path.open() as f:
+            existing = [r for r in csv.DictReader(f) if r.get("method") != method]
+    tmp = csv_path.with_suffix(csv_path.suffix + ".tmp")
+    with tmp.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=MANIFEST_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(existing)
+        writer.writerows(rows)
+    tmp.replace(csv_path)
+
+
+def write_raw_rows(
+    ctx: RunContext,
+    rows: list[dict[str, Any]],
+    replace_method: str | None = None,
+) -> None:
     ensure_dir(ctx.csv_dir)
+    if replace_method is not None:
+        _replace_method_rows(raw_csv_path(ctx), rows, replace_method)
+        return
     existing = _existing_keys(raw_csv_path(ctx))
     rows = [
         r
@@ -172,12 +198,24 @@ def main() -> int:
         "with experiment 02); validation still uses the first N queries",
     )
     ap.add_argument("--max-configs", type=int, default=0)
+    ap.add_argument(
+        "--overwrite-systems",
+        default="",
+        help="comma-separated systems whose existing 03 rows are atomically replaced",
+    )
     args = ap.parse_args()
 
     ctx = make_ctx(args)
     ctx.full_test_queries = args.full_test_queries
     names = [n.strip() for n in args.systems.split(",") if n.strip()]
     adapters = [ADAPTERS[n]() for n in names]
+    overwrite = {n.strip() for n in args.overwrite_systems.split(",") if n.strip()}
+    unknown_overwrite = overwrite - set(names)
+    if unknown_overwrite:
+        ap.error(
+            "--overwrite-systems must be a subset of --systems: "
+            + ",".join(sorted(unknown_overwrite))
+        )
     if not adapters:
         ap.error("no systems selected")
 
@@ -218,9 +256,13 @@ def main() -> int:
                 except Exception as exc:
                     print(f"    repeat {repeat_id} FAILED for {adapter.name}: {exc}")
                     continue
-                write_raw_rows(ctx, rows)
-                for row in rows:
-                    append_manifest_row(manifest, row)
+                replace_method = adapter.name if adapter.name in overwrite else None
+                write_raw_rows(ctx, rows, replace_method)
+                if replace_method is not None:
+                    _replace_method_rows(manifest, rows, replace_method)
+                else:
+                    for row in rows:
+                        append_manifest_row(manifest, row)
                 print(
                     f"    repeat {repeat_id}: {len(rows)} rows "
                     f"({time.time()-t0:.1f}s, recall {rows[0]['recall']:.3f}..{rows[-1]['recall']:.3f})"

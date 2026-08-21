@@ -78,6 +78,7 @@ pub struct SearchResult {
     pub mean_absolute_error: f64,
     pub top10_overlap: f64,
     pub pairwise_flip_rate_top10: f64,
+    pub query_coarse_codec: String,
     pub status: String,
 }
 

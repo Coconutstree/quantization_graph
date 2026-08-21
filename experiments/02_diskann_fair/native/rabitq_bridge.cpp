@@ -310,6 +310,34 @@ std::size_t rabitq_paper_factor_bytes() {
     return sizeof(hnswlib::PaperPruneFactors<float>);
 }
 
+bool rabitq_export_paper_sidecar(
+    const void *space,
+    const void *compact_records_in,
+    std::size_t record_count,
+    std::size_t compact_stride,
+    std::uint8_t *msb_out,
+    void *factors_out) {
+    try {
+        if (space == nullptr || (compact_records_in == nullptr && record_count != 0) ||
+            msb_out == nullptr || factors_out == nullptr) {
+            return false;
+        }
+        const hnswlib::RaBitQSpace *typed =
+            static_cast<const hnswlib::RaBitQSpace *>(space);
+        const std::size_t msb_bytes = typed->paper_msb_code_bytes();
+        const char *records = static_cast<const char *>(compact_records_in);
+        hnswlib::PaperPruneFactors<float> *factors =
+            static_cast<hnswlib::PaperPruneFactors<float> *>(factors_out);
+        for (std::size_t id = 0; id < record_count; ++id) {
+            factors[id] = typed->extract_paper_prune_sidecar(
+                records + id * compact_stride, msb_out + id * msb_bytes);
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 float rabitq_symmetric_distance(const void *space, const void *lhs, const void *rhs) {
     try {
         hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
@@ -329,6 +357,14 @@ const void *rabitq_prepare_query(const void *space, const float *query) {
     }
 }
 
+void rabitq_set_query_coarse_codec(void *space, int codec) {
+    try {
+        static_cast<hnswlib::RaBitQSpace *>(space)->set_query_coarse_codec(
+            static_cast<hnswlib::QueryCoarseCodec>(codec));
+    } catch (...) {
+    }
+}
+
 void rabitq_release_query(const void *space, const void *prepared) {
     try {
         const_cast<hnswlib::RaBitQSpace *>(
@@ -344,6 +380,42 @@ float rabitq_query_distance(const void *space, const void *prepared, const void 
     } catch (...) {
         return std::numeric_limits<float>::infinity();
     }
+}
+
+float rabitq_query_distance_b1(const void *space, const void *prepared, const void *encoded) {
+    try {
+        return static_cast<const hnswlib::RaBitQSpace *>(space)->query_distance_b1(
+            prepared, encoded);
+    } catch (...) {
+        return std::numeric_limits<float>::infinity();
+    }
+}
+
+bool rabitq_query_distance_b1_batch(
+    const void *space,
+    const void *prepared,
+    const std::uint32_t *ids,
+    std::size_t count,
+    const void *encoded_base,
+    std::size_t encoded_stride,
+    float *out_distances) {
+    const hnswlib::RaBitQSpace *typed =
+        static_cast<const hnswlib::RaBitQSpace *>(space);
+    const char *encoded_bytes = static_cast<const char *>(encoded_base);
+    for (std::size_t i = 0; i < count; ++i) {
+        try {
+            const std::size_t id = ids[i];
+            if (i + 4 < count) {
+                const std::size_t next_id = ids[i + 4];
+                __builtin_prefetch(encoded_bytes + next_id * encoded_stride, 0, 3);
+            }
+            out_distances[i] = typed->query_distance_b1(
+                prepared, encoded_bytes + id * encoded_stride);
+        } catch (...) {
+            out_distances[i] = std::numeric_limits<float>::infinity();
+        }
+    }
+    return true;
 }
 
 RabitqPaperEstimate rabitq_paper_estimate(
@@ -396,6 +468,126 @@ RabitqPaperEstimate rabitq_paper_estimate_sidecar(
     }
 }
 
+RabitqPaperEstimate rabitq_paper_estimate_codec(
+    const void *space,
+    const void *prepared,
+    const void *encoded,
+    const std::uint8_t *msb_code,
+    const void *factors,
+    float epsilon0) {
+    try {
+        (void) encoded;
+        const hnswlib::RaBitQSpace *typed =
+            static_cast<const hnswlib::RaBitQSpace *>(space);
+        const hnswlib::PaperPruneFactors<float> factor =
+            *static_cast<const hnswlib::PaperPruneFactors<float> *>(factors);
+        // Query-coarse codec comparisons always use the 1-bit DB sidecar;
+        // compute_paper_prune_estimate_sidecar dispatches by query codec.
+        const hnswlib::PaperPruneEstimate<float> estimate =
+            typed->compute_paper_prune_estimate_sidecar(
+                prepared, msb_code, factor, epsilon0);
+        return RabitqPaperEstimate{
+            estimate.lower_bound,
+            estimate.short_ip,
+            estimate.alpha,
+            estimate.ip_hat,
+            estimate.error_bound,
+            estimate.valid ? static_cast<std::uint8_t>(1) : static_cast<std::uint8_t>(0),
+        };
+    } catch (...) {
+        return RabitqPaperEstimate{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+    }
+}
+
+bool rabitq_paper_estimate_codec_batch(
+    const void *space,
+    const void *prepared,
+    const std::uint32_t *ids,
+    std::size_t count,
+    const void *encoded_base,
+    std::size_t encoded_stride,
+    const std::uint8_t *msb_base,
+    std::size_t msb_stride,
+    const void *factors_base,
+    std::size_t factors_stride,
+    float epsilon0,
+    RabitqPaperEstimate *out) {
+    (void) encoded_base;
+    (void) encoded_stride;
+    hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
+        static_cast<const hnswlib::RaBitQSpace *>(space));
+    const char *factor_bytes = static_cast<const char *>(factors_base);
+    const std::size_t msb_bytes = typed->paper_msb_code_bytes();
+    std::vector<std::uint8_t> msb_stage(32 * msb_bytes);
+    std::vector<hnswlib::PaperPruneFactors<float>> factor_stage(32);
+    std::size_t i = 0;
+    for (; i + 32 <= count; i += 32) {
+        const std::uint8_t *msb_ptrs[32];
+        for (std::size_t k = 0; k < 32; ++k) {
+            const std::size_t id = ids[i + k];
+            const std::size_t pf = i + k + 8;
+            if (pf < count) {
+                const std::size_t next_id = ids[pf];
+                __builtin_prefetch(msb_base + next_id * msb_stride, 0, 3);
+            }
+            std::memcpy(msb_stage.data() + k * msb_bytes,
+                        msb_base + id * msb_stride, msb_bytes);
+            factor_stage[k] =
+                *reinterpret_cast<const hnswlib::PaperPruneFactors<float> *>(
+                    factor_bytes + id * factors_stride);
+            msb_ptrs[k] = msb_stage.data() + k * msb_bytes;
+        }
+        try {
+            hnswlib::PaperPruneEstimate<float> estimates[32];
+            typed->compute_paper_prune_estimate_sidecar_batch(
+                prepared, msb_ptrs,
+                factor_stage.data(), epsilon0, estimates);
+            for (std::size_t k = 0; k < 32; ++k) {
+                out[i + k] = RabitqPaperEstimate{
+                    estimates[k].lower_bound,
+                    estimates[k].short_ip,
+                    estimates[k].alpha,
+                    estimates[k].ip_hat,
+                    estimates[k].error_bound,
+                    estimates[k].valid ? static_cast<std::uint8_t>(1)
+                                       : static_cast<std::uint8_t>(0),
+                };
+            }
+        } catch (...) {
+            for (std::size_t k = 0; k < 32; ++k) {
+                out[i + k] = RabitqPaperEstimate{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+            }
+        }
+    }
+    for (; i < count; ++i) {
+        try {
+            const std::size_t id = ids[i];
+            if (i + 8 < count) {
+                const std::size_t next_id = ids[i + 8];
+                __builtin_prefetch(msb_base + next_id * msb_stride, 0, 3);
+            }
+            const hnswlib::PaperPruneEstimate<float> estimate =
+                typed->compute_paper_prune_estimate_sidecar(
+                    prepared,
+                    msb_base + id * msb_stride,
+                    *reinterpret_cast<const hnswlib::PaperPruneFactors<float> *>(
+                        factor_bytes + id * factors_stride),
+                    epsilon0);
+            out[i] = RabitqPaperEstimate{
+                estimate.lower_bound,
+                estimate.short_ip,
+                estimate.alpha,
+                estimate.ip_hat,
+                estimate.error_bound,
+                estimate.valid ? static_cast<std::uint8_t>(1) : static_cast<std::uint8_t>(0),
+            };
+        } catch (...) {
+            out[i] = RabitqPaperEstimate{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+        }
+    }
+    return true;
+}
+
 float rabitq_query_distance_with_paper(
     const void *space,
     const void *prepared,
@@ -405,6 +597,21 @@ float rabitq_query_distance_with_paper(
         return const_cast<hnswlib::RaBitQSpace *>(
             static_cast<const hnswlib::RaBitQSpace *>(space))->query_distance_with_paper_msb(
             prepared, encoded, short_ip);
+    } catch (...) {
+        return std::numeric_limits<float>::infinity();
+    }
+}
+
+float rabitq_query_distance_with_quantized_paper(
+    const void *space,
+    const void *prepared,
+    const void *encoded,
+    float short_ip) {
+    try {
+        return const_cast<hnswlib::RaBitQSpace *>(
+            static_cast<const hnswlib::RaBitQSpace *>(space))
+            ->query_distance_with_quantized_paper_msb(
+                prepared, encoded, short_ip);
     } catch (...) {
         return std::numeric_limits<float>::infinity();
     }
@@ -502,16 +709,112 @@ bool rabitq_paper_estimate_batch_sidecar(
     hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
         static_cast<const hnswlib::RaBitQSpace *>(space));
     const char *factor_bytes = static_cast<const char *>(factors_base);
-    // 16-candidate SIMD batch path; tail falls back to the single-candidate
+    if (typed->get_query_coarse_codec() == hnswlib::QueryCoarseCodec::B1) {
+        constexpr std::size_t kDirectBatch = 64;
+        for (std::size_t begin = 0; begin < count; begin += kDirectBatch) {
+            const std::size_t batch_count =
+                std::min(kDirectBatch, count - begin);
+            hnswlib::PaperPruneEstimate<float> estimates[kDirectBatch];
+            try {
+                typed->compute_b1_paper_prune_estimate_batch_by_id(
+                    prepared, ids + begin, batch_count,
+                    msb_base, msb_stride, factors_base, factors_stride,
+                    epsilon0, estimates);
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        estimates[k].lower_bound,
+                        estimates[k].short_ip,
+                        estimates[k].alpha,
+                        estimates[k].ip_hat,
+                        estimates[k].error_bound,
+                        estimates[k].valid ? static_cast<std::uint8_t>(1)
+                                           : static_cast<std::uint8_t>(0),
+                    };
+                }
+            } catch (...) {
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+                }
+            }
+        }
+        return true;
+    }
+    if (typed->get_query_coarse_codec() == hnswlib::QueryCoarseCodec::Int4 ||
+        typed->get_query_coarse_codec() == hnswlib::QueryCoarseCodec::Int8) {
+        constexpr std::size_t kDirectBatch = 64;
+        for (std::size_t begin = 0; begin < count; begin += kDirectBatch) {
+            const std::size_t batch_count =
+                std::min(kDirectBatch, count - begin);
+            hnswlib::PaperPruneEstimate<float> estimates[kDirectBatch];
+            try {
+                typed->compute_int_paper_prune_estimate_batch_by_id(
+                    prepared, ids + begin, batch_count,
+                    msb_base, msb_stride, factors_base, factors_stride,
+                    epsilon0, estimates);
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        estimates[k].lower_bound,
+                        estimates[k].short_ip,
+                        estimates[k].alpha,
+                        estimates[k].ip_hat,
+                        estimates[k].error_bound,
+                        estimates[k].valid ? static_cast<std::uint8_t>(1)
+                                           : static_cast<std::uint8_t>(0),
+                    };
+                }
+            } catch (...) {
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+                }
+            }
+        }
+        return true;
+    }
+    if (typed->get_query_coarse_codec() == hnswlib::QueryCoarseCodec::Full ||
+        typed->get_query_coarse_codec() ==
+            hnswlib::QueryCoarseCodec::FullRerankScalar) {
+        constexpr std::size_t kDirectBatch = 64;
+        for (std::size_t begin = 0; begin < count; begin += kDirectBatch) {
+            const std::size_t batch_count =
+                std::min(kDirectBatch, count - begin);
+            hnswlib::PaperPruneEstimate<float> estimates[kDirectBatch];
+            try {
+                typed->compute_full_paper_prune_estimate_batch_by_id(
+                    prepared, ids + begin, batch_count,
+                    msb_base, msb_stride, factors_base, factors_stride,
+                    epsilon0, estimates);
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        estimates[k].lower_bound,
+                        estimates[k].short_ip,
+                        estimates[k].alpha,
+                        estimates[k].ip_hat,
+                        estimates[k].error_bound,
+                        estimates[k].valid ? static_cast<std::uint8_t>(1)
+                                           : static_cast<std::uint8_t>(0),
+                    };
+                }
+            } catch (...) {
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqPaperEstimate{
+                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
+                }
+            }
+        }
+        return true;
+    }
+    // 32-candidate SIMD batch path; tail falls back to the single-candidate
     // path below. Staging the MSB codes into a contiguous buffer turns the
     // per-chunk reads into L1 hits and keeps the prefetch depth at 8.
     const std::size_t msb_bytes = typed->paper_msb_code_bytes();
-    std::vector<std::uint8_t> msb_stage(16 * msb_bytes);
-    std::vector<hnswlib::PaperPruneFactors<float>> factor_stage(16);
+    std::vector<std::uint8_t> msb_stage(32 * msb_bytes);
+    std::vector<hnswlib::PaperPruneFactors<float>> factor_stage(32);
     std::size_t i = 0;
-    for (; i + 16 <= count; i += 16) {
-        const std::uint8_t *msb_ptrs[16];
-        for (std::size_t k = 0; k < 16; ++k) {
+    for (; i + 32 <= count; i += 32) {
+        const std::uint8_t *msb_ptrs[32];
+        for (std::size_t k = 0; k < 32; ++k) {
             const std::size_t id = ids[i + k];
             const std::size_t pf = i + k + 8;
             if (pf < count) {
@@ -526,10 +829,10 @@ bool rabitq_paper_estimate_batch_sidecar(
             msb_ptrs[k] = msb_stage.data() + k * msb_bytes;
         }
         try {
-            hnswlib::PaperPruneEstimate<float> estimates[16];
+            hnswlib::PaperPruneEstimate<float> estimates[32];
             typed->compute_paper_prune_estimate_sidecar_batch(
                 prepared, msb_ptrs, factor_stage.data(), epsilon0, estimates);
-            for (std::size_t k = 0; k < 16; ++k) {
+            for (std::size_t k = 0; k < 32; ++k) {
                 out[i + k] = RabitqPaperEstimate{
                     estimates[k].lower_bound,
                     estimates[k].short_ip,
@@ -541,7 +844,7 @@ bool rabitq_paper_estimate_batch_sidecar(
                 };
             }
         } catch (...) {
-            for (std::size_t k = 0; k < 16; ++k) {
+            for (std::size_t k = 0; k < 32; ++k) {
                 out[i + k] = RabitqPaperEstimate{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0};
             }
         }
@@ -588,6 +891,55 @@ bool rabitq_query_distance_batch(
     hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
         static_cast<const hnswlib::RaBitQSpace *>(space));
     const char *encoded_bytes = static_cast<const char *>(encoded_base);
+    bool all_quantized_reuse = count != 0;
+    bool all_full_reuse = count != 0;
+    bool all_full_recompute = count != 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (modes[i] != 2) {
+            all_quantized_reuse = false;
+        }
+        if (modes[i] != 1) all_full_reuse = false;
+        if (modes[i] != 0) all_full_recompute = false;
+    }
+    if (all_quantized_reuse) {
+        try {
+            typed->query_distance_with_quantized_paper_msb_batch_by_id(
+                prepared, ids, count, encoded_base, encoded_stride,
+                short_ips, out_distances);
+            return true;
+        } catch (...) {
+            std::fill(
+                out_distances, out_distances + count,
+                std::numeric_limits<float>::infinity());
+            return true;
+        }
+    }
+    if (all_full_reuse) {
+        try {
+            typed->query_distance_with_paper_msb_batch_by_id(
+                prepared, ids, count, encoded_base, encoded_stride,
+                short_ips, out_distances);
+            return true;
+        } catch (...) {
+            std::fill(
+                out_distances, out_distances + count,
+                std::numeric_limits<float>::infinity());
+            return true;
+        }
+    }
+    if (all_full_recompute) {
+        try {
+            typed->query_distance_batch_by_id(
+                prepared, ids, count, encoded_base, encoded_stride,
+                out_distances);
+            return true;
+        } catch (...) {
+            std::fill(
+                out_distances, out_distances + count,
+                std::numeric_limits<float>::infinity());
+            return true;
+        }
+    }
     for (std::size_t i = 0; i < count; ++i) {
         try {
             const std::size_t id = ids[i];
@@ -596,9 +948,16 @@ bool rabitq_query_distance_batch(
                 __builtin_prefetch(encoded_bytes + next_id * encoded_stride, 0, 3);
             }
             const void *encoded = encoded_bytes + id * encoded_stride;
-            out_distances[i] = modes[i] != 0
-                ? typed->query_distance_with_paper_msb(prepared, encoded, short_ips[i])
-                : typed->query_distance(prepared, encoded);
+            if (modes[i] == 1 || modes[i] == 3) {
+                out_distances[i] = typed->query_distance_with_paper_msb(
+                    prepared, encoded, short_ips[i]);
+            } else if (modes[i] == 2) {
+                out_distances[i] =
+                    typed->query_distance_with_quantized_paper_msb(
+                        prepared, encoded, short_ips[i]);
+            } else {
+                out_distances[i] = typed->query_distance(prepared, encoded);
+            }
         } catch (...) {
             out_distances[i] = std::numeric_limits<float>::infinity();
         }
@@ -621,6 +980,37 @@ bool rabitq_residual_distance_batch(
         static_cast<const hnswlib::RaBitQSpace *>(space));
     const char *encoded_bytes = static_cast<const char *>(encoded_base);
     const char *residual_bytes = static_cast<const char *>(residual_base);
+    if (typed->get_query_coarse_codec() !=
+        hnswlib::QueryCoarseCodec::FullRerankScalar) {
+        constexpr std::size_t kDirectBatch = 64;
+        for (std::size_t begin = 0; begin < count; begin += kDirectBatch) {
+            const std::size_t batch_count =
+                std::min(kDirectBatch, count - begin);
+            hnswlib::DistanceInterval intervals[kDirectBatch];
+            try {
+                typed->compute_residual_distance_intervals_batch_by_id(
+                    prepared, ids + begin, batch_count,
+                    encoded_base, encoded_stride,
+                    residual_base, residual_stride,
+                    long_distances + begin, intervals);
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqDistanceInterval{
+                        intervals[k].estimate,
+                        intervals[k].lower_bound,
+                        intervals[k].upper_bound,
+                    };
+                }
+            } catch (...) {
+                for (std::size_t k = 0; k < batch_count; ++k) {
+                    out[begin + k] = RabitqDistanceInterval{
+                        long_distances[begin + k],
+                        long_distances[begin + k],
+                        long_distances[begin + k]};
+                }
+            }
+        }
+        return true;
+    }
     for (std::size_t i = 0; i < count; ++i) {
         try {
             const std::size_t id = ids[i];
@@ -642,6 +1032,48 @@ bool rabitq_residual_distance_batch(
         } catch (...) {
             out[i] = RabitqDistanceInterval{
                 long_distances[i], long_distances[i], long_distances[i]};
+        }
+    }
+    return true;
+}
+
+bool rabitq_full_residual_distance_batch(
+    const void *space,
+    const void *prepared,
+    const std::uint32_t *ids,
+    std::size_t count,
+    const void *encoded_base,
+    std::size_t encoded_stride,
+    const void *residual_base,
+    std::size_t residual_stride,
+    RabitqDistanceInterval *out) {
+    hnswlib::RaBitQSpace *typed = const_cast<hnswlib::RaBitQSpace *>(
+        static_cast<const hnswlib::RaBitQSpace *>(space));
+    constexpr std::size_t kDirectBatch = 64;
+    for (std::size_t begin = 0; begin < count; begin += kDirectBatch) {
+        const std::size_t batch_count =
+            std::min(kDirectBatch, count - begin);
+        hnswlib::DistanceInterval intervals[kDirectBatch];
+        try {
+            typed->compute_full_residual_distance_intervals_batch_by_id(
+                prepared, ids + begin, batch_count,
+                encoded_base, encoded_stride,
+                residual_base, residual_stride, intervals);
+            for (std::size_t k = 0; k < batch_count; ++k) {
+                out[begin + k] = RabitqDistanceInterval{
+                    intervals[k].estimate,
+                    intervals[k].lower_bound,
+                    intervals[k].upper_bound,
+                };
+            }
+        } catch (...) {
+            for (std::size_t k = 0; k < batch_count; ++k) {
+                out[begin + k] = RabitqDistanceInterval{
+                    std::numeric_limits<float>::infinity(),
+                    std::numeric_limits<float>::infinity(),
+                    std::numeric_limits<float>::infinity(),
+                };
+            }
         }
     }
     return true;

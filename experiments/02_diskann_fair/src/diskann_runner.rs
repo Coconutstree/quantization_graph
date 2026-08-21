@@ -30,7 +30,7 @@ use rand::{Rng, SeedableRng};
 use crate::config::RunContext;
 use crate::ours_diskann::{
     OursPaperSearchStats, OursPrecursor, RabitqSpace, build_ours_vamana_graph,
-    encode_ours_payloads,
+    encode_ours_payloads, export_ours_paper_sidecar,
     search_ours_paper_active,
 };
 use crate::payload::{AdapterStatus, PreparedPayload, SearchResult};
@@ -260,64 +260,102 @@ pub fn run_ours_exrabitq4(
         ),
     )?;
     let graph_start = Instant::now();
-    let heartbeat = Heartbeat::start(progress_log.to_path_buf(), "graph_build");
-    let total_edges = build_ours_vamana_graph(
-        index.provider(),
-        ctx.config.max_degree,
-        ctx.config.build_beam,
-        ctx.config.alpha,
-        ctx.config.search_beam_width,
-        4096,
-        ctx.config.refine_passes,
-        ctx.config.prune_candidate_cap,
-        ctx.config.build_early_stop_hops,
-    )
-    .map_err(err)?;
-    heartbeat.stop()?;
-    {
-        // Export the built adjacency in canonical DiskANN format so the 03
-        // decomposition can run the uniform fp32 reference search on Ours' own
-        // graph (graph-quality measurement).
-        let graph_dir = ctx
-            .out_root
-            .join(&ctx.dataset.name)
-            .join("indexes/02_diskann_fair")
-            .join(METHOD);
-        fs::create_dir_all(&graph_dir).map_err(err)?;
-        let graph_path = graph_dir.join(format!(
-            "{}_{}_R{}_Lbuild{}.graph.bin",
-            ctx.dataset.name, METHOD, ctx.config.max_degree, ctx.config.build_beam
-        ));
-        let bytes = index
-            .provider()
-            .neighbors()
-            .save_direct(
-                &FileStorageProvider,
-                start_index as u32,
-                graph_path.to_string_lossy().as_ref(),
-            )
-            .map_err(err)? as u64;
+    let graph_build_mode: String;
+    let total_edges: u64;
+    if let Some(graph_file) = &ctx.graph_file {
+        if !graph_file.exists() {
+            return Err(format!(
+                "Ours graph file not found: {}",
+                graph_file.display()
+            ));
+        }
         append_progress(
             progress_log,
-            "graph_save",
-            &format!("path={} bytes={bytes}", graph_path.display()),
+            "graph_load",
+            &format!("path={}", graph_file.display()),
         )?;
+        copy_shared_graph(graph_file, index.provider().neighbors(), data.nrows())?;
+        export_ours_paper_sidecar(index.provider(), data.nrows()).map_err(err)?;
+        graph_build_mode = "reused_graph".to_string();
+        total_edges = count_diskann_graph_edges(graph_file)? as u64;
+    } else {
+        let heartbeat = Heartbeat::start(progress_log.to_path_buf(), "graph_build");
+        total_edges = build_ours_vamana_graph(
+            index.provider(),
+            ctx.config.max_degree,
+            ctx.config.build_beam,
+            ctx.config.alpha,
+            ctx.config.search_beam_width,
+            4096,
+            ctx.config.refine_passes,
+            ctx.config.prune_candidate_cap,
+            ctx.config.build_early_stop_hops,
+        )
+        .map_err(err)?;
+        heartbeat.stop()?;
+        graph_build_mode = "built_in_run".to_string();
+        {
+            // Export the built adjacency in canonical DiskANN format so the 03
+            // decomposition can run the uniform fp32 reference search on Ours' own
+            // graph (graph-quality measurement).
+            let graph_dir = ctx
+                .out_root
+                .join(&ctx.dataset.name)
+                .join("indexes/02_diskann_fair")
+                .join(METHOD);
+            fs::create_dir_all(&graph_dir).map_err(err)?;
+            let graph_path = graph_dir.join(format!(
+                "{}_{}_R{}_Lbuild{}.graph.bin",
+                ctx.dataset.name, METHOD, ctx.config.max_degree, ctx.config.build_beam
+            ));
+            let bytes = index
+                .provider()
+                .neighbors()
+                .save_direct(
+                    &FileStorageProvider,
+                    start_index as u32,
+                    graph_path.to_string_lossy().as_ref(),
+                )
+                .map_err(err)? as u64;
+            append_progress(
+                progress_log,
+                "graph_save",
+                &format!("path={} bytes={bytes}", graph_path.display()),
+            )?;
+        }
     }
     let graph_build_time_ms = graph_start.elapsed().as_secs_f64() * 1000.0;
     append_progress(
         progress_log,
         "graph_build",
-        &format!("done ms={graph_build_time_ms:.3}"),
+        &format!("mode={graph_build_mode} done ms={graph_build_time_ms:.3}"),
     )?;
 
     let build_time_ms = total_build_start.elapsed().as_secs_f64() * 1000.0;
     append_progress(
         progress_log,
         "search",
-        "start paper_prune=active residual_rerank=block16",
+        &format!(
+            "start paper_prune=active residual_rerank=block16 query_coarse_codecs={}",
+            ctx.config
+                .query_coarse_codecs
+                .iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
     )?;
-    let mut search_results = Vec::with_capacity(ctx.config.search_list_sizes.len());
-    for &search_list_size in &ctx.config.search_list_sizes {
+    let mut search_results = Vec::with_capacity(
+        ctx.config.search_list_sizes.len() * ctx.config.query_coarse_codecs.len(),
+    );
+    // The legacy replay is a correctness diagnostic, not part of search
+    // latency. Keep it opt-in so formal benchmarks do not time a second full
+    // search for the first query of every point.
+    let verify_batch_legacy =
+        std::env::var_os("RABITQ_VERIFY_BATCH_LEGACY").is_some();
+    for &codec in &ctx.config.query_coarse_codecs {
+        space.set_query_coarse_codec(codec);
+        for &search_list_size in &ctx.config.search_list_sizes {
         let mut latencies = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
         let mut hits = 0_u64;
         let mut total = 0_u64;
@@ -336,10 +374,12 @@ pub fn run_ours_exrabitq4(
                     search_list_size,
                     ctx.config.search_beam_width,
                     1.9,
+                    ctx.config.b1_epsilon,
                     ctx.config.rerank_candidates,
                     ctx.config.search_early_stop_hops,
                     ctx.config.search_kth_stop,
-                    repeat_idx == 0 && qid == 0,
+                    codec,
+                    verify_batch_legacy && repeat_idx == 0 && qid == 0,
                 )
                 .map_err(err)?;
                 latencies.push(one_start.elapsed().as_secs_f64() * 1_000_000.0);
@@ -369,6 +409,9 @@ pub fn run_ours_exrabitq4(
                 total += K as u64;
             }
         }
+        // QPS is a search metric.  Stop its timer before the offline FP32
+        // accuracy audit below; latency_mean_us already has the same scope.
+        let elapsed = search_start.elapsed().as_secs_f64();
         let mut totals = AccuracyTotals::default();
         for (idx, (ids, distances)) in saved_ids.iter().zip(&saved_distances).enumerate() {
             let qid = idx % queries.nrows();
@@ -383,7 +426,6 @@ pub fn run_ours_exrabitq4(
         }
         let (mean_relative_error, p95_relative_error, mean_absolute_error, top10_overlap, pairwise_flip_rate_top10) =
             accuracy_summary(&mut totals);
-        let elapsed = search_start.elapsed().as_secs_f64();
         let recall = hits as f64 / total as f64;
         let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
         let latency_mean_us = latencies.iter().sum::<f64>() / latencies.len() as f64;
@@ -414,22 +456,26 @@ pub fn run_ours_exrabitq4(
             mean_absolute_error,
             top10_overlap,
             pairwise_flip_rate_top10,
+            query_coarse_codec: codec.as_str().to_string(),
             status: "done".to_string(),
         });
         append_progress(
             progress_log,
             "search",
             &format!(
-                "search_list_size={search_list_size} recall={recall:.6} qps={qps:.3} paper_pruned={} paper_checked={} remaining_kernels={} traverse_breakdown_us=neighbor={:.3} visited_mark={:.3} paper_batch={:.3} flush={:.3}",
+                "search_list_size={search_list_size} query_coarse_codec={} recall={recall:.6} qps={qps:.3} paper_pruned={} paper_checked={} paper_msb_kernels={:.3} remaining_kernels={} ffi_calls={:.3} traverse_us={:.3} paper_batch_us={:.3} flush_us={:.3}",
+                codec.as_str(),
                 stats.paper_full_saved,
                 stats.paper_checked,
+                stats.paper_msb_kernel_calls as f64 / query_count,
                 stats.paper_remaining_kernel_calls,
-                stats.neighbor_fetch_ns as f64 / query_count / 1000.0,
-                stats.visited_mark_ns as f64 / query_count / 1000.0,
+                stats.ffi_calls as f64 / query_count,
+                stats.traverse_ns as f64 / query_count / 1000.0,
                 stats.paper_batch_ns as f64 / query_count / 1000.0,
                 stats.flush_ns as f64 / query_count / 1000.0,
             ),
         )?;
+        }
     }
     append_progress(progress_log, "search", "done")?;
 
@@ -472,7 +518,7 @@ pub fn run_ours_exrabitq4(
         build_time_ms: Some(build_time_ms),
         graph_build_time_ms: Some(graph_build_time_ms),
         shared_graph_build_time_ms: None,
-        graph_build_mode: "built_in_run".to_string(),
+        graph_build_mode,
         index_size_mb: Some(total_bytes as f64 / 1_048_576.0),
         index_bytes: Some(index_bytes),
         auxiliary_bytes: Some(auxiliary_bytes),
@@ -481,7 +527,15 @@ pub fn run_ours_exrabitq4(
         graph_build_distance: "ExRaBitQ4_symmetric".to_string(),
         peak_rss_mb: peak_rss_mb(),
         search_results,
-        note: NOTE.to_string(),
+        note: format!(
+            "{NOTE} query_coarse_codecs={}",
+            ctx.config
+                .query_coarse_codecs
+                .iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
     })
 }
 
@@ -798,6 +852,7 @@ where
             mean_absolute_error,
             top10_overlap,
             pairwise_flip_rate_top10,
+            query_coarse_codec: "full".to_string(),
             status: "done".to_string(),
         });
         progress(
@@ -1064,6 +1119,7 @@ where
             mean_absolute_error,
             top10_overlap,
             pairwise_flip_rate_top10,
+            query_coarse_codec: "full".to_string(),
             status: "done".to_string(),
         });
         progress(
@@ -1435,6 +1491,7 @@ pub fn run_fp32_graph(
             mean_absolute_error,
             top10_overlap,
             pairwise_flip_rate_top10,
+            query_coarse_codec: "full".to_string(),
             status: "done".to_string(),
         });
         append_progress(
@@ -1692,6 +1749,24 @@ fn count_diskann_graph_nodes(path: &Path) -> Result<usize, String> {
         nodes += 1;
     }
     Ok(nodes)
+}
+
+fn count_diskann_graph_edges(path: &Path) -> Result<usize, String> {
+    let mut reader = BufReader::new(fs::File::open(path).map_err(err)?);
+    let mut header = [0_u8; 24];
+    reader.read_exact(&mut header).map_err(err)?;
+    let file_size = u64::from_le_bytes(header[0..8].try_into().unwrap()) as usize;
+    let mut position = 24_usize;
+    let mut edges = 0_usize;
+    while position < file_size {
+        let mut len_buf = [0_u8; 4];
+        reader.read_exact(&mut len_buf).map_err(err)?;
+        let len = u32::from_le_bytes(len_buf) as usize;
+        position += 4 + len * 4;
+        reader.seek(SeekFrom::Current(len as i64 * 4)).map_err(err)?;
+        edges += len;
+    }
+    Ok(edges)
 }
 
 fn parse_meta_f64(text: &str, key: &str) -> Option<f64> {

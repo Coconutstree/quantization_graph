@@ -26,25 +26,38 @@ from systemfair.system_adapter import SystemAdapter  # noqa: E402
 def ours_rows_from_02_csv(
     dataset: str, out_root, degree: int
 ) -> list[dict[str, Any]]:
-    """Read experiment 02's Ours-DiskANN rows for the given graph degree."""
+    """Read the formal INT8-query Ours rows for the given graph degree.
+
+    Query-codec ablations share the same experiment-02 CSV.  The formal 03
+    method consumes only ``query_coarse_codec=int8`` rows. When a run is
+    repeated, the last row for each search-list size is authoritative.
+    """
     csv_path = (
         Path(out_root) / "02_diskann_fair" / dataset / "csv" / "diskann_fair_raw.csv"
     )
     if not csv_path.exists():
         raise RuntimeError(f"02 Ours rows missing at {csv_path}")
     with csv_path.open() as f:
-        rows = [
+        candidates = [
             r
             for r in csv.DictReader(f)
             if r.get("method") == "Ours"
             and int(r.get("max_degree", 0) or 0) == degree
         ]
+    rows = [
+        r
+        for r in candidates
+        if r.get("query_coarse_codec", "").strip('"').lower() == "int8"
+    ]
     if not rows:
         raise RuntimeError(
-            f"no Ours rows with max_degree={degree} in {csv_path}"
+            f"no formal INT8-query Ours rows with max_degree={degree} in {csv_path}"
         )
+    by_l: dict[int, dict[str, str]] = {}
+    for row in rows:
+        by_l[int(row.get("search_param_value", 0) or 0)] = row
     out = []
-    for r in sorted(rows, key=lambda r: int(r.get("search_param_value", 0) or 0)):
+    for _, r in sorted(by_l.items()):
         out.append(
             {
                 "l_search": int(r.get("search_param_value", 0)),
@@ -83,6 +96,7 @@ def ensure_ours_run(
             has = any(
                 r.get("method") == "Ours"
                 and int(r.get("max_degree", 0) or 0) == degree
+                and r.get("query_coarse_codec", "").strip('"').lower() == "int8"
                 for r in csv.DictReader(f)
             )
         if has:
@@ -107,7 +121,8 @@ class OursAdapter(SystemAdapter):
     name = "Ours"
     implementation = (
         "Ours-DiskANN (DiskANN3 + ExRaBitQ4 symmetric Vamana, paper-prune, "
-        "residual4 rerank); M=32 and M=64 configs, centroid_count K=1"
+        "DB=1-bit/INT8-query coarse gate, residual4 rerank); M=32 and M=64 "
+        "configs, centroid_count K=1"
     )
 
     def candidate_configs(self, ctx: RunContext) -> list[dict[str, Any]]:
@@ -121,6 +136,7 @@ class OursAdapter(SystemAdapter):
                 "rerank_candidates": 100,
                 "residual_bits": 4,
                 "centroid_count": 1,
+                "query_coarse_codec": "int8",
             }
         ]
 
@@ -154,7 +170,10 @@ class OursAdapter(SystemAdapter):
         config: dict[str, Any],
         repeat_id: int,
     ) -> list[dict[str, Any]]:
-        self.build(ctx, config)
+        # Search-only reruns may load an already frozen graph.  Keep the
+        # original formal construction metadata from the 03 build record;
+        # only the search metrics below come from the refreshed INT8-query run.
+        build_stats = self.build(ctx, config)
         degree = int(config["M"])
         raw = ours_rows_from_02_csv(ctx.dataset, ctx.out_root, degree)
         rows = []
@@ -166,12 +185,14 @@ class OursAdapter(SystemAdapter):
                 "latency_p50_us": 0.0,
                 "latency_p95_us": item["latency_p95_us"],
                 "query_count": fvec_count(ctx.test_query_path),
-                "build_time_ms": item["build_time_ms"],
-                "graph_build_time_ms": item["graph_build_time_ms"],
-                "index_size_mb": item["index_size_mb"],
+                "build_time_ms": float(build_stats.get("build_time_ms", item["build_time_ms"])),
+                "graph_build_time_ms": float(
+                    build_stats.get("graph_build_time_ms", item["graph_build_time_ms"])
+                ),
+                "index_size_mb": float(build_stats.get("index_size_mb", item["index_size_mb"])),
                 "visited_nodes": item["visited_nodes"],
                 "distance_calls": item["distance_calls"],
-                "peak_rss_mb": item["peak_rss_mb"],
+                "peak_rss_mb": float(build_stats.get("peak_rss_mb", item["peak_rss_mb"])),
             }
             search_param = {
                 "name": "L_search",

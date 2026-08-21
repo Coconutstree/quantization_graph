@@ -1,6 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
+use crate::config::QueryCoarseCodec;
+
 #[derive(Debug, Clone)]
 pub struct Args {
     pub dataset: String,
@@ -15,6 +17,7 @@ pub struct Args {
     pub alpha: f32,
     pub search_list_sizes: Vec<usize>,
     pub search_beam_width: usize,
+    pub b1_epsilon: f32,
     pub rerank_candidates: usize,
     pub threads: usize,
     pub build_threads: usize,
@@ -29,6 +32,7 @@ pub struct Args {
     pub search_kth_stop: bool,
     pub centroid_count: usize,
     pub centroid_train_samples: usize,
+    pub query_coarse_codecs: Vec<QueryCoarseCodec>,
 }
 
 impl Default for Args {
@@ -49,6 +53,7 @@ impl Default for Args {
                 40, 50, 60, 70, 80, 90, 100, 140, 180, 220, 260, 300, 340, 380, 420, 460,
             ],
             search_beam_width: 1,
+            b1_epsilon: 1.9,
             rerank_candidates: 100,
             threads: 1,
             build_threads: 64,
@@ -63,6 +68,9 @@ impl Default for Args {
             search_kth_stop: false,
             centroid_count: 1,
             centroid_train_samples: 100000,
+            // Formal Ours default: INT8 query with DB coarse data fixed at
+            // one bit. Other codecs remain explicit ablation options.
+            query_coarse_codecs: vec![QueryCoarseCodec::Int8],
         }
     }
 }
@@ -85,6 +93,7 @@ impl Args {
                 | "--alpha"
                 | "--search-list-sizes"
                 | "--search-beam-width"
+                | "--b1-epsilon"
                 | "--rerank-candidates"
                 | "--threads"
                 | "--build-threads"
@@ -98,7 +107,9 @@ impl Args {
                 | "--search-early-stop-hops"
                 | "--search-kth-stop"
                 | "--centroid-count"
-                | "--centroid-train-samples" => iter
+                | "--centroid-train-samples"
+                | "--query-coarse-codec"
+                | "--query-coarse-codecs" => iter
                     .next()
                     .ok_or_else(|| format!("missing value for {flag}"))?,
                 "--help" | "-h" => return Err(Self::usage()),
@@ -126,6 +137,11 @@ impl Args {
                 }
                 "--search-list-sizes" => args.search_list_sizes = parse_list(&value)?,
                 "--search-beam-width" => args.search_beam_width = parse_num(&flag, &value)?,
+                "--b1-epsilon" => {
+                    args.b1_epsilon = value
+                        .parse()
+                        .map_err(|_| format!("bad {flag}: {value}"))?
+                }
                 "--rerank-candidates" => args.rerank_candidates = parse_num(&flag, &value)?,
                 "--threads" => args.threads = parse_num(&flag, &value)?,
                 "--build-threads" => args.build_threads = parse_num(&flag, &value)?,
@@ -148,6 +164,23 @@ impl Args {
                 "--centroid-train-samples" => {
                     args.centroid_train_samples = parse_num(&flag, &value)?
                 }
+                "--query-coarse-codec" => {
+                    args.query_coarse_codecs = vec![QueryCoarseCodec::parse(&value)?]
+                }
+                "--query-coarse-codecs" => {
+                    let mut codecs = Vec::new();
+                    for part in value.split(',') {
+                        let item = part.trim();
+                        if item.is_empty() {
+                            continue;
+                        }
+                        codecs.push(QueryCoarseCodec::parse(item)?);
+                    }
+                    if codecs.is_empty() {
+                        return Err("--query-coarse-codecs cannot be empty".to_string());
+                    }
+                    args.query_coarse_codecs = codecs;
+                }
                 _ => unreachable!(),
             }
         }
@@ -159,7 +192,7 @@ impl Args {
     }
 
     fn usage() -> String {
-        "usage: run_diskann_fair --dataset dbpedia --methods PQ,SQ\nformal defaults already set data-root/out-root/max-degree/build-beam/search-list-sizes/search-beam-width/threads/repeats/seed/centroid-count/centroid-train-samples".to_string()
+        "usage: run_diskann_fair --dataset dbpedia --methods PQ,SQ\nformal defaults already set data-root/out-root/max-degree/build-beam/search-list-sizes/search-beam-width/threads/repeats/seed/centroid-count/centroid-train-samples/query-coarse-codecs".to_string()
     }
 }
 

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${ROOT}" || exit 1
+
 CONFIG="${CONFIG:-experiments/01_quantizer_fair/configs/formal_faiss_4bit.env}"
 if [[ -f "${CONFIG}" ]]; then
   # shellcheck source=/dev/null
   source "${CONFIG}"
 fi
 
-DATA_ROOT="${DATA_ROOT:-data}"
+DATA_ROOT="${DATA_ROOT:-${ROOT}/data}"
 OUT_ROOT="${OUT_ROOT:-results}"
 WORK_ROOT="${WORK_ROOT:-work}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
