@@ -54,7 +54,11 @@ pub fn write_raw_log(
     writeln!(
         file,
         "graph_type={}",
-        if is_ours { "DiskANN3/Vamana" } else { "DiskANN/Vamana" }
+        if is_ours {
+            "DiskANN3/Vamana"
+        } else {
+            "DiskANN/Vamana"
+        }
     )
     .map_err(to_string)?;
     writeln!(
@@ -81,15 +85,17 @@ pub fn write_raw_log(
     )
     .map_err(to_string)?;
     if is_ours {
-        writeln!(file, "graph_build_builder=native_vamana_bulk_grouped_refine")
-            .map_err(to_string)?;
+        writeln!(
+            file,
+            "graph_build_builder=native_vamana_bulk_grouped_refine"
+        )
+        .map_err(to_string)?;
         writeln!(file, "graph_refine_passes={}", ctx.config.refine_passes).map_err(to_string)?;
         writeln!(file, "framework=diskann3_provider_search_prune").map_err(to_string)?;
         writeln!(file, "provider=OursExRaBitQ4").map_err(to_string)?;
         writeln!(file, "paper_prune=active").map_err(to_string)?;
         writeln!(file, "paper_epsilon0=1.9").map_err(to_string)?;
-        writeln!(file, "rerank_candidates={}", ctx.config.rerank_candidates)
-            .map_err(to_string)?;
+        writeln!(file, "rerank_candidates={}", ctx.config.rerank_candidates).map_err(to_string)?;
         writeln!(file, "residual_bits=4").map_err(to_string)?;
         writeln!(file, "residual_block_size=16").map_err(to_string)?;
         writeln!(file, "residual_scale_mode=mse").map_err(to_string)?;
@@ -154,8 +160,7 @@ pub fn write_raw_log(
         opt_f64(payload.metadata_bytes_per_vector)
     )
     .map_err(to_string)?;
-    writeln!(file, "fp32_base_bytes={}", opt_u64(payload.fp32_base_bytes))
-        .map_err(to_string)?;
+    writeln!(file, "fp32_base_bytes={}", opt_u64(payload.fp32_base_bytes)).map_err(to_string)?;
     writeln!(file, "codebook_bytes={}", opt_u64(payload.codebook_bytes)).map_err(to_string)?;
     writeln!(file, "base_path={}", ctx.dataset.base_path.display()).map_err(to_string)?;
     writeln!(file, "query_path={}", ctx.dataset.query_path.display()).map_err(to_string)?;
@@ -186,7 +191,11 @@ pub fn write_raw_log(
     writeln!(
         file,
         "build_stage={} us={} status=done",
-        if is_ours { "train_center" } else { "train_quantizer" },
+        if is_ours {
+            "train_center"
+        } else {
+            "train_quantizer"
+        },
         ms_to_us(payload.train_time_ms)
     )
     .map_err(to_string)?;

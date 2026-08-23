@@ -12,6 +12,10 @@ impl PayloadAdapter for SaqAdapter {
     }
 
     fn prepare(&self, ctx: &RunContext, progress_log: &Path) -> Result<PreparedPayload, String> {
-        diskann_runner::run_saq4_own(ctx, progress_log)
+        if ctx.config.shared_graph {
+            diskann_runner::run_saq4(ctx, progress_log)
+        } else {
+            diskann_runner::run_saq4_own(ctx, progress_log)
+        }
     }
 }

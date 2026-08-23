@@ -135,9 +135,8 @@ impl SphericalStore {
         diskann_vector::prefetch_hint_max::<4, _>(data);
     }
 
-    #[cfg(test)]
-    pub(super) fn input_dim(&self) -> usize {
-        self.plan.dim()
+    pub fn input_dim(&self) -> usize {
+        self.plan.full_dim()
     }
 
     pub fn bytes(&self) -> usize {
@@ -148,11 +147,39 @@ impl SphericalStore {
         self.plan.dim()
     }
 
-    pub(super) fn get_vector(&self, i: usize) -> Result<spherical::iface::Opaque<'_>, RQError> {
+    pub fn get_vector(&self, i: usize) -> Result<spherical::iface::Opaque<'_>, RQError> {
         self.num_get_calls.increment();
         // SAFETY: We can tolerate some racing behavior on the data behind this slice.
         let data = unsafe { self.data.get_slice(i) };
         Ok(spherical::iface::Opaque::new(data))
+    }
+
+    /// Return the canonical compressed bytes for persistence by an
+    /// algorithm-preserving external storage adapter.
+    pub fn compressed_vector(&self, i: usize) -> ANNResult<&[u8]> {
+        if i >= self.data.max_vectors() {
+            return Err(ANNError::message(format!(
+                "spherical vector id {i} exceeds {}",
+                self.data.max_vectors()
+            )));
+        }
+        Ok(unsafe { self.data.get_slice(i) })
+    }
+
+    /// Restore one canonical compressed vector.  The caller must provide the
+    /// exact byte layout reported by [`Self::bytes`].
+    pub fn set_compressed_vector(&self, i: usize, value: &[u8]) -> ANNResult<()> {
+        if i >= self.data.max_vectors() || value.len() != self.bytes() {
+            return Err(ANNError::message(format!(
+                "invalid spherical vector slot/length: id={i}, bytes={}, expected_count={}, expected_bytes={}",
+                value.len(),
+                self.data.max_vectors(),
+                self.bytes()
+            )));
+        }
+        let _guard = self.write_locks[i / WRITE_LOCK_GRANULARITY].lock_or_panic();
+        unsafe { self.data.get_mut_slice(i) }.copy_from_slice(value);
+        Ok(())
     }
 
     pub(super) fn set_vector<T>(&self, i: usize, v: &[T]) -> Result<(), RQError>
@@ -180,7 +207,7 @@ impl SphericalStore {
         Ok(self.plan.distance_computer(GlobalAllocator)?)
     }
 
-    pub(super) fn query_computer<T>(
+    pub fn query_computer<T>(
         &self,
         query: &[T],
         layout: spherical::iface::QueryLayout,

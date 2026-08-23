@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
+import json
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -14,6 +14,7 @@ from typing import Any
 
 
 DEFAULT_DATASETS = ("dbpedia", "gist", "agnews")
+DEPENDENCY_LOCK = Path("baselines/DEPENDENCY_LOCK.json")
 
 
 def run_git_commit(path: Path) -> str:
@@ -28,15 +29,12 @@ def run_git_commit(path: Path) -> str:
     return output.strip()
 
 
-def module_path(module_name: str) -> str:
-    spec = importlib.util.find_spec(module_name)
-    if spec is None:
-        return ""
-    if spec.origin:
-        return spec.origin
-    if spec.submodule_search_locations:
-        return ";".join(str(path) for path in spec.submodule_search_locations)
-    return ""
+def locked_commit(name: str) -> str:
+    try:
+        document = json.loads(DEPENDENCY_LOCK.read_text())
+        return str(document["dependencies"][name]["commit"])
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return "unknown"
 
 
 def exists_status(path: str, executable: bool = False) -> str:
@@ -59,7 +57,8 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
     svs_path = Path("baselines/svs")
     ours_path = Path("Ours")
 
-    svs_module = module_path("svs")
+    svs_candidates = sorted((svs_path / "python" / "svs").glob("_svs*.so"))
+    svs_module = str(svs_candidates[0]) if svs_candidates else ""
 
     rows = [
         {
@@ -69,7 +68,7 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
             "status": "ready",
             "implementation": "faiss_product_quantizer",
             "source_path": str(faiss_path),
-            "commit": run_git_commit(faiss_path),
+            "commit": locked_commit("faiss"),
             "binary_or_module_path": "baselines/builds/faiss-cmake43/faiss/libfaiss.a",
             "build_status": exists_status(
                 "baselines/builds/faiss-cmake43/faiss/libfaiss.a"
@@ -85,7 +84,7 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
             "status": "ready",
             "implementation": "faiss_scalar_quantizer",
             "source_path": str(faiss_path),
-            "commit": run_git_commit(faiss_path),
+            "commit": locked_commit("faiss"),
             "binary_or_module_path": "baselines/builds/faiss-cmake43/faiss/libfaiss.a",
             "build_status": exists_status(
                 "baselines/builds/faiss-cmake43/faiss/libfaiss.a"
@@ -101,21 +100,14 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
             "status": "ready",
             "implementation": "official_saq_binary",
             "source_path": str(saq_path),
-            "commit": run_git_commit(saq_path),
-            "binary_or_module_path": "baselines/saq/bin/create_index;baselines/saq/bin/test_relative_error;baselines/saq/bin/test_qps",
-            "build_status": "ready"
-            if all(
-                exists_status(path, executable=True) == "ready"
-                for path in (
-                    "baselines/saq/bin/create_index",
-                    "baselines/saq/bin/test_relative_error",
-                    "baselines/saq/bin/test_qps",
-                )
-            )
-            else "missing",
+            "commit": locked_commit("saq"),
+            "binary_or_module_path": "baselines/saq/bin/test_fixed_candidates",
+            "build_status": exists_status(
+                "baselines/saq/bin/test_fixed_candidates", executable=True
+            ),
             "package_version": "",
             "generated_at_utc": now,
-            "notes": "Official SAQ binaries built with /usr/bin/g++-11; AVX512 required.",
+            "notes": "Official SAQ B=4 fixed-candidate binary; AVX512 required.",
         },
         {
             "suite": "01_quantizer_fair",
@@ -124,7 +116,7 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
             "status": "ready" if svs_module else "missing",
             "implementation": "intel_svs_scalable_vs_python",
             "source_path": str(svs_path),
-            "commit": run_git_commit(svs_path),
+            "commit": locked_commit("svs"),
             "binary_or_module_path": svs_module,
             "build_status": "import_ok" if svs_module else "missing",
             "package_version": "scalable-vs 0.4.0",

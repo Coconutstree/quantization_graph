@@ -203,6 +203,41 @@ where
         })
     }
 
+    /// Restore a quantizer from its already pre-scaled shift vector and a
+    /// deterministically regenerated transform.
+    ///
+    /// This is the inverse companion of [`Self::generate`] for storage
+    /// adapters that persist the final shift and the transform RNG seed.  In
+    /// contrast to `generate`, this function deliberately does not multiply
+    /// `shift` by `pre_scale` a second time.
+    pub fn restore_from_scaled_shift(
+        shift: Poly<[f32], A>,
+        mean_norm: f32,
+        transform: TransformKind,
+        metric: SupportedMetric,
+        pre_scale: f32,
+        rng: &mut dyn RngCore,
+        allocator: A,
+    ) -> Result<Self, TrainError> {
+        let pre_scale = Positive::new(pre_scale).map_err(|_| TrainError::PrescaleNotPositive)?;
+        let mean_norm = Positive::new(mean_norm).map_err(|_| TrainError::NormNotPositive)?;
+        let dim = NonZeroUsize::new(shift.len()).ok_or(TrainError::DimCannotBeZero)?;
+        let transform = match Transform::new(transform, dim, Some(rng), allocator) {
+            Ok(value) => value,
+            Err(NewTransformError::RngMissing(_)) => unreachable!("an RNG was provided"),
+            Err(NewTransformError::AllocatorError(error)) => {
+                return Err(TrainError::AllocatorError(error));
+            }
+        };
+        Ok(Self {
+            shift,
+            transform,
+            metric,
+            mean_norm,
+            pre_scale,
+        })
+    }
+
     /// Return the metric used by this quantizer.
     pub fn metric(&self) -> SupportedMetric {
         self.metric

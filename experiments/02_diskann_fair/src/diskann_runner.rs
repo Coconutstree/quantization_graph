@@ -29,9 +29,8 @@ use rand::{Rng, SeedableRng};
 
 use crate::config::RunContext;
 use crate::ours_diskann::{
-    OursPaperSearchStats, OursPrecursor, RabitqSpace, build_ours_vamana_graph,
-    encode_ours_payloads, export_ours_paper_sidecar,
-    search_ours_paper_active,
+    build_ours_vamana_graph, encode_ours_payloads, export_ours_paper_sidecar,
+    search_ours_paper_active, OursPaperSearchStats, OursPrecursor, RabitqSpace,
 };
 use crate::payload::{AdapterStatus, PreparedPayload, SearchResult};
 
@@ -212,9 +211,9 @@ pub fn run_ours_exrabitq4(
         |builder| {
             builder.alpha(ctx.config.alpha);
             builder.max_minibatch_par(ctx.config.build_threads);
-            builder.intra_batch_candidates(
-                graph::config::IntraBatchCandidates::new(ctx.config.intra_batch_candidates),
-            );
+            builder.intra_batch_candidates(graph::config::IntraBatchCandidates::new(
+                ctx.config.intra_batch_candidates,
+            ));
         },
     )
     .build()
@@ -239,16 +238,18 @@ pub fn run_ours_exrabitq4(
         .set_start_points(std::iter::once(data.row(start_index)))
         .map_err(err)?;
 
-    append_progress(progress_log, "payload_encode", "start target=diskann_provider")?;
+    append_progress(
+        progress_log,
+        "payload_encode",
+        "start target=diskann_provider",
+    )?;
     let encode_start = Instant::now();
     encode_ours_payloads(index.provider(), data.as_ref(), ctx.config.build_threads).map_err(err)?;
     let payload_encode_time_ms = encode_start.elapsed().as_secs_f64() * 1000.0;
     append_progress(
         progress_log,
         "payload_encode",
-        &format!(
-            "done ms={payload_encode_time_ms:.3} target=diskann_provider",
-        ),
+        &format!("done ms={payload_encode_time_ms:.3} target=diskann_provider",),
     )?;
 
     append_progress(
@@ -351,115 +352,120 @@ pub fn run_ours_exrabitq4(
     // The legacy replay is a correctness diagnostic, not part of search
     // latency. Keep it opt-in so formal benchmarks do not time a second full
     // search for the first query of every point.
-    let verify_batch_legacy =
-        std::env::var_os("RABITQ_VERIFY_BATCH_LEGACY").is_some();
+    let verify_batch_legacy = std::env::var_os("RABITQ_VERIFY_BATCH_LEGACY").is_some();
     for &codec in &ctx.config.query_coarse_codecs {
         space.set_query_coarse_codec(codec);
         for &search_list_size in &ctx.config.search_list_sizes {
-        let mut latencies = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
-        let mut hits = 0_u64;
-        let mut total = 0_u64;
-        let mut stats = OursPaperSearchStats::default();
-        let mut saved_ids = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
-        let mut saved_distances = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
-        let search_start = Instant::now();
-        for repeat_idx in 0..ctx.config.repeats {
-            for qid in 0..queries.nrows() {
-                let query = queries.row(qid);
-                let one_start = Instant::now();
-                let result = search_ours_paper_active(
-                    index.provider(),
-                    query,
-                    K,
-                    search_list_size,
-                    ctx.config.search_beam_width,
-                    1.9,
-                    ctx.config.b1_epsilon,
-                    ctx.config.rerank_candidates,
-                    ctx.config.search_early_stop_hops,
-                    ctx.config.search_kth_stop,
-                    codec,
-                    verify_batch_legacy && repeat_idx == 0 && qid == 0,
-                )
-                .map_err(err)?;
-                latencies.push(one_start.elapsed().as_secs_f64() * 1_000_000.0);
-                stats.visited_nodes += result.stats.visited_nodes;
-                stats.distance_computations += result.stats.distance_computations;
-                stats.hops += result.stats.hops;
-                stats.prefetch_issued += result.stats.prefetch_issued;
-                stats.prepare_ns += result.stats.prepare_ns;
-                stats.traverse_ns += result.stats.traverse_ns;
-                stats.rerank_ns += result.stats.rerank_ns;
-                stats.neighbor_fetch_ns += result.stats.neighbor_fetch_ns;
-                stats.visited_mark_ns += result.stats.visited_mark_ns;
-                stats.paper_batch_ns += result.stats.paper_batch_ns;
-                stats.flush_ns += result.stats.flush_ns;
-                stats.paper_checked += result.stats.paper_checked;
-                stats.paper_would_prune += result.stats.paper_would_prune;
-                stats.paper_not_pruned += result.stats.paper_not_pruned;
-                stats.paper_full_saved += result.stats.paper_full_saved;
-                stats.paper_msb_kernel_calls += result.stats.paper_msb_kernel_calls;
-                stats.paper_remaining_kernel_calls += result.stats.paper_remaining_kernel_calls;
-                stats.ffi_calls += result.stats.ffi_calls;
-                let ids = result.ids;
-                let distances = result.distances;
-                hits += recall_hits(&ids, &groundtruth[qid]) as u64;
-                saved_ids.push(ids);
-                saved_distances.push(distances);
-                total += K as u64;
+            let mut latencies = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
+            let mut hits = 0_u64;
+            let mut total = 0_u64;
+            let mut stats = OursPaperSearchStats::default();
+            let mut saved_ids = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
+            let mut saved_distances = Vec::with_capacity(queries.nrows() * ctx.config.repeats);
+            let search_start = Instant::now();
+            for repeat_idx in 0..ctx.config.repeats {
+                for qid in 0..queries.nrows() {
+                    let query = queries.row(qid);
+                    let one_start = Instant::now();
+                    let result = search_ours_paper_active(
+                        index.provider(),
+                        query,
+                        K,
+                        search_list_size,
+                        ctx.config.search_beam_width,
+                        1.9,
+                        ctx.config.b1_epsilon,
+                        ctx.config.rerank_candidates,
+                        ctx.config.search_early_stop_hops,
+                        ctx.config.search_kth_stop,
+                        codec,
+                        verify_batch_legacy && repeat_idx == 0 && qid == 0,
+                    )
+                    .map_err(err)?;
+                    latencies.push(one_start.elapsed().as_secs_f64() * 1_000_000.0);
+                    stats.visited_nodes += result.stats.visited_nodes;
+                    stats.distance_computations += result.stats.distance_computations;
+                    stats.hops += result.stats.hops;
+                    stats.prefetch_issued += result.stats.prefetch_issued;
+                    stats.prepare_ns += result.stats.prepare_ns;
+                    stats.traverse_ns += result.stats.traverse_ns;
+                    stats.rerank_ns += result.stats.rerank_ns;
+                    stats.neighbor_fetch_ns += result.stats.neighbor_fetch_ns;
+                    stats.visited_mark_ns += result.stats.visited_mark_ns;
+                    stats.paper_batch_ns += result.stats.paper_batch_ns;
+                    stats.flush_ns += result.stats.flush_ns;
+                    stats.paper_checked += result.stats.paper_checked;
+                    stats.paper_would_prune += result.stats.paper_would_prune;
+                    stats.paper_not_pruned += result.stats.paper_not_pruned;
+                    stats.paper_full_saved += result.stats.paper_full_saved;
+                    stats.paper_msb_kernel_calls += result.stats.paper_msb_kernel_calls;
+                    stats.paper_remaining_kernel_calls += result.stats.paper_remaining_kernel_calls;
+                    stats.ffi_calls += result.stats.ffi_calls;
+                    let ids = result.ids;
+                    let distances = result.distances;
+                    hits += recall_hits(&ids, &groundtruth[qid]) as u64;
+                    saved_ids.push(ids);
+                    saved_distances.push(distances);
+                    total += K as u64;
+                }
             }
-        }
-        // QPS is a search metric.  Stop its timer before the offline FP32
-        // accuracy audit below; latency_mean_us already has the same scope.
-        let elapsed = search_start.elapsed().as_secs_f64();
-        let mut totals = AccuracyTotals::default();
-        for (idx, (ids, distances)) in saved_ids.iter().zip(&saved_distances).enumerate() {
-            let qid = idx % queries.nrows();
-            accumulate_accuracy(
-                ids,
-                distances,
-                queries.row(qid),
-                data.as_ref(),
-                &groundtruth[qid],
-                &mut totals,
-            );
-        }
-        let (mean_relative_error, p95_relative_error, mean_absolute_error, top10_overlap, pairwise_flip_rate_top10) =
-            accuracy_summary(&mut totals);
-        let recall = hits as f64 / total as f64;
-        let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
-        let latency_mean_us = latencies.iter().sum::<f64>() / latencies.len() as f64;
-        let latency_p95_us = percentile(&mut latencies, 0.95);
-        let query_count = (queries.nrows() * ctx.config.repeats) as f64;
-        search_results.push(SearchResult {
-            search_list_size,
-            recall,
-            qps,
-            latency_mean_us,
-            latency_p95_us,
-            prepare_us: stats.prepare_ns as f64 / query_count / 1000.0,
-            traverse_us: stats.traverse_ns as f64 / query_count / 1000.0,
-            rerank_us: stats.rerank_ns as f64 / query_count / 1000.0,
-            neighbor_fetch_us: stats.neighbor_fetch_ns as f64 / query_count / 1000.0,
-            visited_mark_us: stats.visited_mark_ns as f64 / query_count / 1000.0,
-            paper_batch_us: stats.paper_batch_ns as f64 / query_count / 1000.0,
-            flush_us: stats.flush_ns as f64 / query_count / 1000.0,
-            visited_nodes: stats.visited_nodes as f64 / query_count,
-            distance_computations: stats.distance_computations as f64 / query_count,
-            paper_checked: stats.paper_checked as f64 / query_count,
-            paper_would_prune: stats.paper_would_prune as f64 / query_count,
-            paper_msb_kernel_calls: stats.paper_msb_kernel_calls as f64 / query_count,
-            paper_remaining_kernel_calls: stats.paper_remaining_kernel_calls as f64 / query_count,
-            ffi_calls_per_query: stats.ffi_calls as f64 / query_count,
-            mean_relative_error,
-            p95_relative_error,
-            mean_absolute_error,
-            top10_overlap,
-            pairwise_flip_rate_top10,
-            query_coarse_codec: codec.as_str().to_string(),
-            status: "done".to_string(),
-        });
-        append_progress(
+            // QPS is a search metric.  Stop its timer before the offline FP32
+            // accuracy audit below; latency_mean_us already has the same scope.
+            let elapsed = search_start.elapsed().as_secs_f64();
+            let mut totals = AccuracyTotals::default();
+            for (idx, (ids, distances)) in saved_ids.iter().zip(&saved_distances).enumerate() {
+                let qid = idx % queries.nrows();
+                accumulate_accuracy(
+                    ids,
+                    distances,
+                    queries.row(qid),
+                    data.as_ref(),
+                    &groundtruth[qid],
+                    &mut totals,
+                );
+            }
+            let (
+                mean_relative_error,
+                p95_relative_error,
+                mean_absolute_error,
+                top10_overlap,
+                pairwise_flip_rate_top10,
+            ) = accuracy_summary(&mut totals);
+            let recall = hits as f64 / total as f64;
+            let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
+            let latency_mean_us = latencies.iter().sum::<f64>() / latencies.len() as f64;
+            let latency_p95_us = percentile(&mut latencies, 0.95);
+            let query_count = (queries.nrows() * ctx.config.repeats) as f64;
+            search_results.push(SearchResult {
+                search_list_size,
+                recall,
+                qps,
+                latency_mean_us,
+                latency_p95_us,
+                prepare_us: stats.prepare_ns as f64 / query_count / 1000.0,
+                traverse_us: stats.traverse_ns as f64 / query_count / 1000.0,
+                rerank_us: stats.rerank_ns as f64 / query_count / 1000.0,
+                neighbor_fetch_us: stats.neighbor_fetch_ns as f64 / query_count / 1000.0,
+                visited_mark_us: stats.visited_mark_ns as f64 / query_count / 1000.0,
+                paper_batch_us: stats.paper_batch_ns as f64 / query_count / 1000.0,
+                flush_us: stats.flush_ns as f64 / query_count / 1000.0,
+                visited_nodes: stats.visited_nodes as f64 / query_count,
+                distance_computations: stats.distance_computations as f64 / query_count,
+                paper_checked: stats.paper_checked as f64 / query_count,
+                paper_would_prune: stats.paper_would_prune as f64 / query_count,
+                paper_msb_kernel_calls: stats.paper_msb_kernel_calls as f64 / query_count,
+                paper_remaining_kernel_calls: stats.paper_remaining_kernel_calls as f64
+                    / query_count,
+                ffi_calls_per_query: stats.ffi_calls as f64 / query_count,
+                mean_relative_error,
+                p95_relative_error,
+                mean_absolute_error,
+                top10_overlap,
+                pairwise_flip_rate_top10,
+                query_coarse_codec: codec.as_str().to_string(),
+                status: "done".to_string(),
+            });
+            append_progress(
             progress_log,
             "search",
             &format!(
@@ -722,8 +728,9 @@ where
                 .subview(batch_start..batch_end)
                 .ok_or_else(|| format!("subview {batch_start}..{batch_end} out of bounds"))?
                 .to_owned();
-            let ids: Arc<[u32]> =
-                (batch_start as u32..batch_end as u32).collect::<Vec<_>>().into();
+            let ids: Arc<[u32]> = (batch_start as u32..batch_end as u32)
+                .collect::<Vec<_>>()
+                .into();
             rt.block_on(index.multi_insert::<FullPrecision, Matrix<f32>>(
                 FullPrecision,
                 &DefaultContext,
@@ -733,7 +740,10 @@ where
             .map_err(err)?;
             progress(
                 "graph_build",
-                &format!("batch_done points_processed={batch_end} points_total={}", data.nrows()),
+                &format!(
+                    "batch_done points_processed={batch_end} points_total={}",
+                    data.nrows()
+                ),
             )?;
         }
         heartbeat.stop()?;
@@ -820,8 +830,13 @@ where
                 &mut totals,
             );
         }
-        let (mean_relative_error, p95_relative_error, mean_absolute_error, top10_overlap, pairwise_flip_rate_top10) =
-            accuracy_summary(&mut totals);
+        let (
+            mean_relative_error,
+            p95_relative_error,
+            mean_absolute_error,
+            top10_overlap,
+            pairwise_flip_rate_top10,
+        ) = accuracy_summary(&mut totals);
         let elapsed = search_start.elapsed().as_secs_f64();
         let recall = hits as f64 / total as f64;
         let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
@@ -973,9 +988,9 @@ where
         |builder| {
             builder.alpha(ctx.config.alpha);
             builder.max_minibatch_par(ctx.config.build_threads);
-            builder.intra_batch_candidates(
-                graph::config::IntraBatchCandidates::new(ctx.config.intra_batch_candidates),
-            );
+            builder.intra_batch_candidates(graph::config::IntraBatchCandidates::new(
+                ctx.config.intra_batch_candidates,
+            ));
         },
     )
     .build()
@@ -1021,8 +1036,9 @@ where
             .subview(batch_start..batch_end)
             .ok_or_else(|| format!("subview {batch_start}..{batch_end} out of bounds"))?
             .to_owned();
-        let ids: Arc<[u32]> =
-            (batch_start as u32..batch_end as u32).collect::<Vec<_>>().into();
+        let ids: Arc<[u32]> = (batch_start as u32..batch_end as u32)
+            .collect::<Vec<_>>()
+            .into();
         rt.block_on(index.multi_insert::<S, Matrix<f32>>(
             search_strategy.clone(),
             &DefaultContext,
@@ -1032,7 +1048,10 @@ where
         .map_err(err)?;
         progress(
             "graph_build",
-            &format!("batch_done points_processed={batch_end} points_total={}", data.nrows()),
+            &format!(
+                "batch_done points_processed={batch_end} points_total={}",
+                data.nrows()
+            ),
         )?;
     }
     heartbeat.stop()?;
@@ -1087,8 +1106,13 @@ where
                 &mut totals,
             );
         }
-        let (mean_relative_error, p95_relative_error, mean_absolute_error, top10_overlap, pairwise_flip_rate_top10) =
-            accuracy_summary(&mut totals);
+        let (
+            mean_relative_error,
+            p95_relative_error,
+            mean_absolute_error,
+            top10_overlap,
+            pairwise_flip_rate_top10,
+        ) = accuracy_summary(&mut totals);
         let elapsed = search_start.elapsed().as_secs_f64();
         let recall = hits as f64 / total as f64;
         let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
@@ -1328,10 +1352,7 @@ pub fn run_fp32_graph(
         config.max_degree_u32().get(),
     );
     let index = diskann_async::new_quant_index::<f32, NoStore, NoDeletes>(
-        config,
-        params,
-        NoStore,
-        NoDeletes,
+        config, params, NoStore, NoDeletes,
     )
     .map_err(err)?;
     index
@@ -1346,7 +1367,11 @@ pub fn run_fp32_graph(
         .build()
         .map_err(err)?;
 
-    append_progress(progress_log, "payload_encode", "start target=full_precision_store")?;
+    append_progress(
+        progress_log,
+        "payload_encode",
+        "start target=full_precision_store",
+    )?;
     let encode_start = Instant::now();
     {
         let n = data.nrows();
@@ -1459,8 +1484,13 @@ pub fn run_fp32_graph(
                 &mut totals,
             );
         }
-        let (mean_relative_error, p95_relative_error, mean_absolute_error, top10_overlap, pairwise_flip_rate_top10) =
-            accuracy_summary(&mut totals);
+        let (
+            mean_relative_error,
+            p95_relative_error,
+            mean_absolute_error,
+            top10_overlap,
+            pairwise_flip_rate_top10,
+        ) = accuracy_summary(&mut totals);
         let elapsed = search_start.elapsed().as_secs_f64();
         let recall = hits as f64 / total as f64;
         let qps = (queries.nrows() * ctx.config.repeats) as f64 / elapsed.max(1e-12);
@@ -1745,7 +1775,9 @@ fn count_diskann_graph_nodes(path: &Path) -> Result<usize, String> {
         reader.read_exact(&mut len_buf).map_err(err)?;
         let len = u32::from_le_bytes(len_buf) as usize;
         position += 4 + len * 4;
-        reader.seek(SeekFrom::Current(len as i64 * 4)).map_err(err)?;
+        reader
+            .seek(SeekFrom::Current(len as i64 * 4))
+            .map_err(err)?;
         nodes += 1;
     }
     Ok(nodes)
@@ -1763,7 +1795,9 @@ fn count_diskann_graph_edges(path: &Path) -> Result<usize, String> {
         reader.read_exact(&mut len_buf).map_err(err)?;
         let len = u32::from_le_bytes(len_buf) as usize;
         position += 4 + len * 4;
-        reader.seek(SeekFrom::Current(len as i64 * 4)).map_err(err)?;
+        reader
+            .seek(SeekFrom::Current(len as i64 * 4))
+            .map_err(err)?;
         edges += len;
     }
     Ok(edges)
@@ -1782,7 +1816,7 @@ fn parse_meta_value<'a>(text: &'a str, key: &str) -> Option<&'a str> {
         .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
 }
 
-fn read_fvecs_matrix(path: &Path) -> Result<Matrix<f32>, String> {
+pub fn read_fvecs_matrix(path: &Path) -> Result<Matrix<f32>, String> {
     let mut reader = BufReader::new(fs::File::open(path).map_err(err)?);
     let mut all = Vec::new();
     let mut dim: Option<usize> = None;
@@ -1826,7 +1860,7 @@ fn read_fvecs_matrix(path: &Path) -> Result<Matrix<f32>, String> {
     Matrix::try_from(all.into_boxed_slice(), nrows, dim).map_err(err)
 }
 
-fn read_ivecs_topk(path: &Path, k: usize) -> Result<Vec<Vec<u32>>, String> {
+pub fn read_ivecs_topk(path: &Path, k: usize) -> Result<Vec<Vec<u32>>, String> {
     let mut reader = BufReader::new(fs::File::open(path).map_err(err)?);
     let mut rows = Vec::new();
     loop {
@@ -1857,11 +1891,11 @@ fn read_ivecs_topk(path: &Path, k: usize) -> Result<Vec<Vec<u32>>, String> {
     Ok(rows)
 }
 
-fn recall_hits(ids: &[u32], gt: &[u32]) -> usize {
+pub fn recall_hits(ids: &[u32], gt: &[u32]) -> usize {
     ids.iter().filter(|id| gt.contains(id)).count()
 }
 
-fn percentile(values: &mut [f64], p: f64) -> f64 {
+pub fn percentile(values: &mut [f64], p: f64) -> f64 {
     values.sort_by(|a, b| a.total_cmp(b));
     let index = ((values.len().saturating_sub(1)) as f64 * p).round() as usize;
     values[index]

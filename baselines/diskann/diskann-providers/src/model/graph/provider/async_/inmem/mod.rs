@@ -10,7 +10,7 @@ pub use provider::{DefaultProvider, DefaultProviderParameters, SetStartPoints};
 
 // Extensions
 mod scalar;
-pub use scalar::{SQError, SQStore, WithBits};
+pub use scalar::{QueryComputer as SQQueryComputer, SQError, SQStore, WithBits};
 
 #[cfg(not(test))]
 mod product;

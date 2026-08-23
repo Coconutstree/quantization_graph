@@ -951,6 +951,7 @@ std::vector<float> train_kmeans_centroids(
     return centroids;
 }
 
+#ifndef QGRAPH_FAISS_QUANTIZER_LIBRARY
 int main(int argc, char** argv) {
     try {
         const Args args = parse_args(argc, argv);
@@ -1435,3 +1436,4 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+#endif

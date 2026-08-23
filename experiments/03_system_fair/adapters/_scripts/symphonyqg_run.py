@@ -10,9 +10,16 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, os.environ.get("SYMPHONYQG_PYTHONPATH", "/tmp/baseline_python"))
+_REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(
+    0,
+    os.environ.get(
+        "SYMPHONYQG_PYTHONPATH",
+        str(_REPO / "baselines" / "symphonyqg" / "python"),
+    ),
+)
 import numpy as np  # noqa: E402
-from symphonyqg.symphonyqg import Index  # noqa: E402
+from symphonyqg import Index  # noqa: E402
 
 
 def read_fvecs(path: Path):

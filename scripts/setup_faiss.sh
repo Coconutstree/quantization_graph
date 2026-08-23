@@ -11,18 +11,26 @@ BUILD="${ROOT}/baselines/builds/faiss-cmake43"
 COMMIT="${FAISS_COMMIT:-a424dcb809fd725c44dd976d9063febd4837d16a}"
 REPO_URL="${FAISS_REPO:-https://github.com/facebookresearch/faiss}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
+GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 CXX_BIN="${CXX_BIN:-g++}"
 JOBS="${JOBS:-$(nproc)}"
 
-if [[ ! -d "${SRC}/.git" ]]; then
+if [[ ! -f "${SRC}/CMakeLists.txt" ]]; then
   git clone "${REPO_URL}" "${SRC}"
 fi
-git -C "${SRC}" fetch --all --tags
-git -C "${SRC}" checkout "${COMMIT}"
+if [[ -d "${SRC}/.git" ]]; then
+  git -C "${SRC}" fetch --all --tags
+  git -C "${SRC}" checkout "${COMMIT}"
+else
+  echo "Using repository-local Faiss source archive (${COMMIT}) at ${SRC}"
+fi
 
 "${CMAKE_BIN}" -S "${SRC}" -B "${BUILD}" \
+  -G "${GENERATOR}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER="${CXX_BIN}" \
   -DFAISS_ENABLE_GPU=OFF \
+  -DFAISS_ENABLE_PYTHON=OFF \
+  -DBUILD_TESTING=OFF \
   -DFAISS_OPT_LEVEL=avx2
 "${CMAKE_BIN}" --build "${BUILD}" -j "${JOBS}"

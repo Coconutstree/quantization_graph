@@ -6,8 +6,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
-set(FAISS_ROOT "${REPO_ROOT}/baselines/faiss/upstream")
-set(FAISS_BUILD "${REPO_ROOT}/baselines/builds/faiss-cmake43")
+set(QGRAPH_DEPS_ROOT "${REPO_ROOT}/baselines" CACHE PATH
+    "Root containing faiss/upstream and builds/faiss-cmake43")
+set(FAISS_ROOT "${QGRAPH_DEPS_ROOT}/faiss/upstream")
+set(FAISS_BUILD "${QGRAPH_DEPS_ROOT}/builds/faiss-cmake43")
 set(FAISS_LIB "${FAISS_BUILD}/faiss/libfaiss.a")
 
 if(NOT EXISTS "${FAISS_LIB}")

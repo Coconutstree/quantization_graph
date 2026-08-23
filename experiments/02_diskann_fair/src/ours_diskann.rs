@@ -7,41 +7,39 @@ use diskann::error::IntoANNResult;
 use diskann::graph::glue::{
     self, DefaultPostProcessor, InsertStrategy, PruneStrategy, SearchPostProcess, SearchStrategy,
 };
-use diskann::graph::{AdjacencyList, SearchOutputBuffer, workingset};
+use diskann::graph::{workingset, AdjacencyList, SearchOutputBuffer};
 use diskann::neighbor::{self, Neighbor};
 use diskann::provider::{ExecutionContext, HasId};
 use diskann::utils::{IntoUsize, VectorRepr};
-use diskann::{ANNError, ANNResult, default_post_processor};
-use diskann_providers::model::graph::provider::async_::SimpleNeighborProviderAsync;
+use diskann::{default_post_processor, ANNError, ANNResult};
 use diskann_providers::model::graph::provider::async_::common::{
     CreateVectorStore, SetElementHelper, VectorStore,
 };
-use diskann_providers::model::graph::provider::async_::inmem::{
-    FullPrecisionProvider,
-};
+use diskann_providers::model::graph::provider::async_::inmem::FullPrecisionProvider;
+use diskann_providers::model::graph::provider::async_::SimpleNeighborProviderAsync;
 use diskann_utils::views::Matrix;
-use diskann_vector::DistanceFunction;
 use diskann_vector::distance::Metric;
+use diskann_vector::DistanceFunction;
 
 use crate::config::QueryCoarseCodec;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct RabitqDistanceInterval {
-    estimate: f32,
-    lower_bound: f32,
-    upper_bound: f32,
+pub struct RabitqDistanceInterval {
+    pub estimate: f32,
+    pub lower_bound: f32,
+    pub upper_bound: f32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct RabitqPaperEstimate {
-    lower_bound: f32,
-    short_ip: f32,
-    alpha: f32,
-    ip_hat: f32,
-    error_bound: f32,
-    valid: u8,
+pub struct RabitqPaperEstimate {
+    pub lower_bound: f32,
+    pub short_ip: f32,
+    pub alpha: f32,
+    pub ip_hat: f32,
+    pub error_bound: f32,
+    pub valid: u8,
 }
 
 unsafe extern "C" {
@@ -290,7 +288,11 @@ impl RabitqSpace {
             unsafe { rabitq_space_delete(ptr) };
             return Err("failed to set ExRaBitQ centroids".to_string());
         }
-        Ok(Arc::new(Self { ptr, dim, centroid_count }))
+        Ok(Arc::new(Self {
+            ptr,
+            dim,
+            centroid_count,
+        }))
     }
 
     pub fn set_query_coarse_codec(&self, codec: QueryCoarseCodec) {
@@ -364,6 +366,68 @@ impl RabitqSpace {
         unsafe { rabitq_paper_factor_bytes() }
     }
 
+    pub fn dim(&self) -> usize {
+        self.dim
+    }
+
+    pub fn centroid_count(&self) -> usize {
+        self.centroid_count
+    }
+
+    /// Encode one vector into the exact compact 4-bit navigation record and
+    /// residual record used by experiment 02.  The disk port calls this
+    /// adapter instead of reimplementing ExRaBitQ's binary layout.
+    pub fn encode_parts(&self, raw: &[f32]) -> ANNResult<(Vec<u8>, Vec<u8>)> {
+        let mut full = vec![0_u8; self.full_record_bytes()];
+        let mut compact = vec![0_u8; self.compact_record_bytes()];
+        let mut residual = vec![0_u8; self.residual_record_bytes()];
+        self.encode_full(raw, &mut full)?;
+        self.copy_compact(&full, &mut compact)?;
+        self.copy_residual_record(&full, &mut residual)?;
+        Ok((compact, residual))
+    }
+
+    /// Export the resident DB1/factor sidecar from contiguous compact records
+    /// using the same C++ kernel as the in-memory experiment.
+    pub fn export_sidecar(
+        &self,
+        compact_records: &[u8],
+        record_count: usize,
+    ) -> ANNResult<(Vec<u8>, Vec<u8>)> {
+        let expected = record_count
+            .checked_mul(self.compact_record_bytes())
+            .ok_or_else(|| ANNError::message("ExRaBitQ compact sidecar size overflow"))?;
+        if compact_records.len() != expected {
+            return Err(ANNError::message(format!(
+                "ExRaBitQ compact sidecar bytes={} expected={expected}",
+                compact_records.len()
+            )));
+        }
+        let mut msb = vec![0_u8; record_count * self.paper_msb_code_bytes()];
+        let mut factors = vec![0_u8; record_count * self.paper_factor_bytes()];
+        let ok = unsafe {
+            rabitq_export_paper_sidecar(
+                self.ptr,
+                compact_records.as_ptr().cast::<std::ffi::c_void>(),
+                record_count,
+                self.compact_record_bytes(),
+                msb.as_mut_ptr(),
+                factors.as_mut_ptr().cast::<std::ffi::c_void>(),
+            )
+        };
+        if ok {
+            Ok((msb, factors))
+        } else {
+            Err(ANNError::message(
+                "native ExRaBitQ paper sidecar export failed",
+            ))
+        }
+    }
+
+    pub fn prepare_query(self: &Arc<Self>, query: &[f32]) -> ANNResult<QueryComputer> {
+        QueryComputer::new(self.clone(), query)
+    }
+
     fn encode_full(&self, raw: &[f32], encoded_out: &mut [u8]) -> ANNResult<()> {
         if raw.len() != self.dim {
             return Err(ANNError::message(format!(
@@ -390,7 +454,9 @@ impl RabitqSpace {
     }
 
     fn copy_compact(&self, full: &[u8], compact_out: &mut [u8]) -> ANNResult<()> {
-        if full.len() != self.full_record_bytes() || compact_out.len() != self.compact_record_bytes() {
+        if full.len() != self.full_record_bytes()
+            || compact_out.len() != self.compact_record_bytes()
+        {
             return Err(ANNError::message("ExRaBitQ compact copy size mismatch"));
         }
         let ok = unsafe {
@@ -578,7 +644,9 @@ impl OursStore {
             )
         };
         if !ok {
-            return Err(ANNError::message("native ExRaBitQ paper sidecar export failed"));
+            return Err(ANNError::message(
+                "native ExRaBitQ paper sidecar export failed",
+            ));
         }
         self.install_paper_sidecar(msb, factors, record_count);
         Ok(())
@@ -660,7 +728,7 @@ unsafe impl Send for QueryComputer {}
 unsafe impl Sync for QueryComputer {}
 
 impl QueryComputer {
-    fn new(space: Arc<RabitqSpace>, query: &[f32]) -> ANNResult<Self> {
+    pub fn new(space: Arc<RabitqSpace>, query: &[f32]) -> ANNResult<Self> {
         let prepared = unsafe { rabitq_prepare_query(space.ptr, query.as_ptr()) };
         if prepared.is_null() {
             return Err(ANNError::message("ExRaBitQ query preparation failed"));
@@ -668,7 +736,7 @@ impl QueryComputer {
         Ok(Self { space, prepared })
     }
 
-    fn distance(&self, encoded: &[u8]) -> f32 {
+    pub fn distance(&self, encoded: &[u8]) -> f32 {
         unsafe {
             rabitq_query_distance(
                 self.space.ptr,
@@ -696,7 +764,9 @@ impl QueryComputer {
         out_distances: &mut [f32],
     ) -> ANNResult<()> {
         if ids.len() != out_distances.len() {
-            return Err(ANNError::message("ExRaBitQ b1 distance batch size mismatch"));
+            return Err(ANNError::message(
+                "ExRaBitQ b1 distance batch size mismatch",
+            ));
         }
         if ids.is_empty() {
             return Ok(());
@@ -791,7 +861,9 @@ impl QueryComputer {
         out: &mut [RabitqPaperEstimate],
     ) -> ANNResult<()> {
         if ids.len() != out.len() {
-            return Err(ANNError::message("ExRaBitQ paper estimate batch size mismatch"));
+            return Err(ANNError::message(
+                "ExRaBitQ paper estimate batch size mismatch",
+            ));
         }
         if ids.is_empty() {
             return Ok(());
@@ -815,7 +887,7 @@ impl QueryComputer {
         }
     }
 
-    fn paper_estimate_batch_sidecar(
+    pub fn paper_estimate_batch_sidecar(
         &self,
         ids: &[u32],
         msb_base: *const u8,
@@ -826,7 +898,9 @@ impl QueryComputer {
         out: &mut [RabitqPaperEstimate],
     ) -> ANNResult<()> {
         if ids.len() != out.len() {
-            return Err(ANNError::message("ExRaBitQ paper sidecar estimate batch size mismatch"));
+            return Err(ANNError::message(
+                "ExRaBitQ paper sidecar estimate batch size mismatch",
+            ));
         }
         if ids.is_empty() {
             return Ok(());
@@ -848,11 +922,13 @@ impl QueryComputer {
         if ok {
             Ok(())
         } else {
-            Err(ANNError::message("ExRaBitQ paper sidecar estimate batch failed"))
+            Err(ANNError::message(
+                "ExRaBitQ paper sidecar estimate batch failed",
+            ))
         }
     }
 
-    fn distance_batch(
+    pub fn distance_batch(
         &self,
         ids: &[u32],
         modes: &[u8],
@@ -890,7 +966,7 @@ impl QueryComputer {
         }
     }
 
-    fn residual_distance_batch(
+    pub fn residual_distance_batch(
         &self,
         ids: &[u32],
         encoded_base: *const std::ffi::c_void,
@@ -901,7 +977,9 @@ impl QueryComputer {
         out: &mut [RabitqDistanceInterval],
     ) -> ANNResult<()> {
         if ids.len() != long_distances.len() || ids.len() != out.len() {
-            return Err(ANNError::message("ExRaBitQ residual distance batch size mismatch"));
+            return Err(ANNError::message(
+                "ExRaBitQ residual distance batch size mismatch",
+            ));
         }
         if ids.is_empty() {
             return Ok(());
@@ -927,7 +1005,7 @@ impl QueryComputer {
         }
     }
 
-    fn full_residual_distance_batch(
+    pub fn full_residual_distance_batch(
         &self,
         ids: &[u32],
         encoded_base: *const std::ffi::c_void,
@@ -1018,7 +1096,11 @@ fn candidate_less(lhs: SearchCandidate, rhs: SearchCandidate) -> bool {
     lhs.distance < rhs.distance || (lhs.distance == rhs.distance && lhs.id < rhs.id)
 }
 
-fn insert_candidate_sorted(pool: &mut Vec<SearchCandidate>, candidate: SearchCandidate, l_value: usize) {
+fn insert_candidate_sorted(
+    pool: &mut Vec<SearchCandidate>,
+    candidate: SearchCandidate,
+    l_value: usize,
+) {
     if l_value == 0 {
         return;
     }
@@ -1170,7 +1252,9 @@ where
     }
     l_value = l_value.max(k);
     if beam_width == 0 {
-        return Err(ANNError::message("Ours paper-active search requires beam_width > 0"));
+        return Err(ANNError::message(
+            "Ours paper-active search requires beam_width > 0",
+        ));
     }
 
     let total_points = provider.total_points();
@@ -1214,7 +1298,10 @@ where
 
     let mut stall_hops = 0usize;
     loop {
-        let back_before = pool.last().map(|candidate| candidate.distance).unwrap_or(0.0f32);
+        let back_before = pool
+            .last()
+            .map(|candidate| candidate.distance)
+            .unwrap_or(0.0f32);
         frontier.clear();
         for candidate in &mut pool {
             if !candidate.expanded {
@@ -1264,7 +1351,10 @@ where
                 let t_b1 = Instant::now();
                 computer.distance_b1_batch(
                     &fresh,
-                    provider.aux_vectors.records_ptr().cast::<std::ffi::c_void>(),
+                    provider
+                        .aux_vectors
+                        .records_ptr()
+                        .cast::<std::ffi::c_void>(),
                     provider.aux_vectors.record_bytes,
                     &mut b1_distances,
                 )?;
@@ -1346,10 +1436,7 @@ where
                         | QueryCoarseCodec::FullRerankScalar
                 ) {
                     computer.distance_with_paper(encoded, paper.short_ip)
-                } else if matches!(
-                    codec,
-                    QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8
-                ) {
+                } else if matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8) {
                     computer.distance_with_quantized_paper(encoded, paper.short_ip)
                 } else {
                     computer.distance(encoded)
@@ -1386,7 +1473,10 @@ where
             }
         }
         if early_stop_hops != 0 && pool.len() >= l_value {
-            let back_after = pool.last().map(|candidate| candidate.distance).unwrap_or(0.0f32);
+            let back_after = pool
+                .last()
+                .map(|candidate| candidate.distance)
+                .unwrap_or(0.0f32);
             if back_after >= back_before {
                 stall_hops += 1;
             } else {
@@ -1413,12 +1503,12 @@ where
             let residual_record = provider
                 .aux_vectors
                 .get_residual_record(candidate.id.into_usize());
-            let long_distance =
-                if matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8) {
-                    computer.distance(encoded)
-                } else {
-                    candidate.distance
-                };
+            let long_distance = if matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8)
+            {
+                computer.distance(encoded)
+            } else {
+                candidate.distance
+            };
             (
                 computer.residual_distance(encoded, residual_record, long_distance),
                 candidate.id,
@@ -1472,7 +1562,9 @@ where
     }
     l_value = l_value.max(k);
     if beam_width == 0 {
-        return Err(ANNError::message("Ours paper-active search requires beam_width > 0"));
+        return Err(ANNError::message(
+            "Ours paper-active search requires beam_width > 0",
+        ));
     }
 
     let total_points = provider.total_points();
@@ -1526,7 +1618,10 @@ where
     let t_traverse = Instant::now();
     let mut stall_hops = 0usize;
     loop {
-        let back_before = pool.last().map(|candidate| candidate.distance).unwrap_or(0.0f32);
+        let back_before = pool
+            .last()
+            .map(|candidate| candidate.distance)
+            .unwrap_or(0.0f32);
         frontier.clear();
         for candidate in &mut pool {
             if !candidate.expanded {
@@ -1565,8 +1660,7 @@ where
             if codec == QueryCoarseCodec::B1Main {
                 for candidate in fresh.iter().copied() {
                     let id = candidate.into_usize();
-                    let distance = computer.distance_b1(
-                        provider.aux_vectors.get_vector(id));
+                    let distance = computer.distance_b1(provider.aux_vectors.get_vector(id));
                     stats.ffi_calls += 1;
                     stats.distance_computations += 1;
                     stats.paper_remaining_kernel_calls += 1;
@@ -1647,10 +1741,7 @@ where
                     DIST_MODE_REUSE_FULL_MSB
                 } else if codec == QueryCoarseCodec::FullScalar {
                     DIST_MODE_REUSE_FULL_MSB_SCALAR
-                } else if matches!(
-                    codec,
-                    QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8
-                ) {
+                } else if matches!(codec, QueryCoarseCodec::Int4 | QueryCoarseCodec::Int8) {
                     DIST_MODE_REUSE_QUANTIZED_MSB
                 } else {
                     DIST_MODE_RECOMPUTE_FULL
@@ -1702,7 +1793,10 @@ where
             }
         }
         if early_stop_hops != 0 && pool.len() >= l_value {
-            let back_after = pool.last().map(|candidate| candidate.distance).unwrap_or(0.0f32);
+            let back_after = pool
+                .last()
+                .map(|candidate| candidate.distance)
+                .unwrap_or(0.0f32);
             if back_after >= back_before {
                 stall_hops += 1;
             } else {
@@ -1918,14 +2012,22 @@ fn verify_search_parity(
     let batched_stats = &batched.stats;
     let legacy_stats = &legacy.stats;
     let fields = [
-        ("visited_nodes", batched_stats.visited_nodes, legacy_stats.visited_nodes),
+        (
+            "visited_nodes",
+            batched_stats.visited_nodes,
+            legacy_stats.visited_nodes,
+        ),
         (
             "distance_computations",
             batched_stats.distance_computations,
             legacy_stats.distance_computations,
         ),
         ("hops", batched_stats.hops, legacy_stats.hops),
-        ("paper_checked", batched_stats.paper_checked, legacy_stats.paper_checked),
+        (
+            "paper_checked",
+            batched_stats.paper_checked,
+            legacy_stats.paper_checked,
+        ),
         (
             "paper_would_prune",
             batched_stats.paper_would_prune,
@@ -2016,7 +2118,9 @@ where
         )
     };
     if !ok {
-        return Err(ANNError::message("native ExRaBitQ Vamana graph build failed"));
+        return Err(ANNError::message(
+            "native ExRaBitQ Vamana graph build failed",
+        ));
     }
     if msb_stride_out != msb_bytes || factor_bytes_out != factor_bytes {
         return Err(ANNError::message(format!(
@@ -2077,9 +2181,10 @@ where
                     if first_error.lock().unwrap().is_some() {
                         break;
                     }
-                    if let Err(err) = provider
-                        .aux_vectors
-                        .set_vector_with_scratch(id, data.row(id), &mut full)
+                    if let Err(err) =
+                        provider
+                            .aux_vectors
+                            .set_vector_with_scratch(id, data.row(id), &mut full)
                     {
                         *first_error.lock().unwrap() = Some(err.to_string());
                         break;
@@ -2208,16 +2313,15 @@ where
         std::future::ready(Ok(self.provider.num_start_points()))
     }
 
-    fn start_point_distances<F>(
-        &mut self,
-        mut f: F,
-    ) -> impl Future<Output = ANNResult<()>> + Send
+    fn start_point_distances<F>(&mut self, mut f: F) -> impl Future<Output = ANNResult<()>> + Send
     where
         F: FnMut(Self::Id, f32) + Send,
     {
         let mut run = move || -> ANNResult<()> {
             for id in self.provider.starting_points()? {
-                let distance = self.computer.distance(self.provider.aux_vectors.get_vector(id.into_usize()));
+                let distance = self
+                    .computer
+                    .distance(self.provider.aux_vectors.get_vector(id.into_usize()));
                 f(id, distance);
             }
             Ok(())
@@ -2245,7 +2349,9 @@ where
                 id_buffer.retain(|candidate| pred.eval_mut(candidate));
                 let lookahead = self.provider.aux_vectors.prefetch_lookahead;
                 for candidate in id_buffer.iter().take(lookahead) {
-                    self.provider.aux_vectors.prefetch_hint(candidate.into_usize());
+                    self.provider
+                        .aux_vectors
+                        .prefetch_hint(candidate.into_usize());
                 }
                 for (offset, candidate) in id_buffer.iter().enumerate() {
                     if lookahead > 0 && offset + lookahead < id_buffer.len() {
@@ -2320,9 +2426,11 @@ where
                     .get_residual_record(candidate.id().into_usize());
                 Neighbor::new(
                     *candidate.id(),
-                    accessor
-                        .computer
-                        .residual_distance(encoded, residual_record, *candidate.distance()),
+                    accessor.computer.residual_distance(
+                        encoded,
+                        residual_record,
+                        *candidate.distance(),
+                    ),
                 )
             })
             .collect();
@@ -2384,11 +2492,11 @@ where
     Ctx: ExecutionContext,
     B: glue::Batch,
     Self: for<'a> InsertStrategy<
-            'a,
-            FullPrecisionProvider<f32, OursStore, D, Ctx>,
-            B::Element<'a>,
-            PruneStrategy = Self,
-        >,
+        'a,
+        FullPrecisionProvider<f32, OursStore, D, Ctx>,
+        B::Element<'a>,
+        PruneStrategy = Self,
+    >,
 {
     type Seed = ();
     type FinishError = diskann::error::Infallible;

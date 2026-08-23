@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 
 use crate::config::RunContext;
 
+pub mod fp32;
 pub mod lvq;
 pub mod ours;
-pub mod fp32;
 pub mod pq;
 pub mod saq;
 pub mod sq;

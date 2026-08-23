@@ -7,6 +7,10 @@ edition = "2021"
 name = "run_diskann_fair"
 path = "src/main.rs"
 
+[[bin]]
+name = "qgraph05_shared_graph_port"
+path = "../05_disk_system_fair/native_rust/src/main.rs"
+
 [dependencies]
 diskann = { path = "../../baselines/diskann/diskann" }
 diskann-providers = { path = "../../baselines/diskann/diskann-providers" }

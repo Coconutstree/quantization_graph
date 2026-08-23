@@ -61,6 +61,9 @@ logs/
 # Third-party baselines fetched or linked by setup scripts
 baselines/saq/
 baselines/deps/
+baselines/svs/
+baselines/pyglass/
+baselines/tools/fio-package/
 
 # Generated graph/index artifacts
 *.graph

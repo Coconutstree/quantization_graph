@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "note": "Local formal 05 disk registry. Every ready entry pins one executable and its sha256.",
+  "ports": {
+    "05a:PQ_4bit": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_quantizer_port"],
+      "source_suite": "01_quantizer_fair",
+      "source_kernel": "faiss::ProductQuantizer",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05a-faiss-pq4-native-odirect-v1",
+      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+    },
+    "05a:SQ_4bit": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_quantizer_port"],
+      "source_suite": "01_quantizer_fair",
+      "source_kernel": "faiss::ScalarQuantizer(QT_4bit)",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05a-faiss-sq4-native-odirect-v1",
+      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+    },
+    "05a:SAQ_B4": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_saq_quantizer_port"],
+      "source_suite": "01_quantizer_fair",
+      "source_kernel": "official SAQ B=4 distance kernel",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05a-saq-b4-native-odirect-v1",
+      "binary_sha256": "fa92703f73ab7b5e1a3afa1390bfdc5ccab966b670d6f5eabdb08934799faebb"
+    },
+    "05a:Ours_RaBitQ_K1": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_quantizer_port"],
+      "source_suite": "01_quantizer_fair",
+      "source_kernel": "hnswlib::RaBitQSpace K=1",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05a-rabitq-k1-native-odirect-v1",
+      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+    },
+    "05b:PQ-DiskANN-Disk": {
+      "status": "ready",
+      "command": ["experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"],
+      "source_suite": "02_diskann_fair",
+      "source_kernel": "DiskANN FixedChunkPQTable 4-bit",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05b-shared-graph-pq4-release-native-odirect-v1",
+      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+    },
+    "05b:SQ-DiskANN-Disk": {
+      "status": "ready",
+      "command": ["experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"],
+      "source_suite": "02_diskann_fair",
+      "source_kernel": "DiskANN ScalarQuantizer<4>",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05b-shared-graph-sq4-release-native-odirect-v1",
+      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+    },
+    "05b:SAQ-DiskANN-Disk": {
+      "status": "ready",
+      "command": ["experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"],
+      "source_suite": "02_diskann_fair",
+      "source_kernel": "DiskANN spherical::Impl<4>",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05b-shared-graph-saq4-release-native-odirect-v1",
+      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+    },
+    "05b:Ours-Disk": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"],
+      "source_suite": "02_diskann_fair",
+      "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05b-ours-release-native-odirect-v2",
+      "binary_sha256": "c88cb6afe424db8cefa29b1ed14eb67b66588e44a9e0e070812c92b6e075e577"
+    },
+    "05c:Ours-Disk": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"],
+      "source_suite": "03_system_fair",
+      "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05c-ours-release-native-odirect-v2",
+      "binary_sha256": "c88cb6afe424db8cefa29b1ed14eb67b66588e44a9e0e070812c92b6e075e577"
+    },
+    "05c:SymphonyQG-DiskPort": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_symphonyqg_disk_port"],
+      "source_suite": "03_system_fair",
+      "source_kernel": "official SymphonyQG FastScan LUT+SIMD",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-v1",
+      "binary_sha256": "2080ec83a3ea2e64e5d459aec35f2bf3a7c316945dcc677ba7ff9a9cfede625d"
+    },
+    "05c:OG-LVQ-DiskPort": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port"],
+      "source_suite": "03_system_fair",
+      "source_kernel": "official SVS LVQ4 distance kernel",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05c-og-lvq-svs-layout-native-odirect-v1",
+      "binary_sha256": "d2d5fb113c6a470dfcc01cac0a0237fa4776b571414e1b67d4bc8d19f6788ee2"
+    },
+    "05c:Glass-NSG-DiskPort": {
+      "status": "ready",
+      "command": ["build/formal_local/05_disk_system_fair/qgraph05_glass_disk_port"],
+      "source_suite": "03_system_fair",
+      "source_kernel": "official Glass NSG SQ4U distance kernel",
+      "port_kind": "algorithm_preserving_disk_port",
+      "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1",
+      "binary_sha256": "c85c6af6477de6e11a68d3fc085324c21a62bc286b75488d3f188a0b02370421"
+    },
+    "05c:DiskANN-PQ-Disk": {
+      "status": "ready",
+      "command": ["baselines/diskann/target/release/qgraph05_diskann_port"],
+      "source_suite": "03_system_fair",
+      "source_kernel": "official diskann-disk PQ search",
+      "port_kind": "official_native_disk",
+      "implementation_fingerprint": "05c-official-diskann-pq-release-io-uring-v1",
+      "binary_sha256": "cc166461fd40bfb157c4f4fb5e24d9eb40e9320ea777caec257aae2cf2e84ead"
+    }
+  }
+}

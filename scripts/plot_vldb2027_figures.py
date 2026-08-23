@@ -67,14 +67,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS_ROOT = Path(os.environ.get("PAPER_RESULTS_ROOT", ROOT / "results"))
 OUT_DIR = ROOT / "paper" / "figures"
 
-# Optional external experiment-data home. The source checkout that owns the
-# optimized-Ours query runs (query_es/), the Glass R64/L400 robustness rebuild
-# (glass_l400_robustness/) and the round2 build records used by fig10.
-# Defaults to the sibling quantized_hnsw checkout when present; otherwise the
-# repo-local results/ tree is used (and the affected figures degrade to
-# whatever data is available).
-_QH_DIR = Path(os.environ.get("QH_DIR", ROOT.parent / "quantized_hnsw"))
-QH_DIR = _QH_DIR if _QH_DIR.exists() else RESULTS_ROOT
+# Optional override for archived experiment data. The default is repository
+# local so figure generation never silently reads a sibling checkout.
+QH_DIR = Path(os.environ.get("QH_DIR", RESULTS_ROOT))
 
 DATASETS = [
     ("DBpedia-1M", "dbpedia"),

@@ -135,11 +135,11 @@ where
         diskann_vector::prefetch_hint_max::<4, _>(data);
     }
 
-    pub(super) fn dim(&self) -> usize {
+    pub fn dim(&self) -> usize {
         self.quantizer.dim()
     }
 
-    pub(super) fn get_vector(&self, i: usize) -> Result<CVRef<'_, NBITS>, SQError> {
+    pub fn get_vector(&self, i: usize) -> Result<CVRef<'_, NBITS>, SQError> {
         self.num_get_calls.increment();
         Ok(CVRef::from_canonical_front(
             unsafe { self.data.get_slice(i) },
@@ -224,7 +224,7 @@ where
         })
     }
 
-    pub(super) fn query_computer<T>(
+    pub fn query_computer<T>(
         &self,
         query: &[T],
         allow_rescale: bool,

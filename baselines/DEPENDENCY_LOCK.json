@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "policy": "All formal experiment source paths resolve inside quantization_graph/baselines. Large generated datasets, indexes and logs are not copied into baseline source trees.",
+  "dependencies": {
+    "faiss": {
+      "commit": "a424dcb809fd725c44dd976d9063febd4837d16a",
+      "path": "baselines/faiss/upstream"
+    },
+    "saq": {
+      "commit": "2163ebcedd0ad9c9f4de326e6ca7a860f9eafe52",
+      "path": "baselines/saq"
+    },
+    "svs": {
+      "commit": "078846e3f76829b60f5c256806da1b90e385cda5",
+      "path": "baselines/svs"
+    },
+    "pyglass": {
+      "commit": "d2296ec447d2374ee8f88c6d3b85be1b1e434ad3",
+      "path": "baselines/pyglass"
+    },
+    "symphonyqg": {
+      "commit": "f70f08cb210e464ec5fc88055cb1d76cb07dcad3",
+      "path": "baselines/symphonyqg"
+    },
+    "glog": {
+      "commit": "53d58e4531c7c90f71ddab503d915e027432447a",
+      "path": "baselines/deps/glog"
+    },
+    "diskann": {
+      "commit": "3218478b5f7d1721840c29309e22d9fd74b1b4bc",
+      "path": "baselines/diskann"
+    }
+  },
+  "repository_local_runtime_assets": {
+    "saq_preprocessed_data": {
+      "path": "baselines/saq/data",
+      "storage": "hard links to avoid duplicating 15 GiB on the same filesystem"
+    },
+    "svs_python_binding": {
+      "path": "baselines/svs/python/svs"
+    },
+    "symphonyqg_python_binding": {
+      "path": "baselines/symphonyqg/python"
+    },
+    "pyglass_python_binding": {
+      "path": "baselines/pyglass/python"
+    },
+    "cpp_dependency_prefix": {
+      "path": "baselines/deps/local",
+      "contents": "glog 0.8.0 and fmt 11.2.0"
+    },
+    "fio_local": {
+      "path": "baselines/tools/fio-package/root/usr/bin/fio",
+      "version": "3.28-1 (Ubuntu jammy package, repository-local extraction)"
+    }
+  },
+  "excluded_generated_content": [
+    "SymphonyQG historical indexes and logs",
+    "third-party .git object databases"
+  ]
+}

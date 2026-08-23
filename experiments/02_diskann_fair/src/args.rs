@@ -30,6 +30,7 @@ pub struct Args {
     pub build_early_stop_hops: usize,
     pub search_early_stop_hops: usize,
     pub search_kth_stop: bool,
+    pub shared_graph: bool,
     pub centroid_count: usize,
     pub centroid_train_samples: usize,
     pub query_coarse_codecs: Vec<QueryCoarseCodec>,
@@ -66,6 +67,7 @@ impl Default for Args {
             build_early_stop_hops: 0,
             search_early_stop_hops: 0,
             search_kth_stop: false,
+            shared_graph: false,
             centroid_count: 1,
             centroid_train_samples: 100000,
             // Formal Ours default: INT8 query with DB coarse data fixed at
@@ -112,6 +114,10 @@ impl Args {
                 | "--query-coarse-codecs" => iter
                     .next()
                     .ok_or_else(|| format!("missing value for {flag}"))?,
+                "--shared-graph" => {
+                    args.shared_graph = true;
+                    continue;
+                }
                 "--help" | "-h" => return Err(Self::usage()),
                 other => return Err(format!("unknown argument: {other}\n\n{}", Self::usage())),
             };
@@ -138,9 +144,7 @@ impl Args {
                 "--search-list-sizes" => args.search_list_sizes = parse_list(&value)?,
                 "--search-beam-width" => args.search_beam_width = parse_num(&flag, &value)?,
                 "--b1-epsilon" => {
-                    args.b1_epsilon = value
-                        .parse()
-                        .map_err(|_| format!("bad {flag}: {value}"))?
+                    args.b1_epsilon = value.parse().map_err(|_| format!("bad {flag}: {value}"))?
                 }
                 "--rerank-candidates" => args.rerank_candidates = parse_num(&flag, &value)?,
                 "--threads" => args.threads = parse_num(&flag, &value)?,
@@ -156,10 +160,13 @@ impl Args {
                 "--refine-passes" => args.refine_passes = parse_num(&flag, &value)?,
                 "--build-prune-cap" => args.prune_candidate_cap = parse_num(&flag, &value)?,
                 "--build-early-stop-hops" => args.build_early_stop_hops = parse_num(&flag, &value)?,
-                "--search-early-stop-hops" => args.search_early_stop_hops = parse_num(&flag, &value)?,
+                "--search-early-stop-hops" => {
+                    args.search_early_stop_hops = parse_num(&flag, &value)?
+                }
                 "--search-kth-stop" => {
                     args.search_kth_stop = parse_num::<usize>(&flag, &value)? != 0
                 }
+                "--shared-graph" => args.shared_graph = true,
                 "--centroid-count" => args.centroid_count = parse_num(&flag, &value)?,
                 "--centroid-train-samples" => {
                     args.centroid_train_samples = parse_num(&flag, &value)?

@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "note": "Copy to ports.local.json only after each native runner preserves the stated 01/02/03 kernel and passes its memory-vs-disk parity test. Python reference codecs and memory-only adapters are forbidden for timed search.",
+  "ports": {
+    "05a:PQ_4bit": {"status": "pending", "command": ["/ABS/PATH/TO/05a_native_port"], "source_suite": "01_quantizer_fair", "source_kernel": "faiss::ProductQuantizer", "port_kind": "algorithm_preserving_disk_port"},
+    "05a:SQ_4bit": {"status": "pending", "command": ["/ABS/PATH/TO/05a_native_port"], "source_suite": "01_quantizer_fair", "source_kernel": "faiss::ScalarQuantizer(QT_4bit)", "port_kind": "algorithm_preserving_disk_port"},
+    "05a:SAQ_B4": {"status": "pending", "command": ["/ABS/PATH/TO/05a_saq_native_port"], "source_suite": "01_quantizer_fair", "source_kernel": "official SAQ B=4 distance kernel", "port_kind": "algorithm_preserving_disk_port"},
+    "05a:Ours_RaBitQ_K1": {"status": "pending", "command": ["/ABS/PATH/TO/05a_native_port"], "source_suite": "01_quantizer_fair", "source_kernel": "hnswlib::RaBitQSpace K=1", "port_kind": "algorithm_preserving_disk_port"},
+    "05b:PQ-DiskANN-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/05b_native_port"], "source_suite": "02_diskann_fair", "source_kernel": "DiskANN FixedChunkPQTable 4-bit", "port_kind": "algorithm_preserving_disk_port"},
+    "05b:SQ-DiskANN-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/05b_native_port"], "source_suite": "02_diskann_fair", "source_kernel": "DiskANN ScalarQuantizer<4>", "port_kind": "algorithm_preserving_disk_port"},
+    "05b:SAQ-DiskANN-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/05b_native_port"], "source_suite": "02_diskann_fair", "source_kernel": "DiskANN spherical::Impl<4>", "port_kind": "algorithm_preserving_disk_port"},
+    "05b:Ours-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/05b_ours_native_port"], "source_suite": "02_diskann_fair", "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", "port_kind": "algorithm_preserving_disk_port"},
+    "05c:Ours-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/ours_disk_port"], "source_suite": "03_system_fair", "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", "port_kind": "algorithm_preserving_disk_port"},
+    "05c:SymphonyQG-DiskPort": {"status": "pending", "command": ["build/formal_local/05_disk_system_fair/qgraph05_symphonyqg_disk_port"], "source_suite": "03_system_fair", "source_kernel": "official SymphonyQG FastScan LUT+SIMD", "port_kind": "algorithm_preserving_disk_port"},
+    "05c:OG-LVQ-DiskPort": {"status": "pending", "command": ["build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port"], "source_suite": "03_system_fair", "source_kernel": "official SVS LVQ4 distance kernel", "port_kind": "algorithm_preserving_disk_port"},
+    "05c:Glass-NSG-DiskPort": {"status": "pending", "command": ["build/formal_local/05_disk_system_fair/qgraph05_glass_disk_port"], "source_suite": "03_system_fair", "source_kernel": "official Glass NSG SQ4U distance kernel", "port_kind": "algorithm_preserving_disk_port"},
+    "05c:DiskANN-PQ-Disk": {"status": "pending", "command": ["/ABS/PATH/TO/diskann_disk_port"], "source_suite": "03_system_fair", "source_kernel": "official diskann-disk PQ search", "port_kind": "official_native_disk"}
+  }
+}

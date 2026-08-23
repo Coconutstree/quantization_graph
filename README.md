@@ -100,9 +100,10 @@ bash scripts/setup_deps.sh --with-data   # 额外下载公开数据集
 手动方式（等价于上面脚本）——Python 之外的依赖（非 pip 包）：
 - Rust 工具链（构建 `experiments/02_diskann_fair`）；cmake ≥ 3.20、g++（C++17+OpenMP）、BLAS；
 - Faiss：`bash scripts/setup_faiss.sh`（pinned commit 源码构建，01 实验链接）；
-- SAQ：第三方仓库锁定 commit，按计划文档构建 `test_fixed_candidates`
-  （依赖 glog/fmt 等，见 `BASELINE_EXPERIMENT_PLAN_MS_V2.md`）；
-- SymphonyQG 绑定：从官方仓库锁定 commit 构建，运行时以 `SYMPHONYQG_PYTHONPATH` 指定；
+- SAQ：第三方仓库锁定 commit，构建 `test_fixed_candidates`；
+  glog/fmt 默认从仓库内 `baselines/deps/local` 加载；
+- SymphonyQG 绑定：从官方仓库锁定 commit 构建，默认从仓库内
+  `baselines/symphonyqg/python` 加载；`SYMPHONYQG_PYTHONPATH` 仅作为显式开发覆盖；
 - 数据集（私有数据不提交、不外链）：公开数据集用 `bash scripts/download_data.sh` 下载；
   私有/自定义数据集请自行放入 `data/<dataset>/`（格式见 `data/README.md`：
   `<dataset>_base.fvecs`、`<dataset>_query.fvecs`、`<dataset>_groundtruth.ivecs`）。

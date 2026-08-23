@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import resource
+import sys
 import time
 from pathlib import Path
 
+_REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(
+    0,
+    os.environ.get(
+        "GLASS_PYTHONPATH",
+        str(_REPO / "baselines" / "pyglass" / "python"),
+    ),
+)
 import glass
 import numpy as np
 
