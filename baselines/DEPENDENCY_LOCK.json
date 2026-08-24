@@ -19,7 +19,7 @@
       "path": "baselines/pyglass"
     },
     "symphonyqg": {
-      "commit": "f70f08cb210e464ec5fc88055cb1d76cb07dcad3",
+      "commit": "6124ddb34ee4d176edea1bd7ad38d1672343df28",
       "path": "baselines/symphonyqg"
     },
     "glog": {
@@ -47,11 +47,11 @@
     },
     "cpp_dependency_prefix": {
       "path": "baselines/deps/local",
-      "contents": "glog 0.8.0 and fmt 11.2.0"
+      "contents": "Debian-packaged glog/fmt/gflags plus local OpenBLAS/libaio/OpenSSL/libunwind"
     },
     "fio_local": {
       "path": "baselines/tools/fio-package/root/usr/bin/fio",
-      "version": "3.28-1 (Ubuntu jammy package, repository-local extraction)"
+      "version": "3.36-1ubuntu0.1 (Ubuntu noble package, repository-local extraction)"
     }
   },
   "excluded_generated_content": [

@@ -14,6 +14,8 @@ CMAKE_BIN="${CMAKE_BIN:-cmake}"
 GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 CXX_BIN="${CXX_BIN:-g++}"
 JOBS="${JOBS:-$(nproc)}"
+LOCAL_PREFIX="${ROOT}/baselines/deps/local"
+OPENBLAS_LIB="${OPENBLAS_LIB:-${LOCAL_PREFIX}/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblas.so.0}"
 
 if [[ ! -f "${SRC}/CMakeLists.txt" ]]; then
   git clone "${REPO_URL}" "${SRC}"
@@ -32,5 +34,7 @@ fi
   -DFAISS_ENABLE_GPU=OFF \
   -DFAISS_ENABLE_PYTHON=OFF \
   -DBUILD_TESTING=OFF \
-  -DFAISS_OPT_LEVEL=avx2
+  -DFAISS_OPT_LEVEL=avx2 \
+  -DBLAS_LIBRARIES="${OPENBLAS_LIB}" \
+  -DLAPACK_LIBRARIES="${OPENBLAS_LIB}"
 "${CMAKE_BIN}" --build "${BUILD}" -j "${JOBS}"

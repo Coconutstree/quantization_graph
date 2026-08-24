@@ -11,7 +11,7 @@
       "source_kernel": "faiss::ProductQuantizer",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05a-faiss-pq4-native-odirect-v1",
-      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+      "binary_sha256": "ac6281f3c74243614c2779b5025d952cb0d4d247b55bb979846258d6ebf03e19"
     },
     "05a:SQ_4bit": {
       "status": "ready",
@@ -22,7 +22,7 @@
       "source_kernel": "faiss::ScalarQuantizer(QT_4bit)",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05a-faiss-sq4-native-odirect-v1",
-      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+      "binary_sha256": "ac6281f3c74243614c2779b5025d952cb0d4d247b55bb979846258d6ebf03e19"
     },
     "05a:SAQ_B4": {
       "status": "ready",
@@ -33,7 +33,7 @@
       "source_kernel": "official SAQ B=4 distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05a-saq-b4-native-odirect-v1",
-      "binary_sha256": "fa92703f73ab7b5e1a3afa1390bfdc5ccab966b670d6f5eabdb08934799faebb"
+      "binary_sha256": "3dcadae2e84bad3e6350698617b3786b4c9a68b58ec309daacf576a596eb4b61"
     },
     "05a:Ours_RaBitQ_K1": {
       "status": "ready",
@@ -44,7 +44,7 @@
       "source_kernel": "hnswlib::RaBitQSpace K=1",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05a-rabitq-k1-native-odirect-v1",
-      "binary_sha256": "8ad976b01c8e225e93ca084aa1ed8726eaccd1acd8598413631334dfa83d211c"
+      "binary_sha256": "ac6281f3c74243614c2779b5025d952cb0d4d247b55bb979846258d6ebf03e19"
     },
     "05b:PQ-DiskANN-Disk": {
       "status": "ready",
@@ -55,7 +55,7 @@
       "source_kernel": "DiskANN FixedChunkPQTable 4-bit",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-pq4-release-native-odirect-v1",
-      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
     },
     "05b:SQ-DiskANN-Disk": {
       "status": "ready",
@@ -66,7 +66,7 @@
       "source_kernel": "DiskANN ScalarQuantizer<4>",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-sq4-release-native-odirect-v1",
-      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
     },
     "05b:SAQ-DiskANN-Disk": {
       "status": "ready",
@@ -77,29 +77,29 @@
       "source_kernel": "DiskANN spherical::Impl<4>",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-saq4-release-native-odirect-v1",
-      "binary_sha256": "bf35dfccf7c052c3d608857e6d01beeadd751fc90e69d8f56edcad68dd3ec6e7"
+      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
     },
     "05b:Ours-Disk": {
       "status": "ready",
       "command": [
-        "build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"
+        "experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"
       ],
       "source_suite": "02_diskann_fair",
       "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-ours-release-native-odirect-v2",
-      "binary_sha256": "c88cb6afe424db8cefa29b1ed14eb67b66588e44a9e0e070812c92b6e075e577"
+      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
     },
     "05c:Ours-Disk": {
       "status": "ready",
       "command": [
-        "build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"
+        "experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"
       ],
       "source_suite": "03_system_fair",
       "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-ours-release-native-odirect-v2",
-      "binary_sha256": "c88cb6afe424db8cefa29b1ed14eb67b66588e44a9e0e070812c92b6e075e577"
+      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
     },
     "05c:SymphonyQG-DiskPort": {
       "status": "ready",
@@ -110,7 +110,7 @@
       "source_kernel": "official SymphonyQG FastScan LUT+SIMD",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-v1",
-      "binary_sha256": "2080ec83a3ea2e64e5d459aec35f2bf3a7c316945dcc677ba7ff9a9cfede625d"
+      "binary_sha256": "303fdede1df8cddc463b9de3ea9841030cd7fbe65ef75bdb4708196a9364f0b0"
     },
     "05c:OG-LVQ-DiskPort": {
       "status": "ready",
@@ -121,7 +121,7 @@
       "source_kernel": "official SVS LVQ4 distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-og-lvq-svs-layout-native-odirect-v1",
-      "binary_sha256": "d2d5fb113c6a470dfcc01cac0a0237fa4776b571414e1b67d4bc8d19f6788ee2"
+      "binary_sha256": "3ed1f15f58b92d3f80552fa779b7e8e0735a82a767194e3dc7f45cf792822a9a"
     },
     "05c:Glass-NSG-DiskPort": {
       "status": "ready",
@@ -132,7 +132,7 @@
       "source_kernel": "official Glass NSG SQ4U distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1",
-      "binary_sha256": "c85c6af6477de6e11a68d3fc085324c21a62bc286b75488d3f188a0b02370421"
+      "binary_sha256": "5ff8f8414fb5eb3625adb46d335a2cab49fffcf9e9f717198fff64cef15c19a5"
     },
     "05c:DiskANN-PQ-Disk": {
       "status": "ready",
@@ -143,7 +143,7 @@
       "source_kernel": "official diskann-disk PQ search",
       "port_kind": "official_native_disk",
       "implementation_fingerprint": "05c-official-diskann-pq-release-io-uring-v1",
-      "binary_sha256": "cc166461fd40bfb157c4f4fb5e24d9eb40e9320ea777caec257aae2cf2e84ead"
+      "binary_sha256": "029188192cae956a056438bc0a8c9992dc1bdcf42a079a3cb5bd03aec1a2ed81"
     }
   }
 }

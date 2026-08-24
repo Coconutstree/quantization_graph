@@ -14,7 +14,7 @@ htmlcov/
 # Rust / C++
 target/
 **/target/
-build/
+/build/
 *.o
 *.a
 

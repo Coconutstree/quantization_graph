@@ -116,7 +116,7 @@ bash scripts/setup_deps.sh --with-data   # 额外下载公开数据集
 手动方式（等价于上面脚本）——Python 之外的依赖（非 pip 包）：
 - Rust 工具链（构建 `experiments/02_diskann_fair`）；cmake ≥ 3.20、g++（C++17+OpenMP）、BLAS；
 - Faiss：`bash scripts/setup_faiss.sh`（pinned commit 源码构建，01 实验链接）；
-- SAQ：第三方仓库锁定 commit，构建 `test_fixed_candidates`；
+- SAQ：第三方仓库锁定 commit，构建 `create_index`, `test_qps`, `test_relative_error`；
   glog/fmt 默认从仓库内 `baselines/deps/local` 加载；
 - SymphonyQG 绑定：从官方仓库锁定 commit 构建，默认从仓库内
   `baselines/symphonyqg/python` 加载；`SYMPHONYQG_PYTHONPATH` 仅作为显式开发覆盖；
@@ -142,6 +142,27 @@ python scripts/check_datasets.py --datasets gist --data-root data --out-root res
 
 ## 5. 编译（Build）
 
+推荐的一键编译入口：
+
+```bash
+mkdir -p build/cmake_repro
+cd build/cmake_repro
+cmake ../..
+make -j
+```
+
+也可以分目标执行：
+
+```bash
+make setup_cpp_deps   # 本地解包 C/C++ 依赖
+make setup_deps       # Faiss / SAQ / SymphonyQG
+make formal_local     # 01/03/05 native/Rust ports
+make write_05_ports   # 生成 05 ports.local.json
+make download_data    # 下载并转换公开数据集
+```
+
+原始分步命令仍可使用：
+
 ```bash
 # 02：run_diskann_fair（需 Rust 工具链；--offline 可用本地 crate 缓存）
 cd experiments/02_diskann_fair && cargo build --release --offline
@@ -150,11 +171,11 @@ cd experiments/02_diskann_fair && cargo build --release --offline
 cmake -S experiments/01_quantizer_fair -B build/01_quantizer_fair   -DCMAKE_BUILD_TYPE=Release
 cmake --build build/01_quantizer_fair -j 16
 
-# SAQ：test_fixed_candidates
+# SAQ：create_index / test_qps / test_relative_error
 cmake -S baselines/saq -B baselines/saq/build_gcc11 \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_UNIT_TESTS=OFF \
   -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH:-/usr}"   # 依赖默认走系统（apt: libfmt/glog/gflags/gtest）
-cmake --build baselines/saq/build_gcc11 --target test_fixed_candidates -j 16
+cmake --build baselines/saq/build_gcc11 --target create_index test_qps test_relative_error -j 16
 
 # 05：正式磁盘实验 native dependencies / ports（Faiss、SAQ、05 C++ ports、Rust ports）
 bash scripts/build_formal_local.sh

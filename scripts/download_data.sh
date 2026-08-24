@@ -18,8 +18,13 @@ if [[ ! -f data/dbpedia/dbpedia_base.fvecs ]]; then
   fi
   echo "dc5fecd77592b669643a5e1ea0541887  downloads/dbpedia_openai_1M.tgz" | md5sum -c -
   tar -xzf downloads/dbpedia_openai_1M.tgz -C downloads
-  mv downloads/dbpedia_openai_1M/vectors.npy data/dbpedia/
-  mv downloads/dbpedia_openai_1M/tests.jsonl data/dbpedia/
+  if [[ -f downloads/dbpedia_openai_1M/vectors.npy ]]; then
+    mv downloads/dbpedia_openai_1M/vectors.npy data/dbpedia/
+    mv downloads/dbpedia_openai_1M/tests.jsonl data/dbpedia/
+  else
+    mv downloads/vectors.npy data/dbpedia/
+    mv downloads/tests.jsonl data/dbpedia/
+  fi
   "${PY}" data/convert_dbpedia_npy_jsonl.py --data-dir data/dbpedia --prefix dbpedia
 else
   echo "== dbpedia: already present, skip =="

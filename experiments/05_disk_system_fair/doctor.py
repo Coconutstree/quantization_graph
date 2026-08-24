@@ -109,10 +109,11 @@ def run_doctor(
         str(fio) if fio else "",
         "fio is required; run scripts/setup_fio_local.sh",
     )
+    local_libaio = repo_root / "baselines" / "deps" / "local" / "usr" / "include" / "libaio.h"
     add(
-        Path("/usr/include/libaio.h").exists(),
+        Path("/usr/include/libaio.h").exists() or local_libaio.exists(),
         "dependency:libaio",
-        "/usr/include/libaio.h",
+        "/usr/include/libaio.h or baselines/deps/local/usr/include/libaio.h",
         "libaio development header is missing",
     )
 

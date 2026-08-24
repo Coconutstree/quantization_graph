@@ -19,7 +19,8 @@ mkdir -p "${PACKAGE_ROOT}"
 cd "${PACKAGE_ROOT}"
 apt-get download \
   fio libgfapi0 librados2 librbd1 libpmemblk1 libpmem1 \
-  libglusterfs0 libgfrpc0 libgfxdr0 ceph-common libndctl6 libdaxctl1
+  libglusterfs0 libgfrpc0 libgfxdr0 ceph-common libndctl6 libdaxctl1 \
+  libnbd0 librdmacm1t64 libboost-thread1.83.0 libboost-iostreams1.83.0
 for package in ./*.deb; do
   dpkg-deb -x "${package}" "${INSTALL_ROOT}"
 done

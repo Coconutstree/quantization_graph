@@ -64,14 +64,14 @@ PORTS = {
         "implementation_fingerprint": "05b-shared-graph-saq4-release-native-odirect-v1",
     },
     "05b:Ours-Disk": {
-        "command": ["build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"],
+        "command": ["experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"],
         "source_suite": "02_diskann_fair",
         "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
         "port_kind": "algorithm_preserving_disk_port",
         "implementation_fingerprint": "05b-ours-release-native-odirect-v2",
     },
     "05c:Ours-Disk": {
-        "command": ["build/formal_local/05_disk_system_fair/qgraph05_shared_graph_port_v2"],
+        "command": ["experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"],
         "source_suite": "03_system_fair",
         "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
         "port_kind": "algorithm_preserving_disk_port",

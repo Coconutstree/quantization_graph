@@ -3,7 +3,7 @@
 #
 # What it does:
 #   1. Faiss        : clone pinned commit + build libfaiss.a (via setup_faiss.sh)
-#   2. SAQ          : clone pinned commit + build test_fixed_candidates
+#   2. SAQ          : clone pinned commit + build create_index
 #                     (uses repository-local fmt/glog; gflags remains a system lib)
 #   3. SymphonyQG   : clone pinned commit + build Python binding into
 #                     $SYMPHONYQG_PYTHONPATH (default baselines/symphonyqg/python)
@@ -23,14 +23,17 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}" || exit 1
 JOBS="${JOBS:-$(nproc)}"
-CXX_BIN="${CXX_BIN:-g++-11}"
+CXX_BIN="${CXX_BIN:-g++}"
+if [[ "${CXX_BIN}" != /* ]]; then
+  CXX_BIN="$(command -v "${CXX_BIN}")"
+fi
 CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 SYMPHONYQG_PYTHONPATH="${SYMPHONYQG_PYTHONPATH:-${ROOT}/baselines/symphonyqg/python}"
 LOCAL_PREFIX="${ROOT}/baselines/deps/local"
 
 FAISS_COMMIT="${FAISS_COMMIT:-a424dcb809fd725c44dd976d9063febd4837d16a}"
 SAQ_COMMIT="${SAQ_COMMIT:-2163ebcedd0ad9c9f4de326e6ca7a860f9eafe52}"
-SYM_COMMIT="${SYM_COMMIT:-f70f08cb210e464ec5fc88055cb1d76cb07dcad3}"
+SYM_COMMIT="${SYM_COMMIT:-6124ddb34ee4d176edea1bd7ad38d1672343df28}"
 SAQ_REPO="${SAQ_REPO:-https://github.com/howarlii/saq}"
 SYM_REPO="${SYM_REPO:-https://github.com/gouyt13/SymphonyQG}"
 
@@ -51,6 +54,12 @@ if ! command -v cargo >/dev/null 2>&1 && ! command -v rustc >/dev/null 2>&1; the
   fi
 fi
 
+# ---------- repository-local C/C++ dependencies ----------
+if [[ "${SKIP_CPP_DEPS:-0}" != "1" ]]; then
+  step "preparing repository-local C/C++ dependencies"
+  bash scripts/setup_cpp_deps_local.sh || die "C/C++ dependency setup failed"
+fi
+
 # ---------- 1. Faiss ----------
 FAISS_LIB="${ROOT}/baselines/builds/faiss-cmake43/faiss/libfaiss.a"
 if [[ -f "${FAISS_LIB}" ]]; then
@@ -62,14 +71,14 @@ fi
 
 # ---------- 2. SAQ ----------
 SAQ_DIR="${ROOT}/baselines/saq"
-SAQ_BIN="${ROOT}/baselines/saq/bin/test_fixed_candidates"
+SAQ_BIN="${ROOT}/baselines/saq/bin/create_index"
 SAQ_LOCAL_RUNTIME=0
 if [[ -x "${SAQ_BIN}" ]] && command -v readelf >/dev/null 2>&1 && \
    readelf -d "${SAQ_BIN}" 2>/dev/null | grep -Fq "${LOCAL_PREFIX}/lib"; then
   SAQ_LOCAL_RUNTIME=1
 fi
 if [[ "${SAQ_LOCAL_RUNTIME}" == "1" ]]; then
-  echo "SAQ test_fixed_candidates already built: ${SAQ_BIN}"
+  echo "SAQ create_index already built: ${SAQ_BIN}"
 else
   step "cloning SAQ (pinned ${SAQ_COMMIT})"
   if [[ ! -f "${SAQ_DIR}/CMakeLists.txt" ]]; then
@@ -85,14 +94,23 @@ else
         ! -f "${LOCAL_PREFIX}/lib/cmake/fmt/fmt-config.cmake" ]]; then
     die "repository-local SAQ dependencies are missing under ${LOCAL_PREFIX}"
   fi
-  step "building SAQ test_fixed_candidates"
-  cmake -S "${SAQ_DIR}" -B "${ROOT}/baselines/builds/saq-gcc11" \
+  step "building SAQ create_index"
+  SAQ_BUILD_DIR="${ROOT}/baselines/builds/saq-gcc11"
+  if [[ -f "${SAQ_BUILD_DIR}/CMakeCache.txt" ]] && \
+     ! grep -Fq "CMAKE_CXX_COMPILER:FILEPATH=${CXX_BIN}" "${SAQ_BUILD_DIR}/CMakeCache.txt"; then
+    rm -f "${SAQ_BUILD_DIR}/CMakeCache.txt"
+    rm -rf "${SAQ_BUILD_DIR}/CMakeFiles"
+  fi
+  cmake -S "${SAQ_DIR}" -B "${SAQ_BUILD_DIR}" \
     -G "${CMAKE_GENERATOR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_COMPILER="${CXX_BIN}" \
     -DBUILD_UNIT_TESTS=OFF \
-    -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH:-${LOCAL_PREFIX};/usr}" || die "SAQ cmake configure failed"
-  cmake --build "${ROOT}/baselines/builds/saq-gcc11" --target test_fixed_candidates -j "${JOBS}" || die "SAQ build failed"
+    -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH:-${LOCAL_PREFIX};/usr}" \
+    -DCMAKE_MODULE_PATH="${SAQ_CMAKE_MODULE_PATH:-${LOCAL_PREFIX}/usr/share/glog/cmake}" \
+    -DUnwind_INCLUDE_DIR="${SAQ_UNWIND_INCLUDE_DIR:-${LOCAL_PREFIX}/usr/include}" \
+    -DUnwind_LIBRARY="${SAQ_UNWIND_LIBRARY:-${LOCAL_PREFIX}/usr/lib/x86_64-linux-gnu/libunwind.so}" || die "SAQ cmake configure failed"
+  cmake --build "${SAQ_BUILD_DIR}" --target create_index test_qps test_relative_error -j "${JOBS}" || die "SAQ build failed"
 fi
 echo "NOTE: SAQ 实验还需 baselines/saq/data/<dataset>（PCA 后的库/查询/质心）。"
 echo "      该数据由你的数据集生成（见 BASELINE_EXPERIMENT_PLAN_MS_V2.md 的 SAQ 数据准备），"
