@@ -115,7 +115,7 @@ def _read_rows(path: Path) -> list[dict[str, Any]]:
 def _workers_for(layer: str, dataset: str) -> tuple[int, ...]:
     if dataset == "gist" and layer in ("05b", "05c"):
         return (1, 4, 8, 16, 32)
-    return (1, 16)
+    return (1, 32)
 
 
 def _load_complete(run_root: Path, layer: str, dataset: str) -> list[dict[str, Any]]:
@@ -348,10 +348,10 @@ def _plot_05b(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
         and float(r["search_dram_budget_gib"]) == 2.0
         and r.get("cache_mode") == "standard"
     ]
-    qps_rows = [r for r in primary if int(r["workers"]) == 16]
+    qps_rows = [r for r in primary if int(r["workers"]) == 32]
     latency_rows = [r for r in primary if int(r["workers"]) == 1]
     _save(
-        _curve_figure(qps_rows, LAYER_METHODS["05b"], yfield="qps", ylabel="QPS (16 workers)", maximize=True, logy=True),
+        _curve_figure(qps_rows, LAYER_METHODS["05b"], yfield="qps", ylabel="QPS (32 workers)", maximize=True, logy=True),
         fig_dir,
         "diskann_vs_rabitq_recall_qps_logy",
     )
@@ -422,10 +422,10 @@ def _plot_05c(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
         if float(r["search_dram_budget_gib"]) == 2.0
         and r.get("cache_mode") == "standard"
     ]
-    qps_rows = [r for r in primary if int(r["workers"]) == 16]
+    qps_rows = [r for r in primary if int(r["workers"]) == 32]
     latency_rows = [r for r in primary if int(r["workers"]) == 1]
     _save(
-        _curve_figure(qps_rows, LAYER_METHODS["05c"], yfield="qps", ylabel="QPS (16 workers)", maximize=True),
+        _curve_figure(qps_rows, LAYER_METHODS["05c"], yfield="qps", ylabel="QPS (32 workers)", maximize=True),
         fig_dir,
         "system_qps_recall",
     )
@@ -435,7 +435,7 @@ def _plot_05c(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
         "system_p95latency_recall",
     )
     _save(
-        _curve_figure(qps_rows, LAYER_METHODS["05c"], yfield="qps", ylabel="QPS (16 workers)", maximize=True, logy=True, xlim=(0.8, 1.0)),
+        _curve_figure(qps_rows, LAYER_METHODS["05c"], yfield="qps", ylabel="QPS (32 workers)", maximize=True, logy=True, xlim=(0.8, 1.0)),
         fig_dir,
         "system_qps_recall_logy_highrecall",
     )
@@ -543,16 +543,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--layers", default="05a,05b,05c")
     parser.add_argument("--datasets", default="agnews,gist,dbpedia")
+    parser.add_argument("--methods", default="", help="optional comma-separated method filter")
     args = parser.parse_args(argv)
     try:
         layers = tuple(x.strip() for x in args.layers.split(",") if x.strip())
         datasets = tuple(x.strip() for x in args.datasets.split(",") if x.strip())
+        methods = tuple(x.strip() for x in args.methods.split(",") if x.strip())
         _validate_run_manifests(args.run_root.resolve())
         for layer in layers:
             for dataset in datasets:
-                rows = _load_complete(args.run_root.resolve(), layer, dataset)
+                rows = _load_complete(args.run_root.resolve(), layer, dataset) if not methods else _read_rows(args.run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_rows.csv")
+                if methods:
+                    rows = [row for row in rows if row["method"] in methods]
                 rows = _selected_rows(args.run_root.resolve(), layer, dataset, rows)
-                rows = _median_rows(rows)
+                rows = rows if methods else _median_rows(rows)
                 aggregate = args.run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_median.csv"
                 atomic_write_csv(aggregate, rows)
                 if layer == "05a":

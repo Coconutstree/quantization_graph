@@ -17,7 +17,7 @@ SAQ_ROOT="${SAQ_ROOT:-baselines/saq}"
 SAQ_DATA_ROOT="${SAQ_DATA_ROOT:-${SAQ_ROOT}/data}"
 SAQ_BUILD_DIR="${SAQ_BUILD_DIR:-${SAQ_ROOT}/build_gcc11}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
-SAQ_CXX_BIN="${SAQ_CXX_BIN:-/usr/bin/g++-11}"
+SAQ_CXX_BIN="${SAQ_CXX_BIN:-$(command -v g++)}"
 SAQ_CMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH:-${ROOT}/baselines/deps/local;/usr}"
 BUILD_JOBS="${BUILD_JOBS:-16}"
 CANDIDATE_SIZE="${CANDIDATE_SIZE:-1000}"
@@ -34,9 +34,12 @@ GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER="${SAQ_CXX_BIN}" \
   -DBUILD_UNIT_TESTS=OFF \
-  -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH}"
+  -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH}" \
+  -DCMAKE_MODULE_PATH="${SAQ_CMAKE_MODULE_PATH:-${ROOT}/baselines/deps/local/usr/share/glog/cmake}" \
+  -DUnwind_INCLUDE_DIR="${SAQ_UNWIND_INCLUDE_DIR:-${ROOT}/baselines/deps/local/usr/include}" \
+  -DUnwind_LIBRARY="${SAQ_UNWIND_LIBRARY:-${ROOT}/baselines/deps/local/usr/lib/x86_64-linux-gnu/libunwind.so}"
 
-"${CMAKE_BIN}" --build "${SAQ_BUILD_DIR}" --target test_fixed_candidates -j "${BUILD_JOBS}"
+"${CMAKE_BIN}" --build "${SAQ_BUILD_DIR}" --target create_index test_qps test_relative_error -j "${BUILD_JOBS}"
 
 for DATASET in ${DATASETS}; do
   RAW_DIR="${OUT_ROOT}/01_quantizer_fair/${DATASET}/logs/SAQ"

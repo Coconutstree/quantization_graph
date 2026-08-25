@@ -9,13 +9,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
-use diskann::graph::config;
-use diskann::utils::ONE;
-use diskann_disk::build::builder::build::DiskIndexBuilder;
 use diskann_disk::data_model::{AdHoc, CachingStrategy, GraphDataType};
-use diskann_disk::disk_index_build_parameter::{
-    DiskIndexBuildParameters, MemoryBudget, NumPQChunks, DISK_SECTOR_LEN,
-};
+use diskann_disk::disk_index_build_parameter::DISK_SECTOR_LEN;
 use diskann_disk::search::provider::aligned_file_reader::traits::{
     AlignedFileReader, AlignedReaderFactory,
 };
@@ -26,10 +21,12 @@ use diskann_disk::search::search_mode::SearchMode;
 use diskann_disk::storage::disk_index_reader::DiskIndexReader;
 use diskann_disk::storage::DiskIndexWriter;
 use diskann_disk::utils::QueryStatistics;
-use diskann_disk::QuantizationType;
-use diskann_providers::model::IndexConfiguration;
+use diskann_providers::model::{
+    GeneratePivotArguments, MAX_PQ_TRAINING_SET_SIZE, NUM_KMEANS_REPS_PQ, NUM_PQ_CENTROIDS,
+};
 use diskann_providers::storage::{
-    get_compressed_pq_file, get_disk_index_file, get_pq_pivot_file, FileStorageProvider,
+    get_compressed_pq_file, get_disk_index_file, get_mem_index_file, get_pq_pivot_file,
+    FileStorageProvider, PQStorage,
 };
 use diskann_vector::distance::Metric;
 use rayon::prelude::*;
@@ -319,6 +316,84 @@ fn write_index_manifest(files: &IndexFiles) -> Result<()> {
     )
 }
 
+fn shared_graph_path(args: &Args) -> Result<PathBuf> {
+    let dataset = args.text("--dataset")?;
+    Ok(args
+        .path("--source-results-root")?
+        .join(dataset)
+        .join("indexes/02_diskann_fair/shared_graph")
+        .join("diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"))
+}
+
+fn prepare_official_diskann_inputs(
+    args: &Args,
+    files: &IndexFiles,
+    base_count: usize,
+    dimension: usize,
+    pq_chunks: usize,
+) -> Result<()> {
+    let mem_index = PathBuf::from(get_mem_index_file(&files.prefix));
+    if !mem_index.is_file() {
+        let source_graph = shared_graph_path(args)?;
+        if !source_graph.is_file() {
+            bail!("missing source shared graph: {}", source_graph.display());
+        }
+        fs::copy(&source_graph, &mem_index).with_context(|| {
+            format!(
+                "copying shared graph {} to {}",
+                source_graph.display(),
+                mem_index.display()
+            )
+        })?;
+    }
+
+    if files.pq_pivots.is_file() && files.pq_codes.is_file() {
+        return Ok(());
+    }
+
+    let mut pq_storage = PQStorage::new(
+        &files.pq_pivots.to_string_lossy(),
+        &files.pq_codes.to_string_lossy(),
+        Some(&files.converted_base.to_string_lossy()),
+    );
+    let mut rng = diskann_providers::utils::create_rnd_provider_from_seed(42).create_rnd();
+    let p_val = (MAX_PQ_TRAINING_SET_SIZE / base_count as f64).min(1.0);
+    let (mut train_data, num_train, train_dim) = pq_storage
+        .get_random_train_data_slice::<f32, _>(p_val, &FileStorageProvider, &mut rng)?;
+    let pool = diskann_providers::utils::create_thread_pool(
+        std::thread::available_parallelism().map_or(1, usize::from),
+    )?;
+    let random_provider = diskann_providers::utils::create_rnd_provider_from_seed(42);
+    diskann_providers::model::pq::generate_pq_pivots(
+        GeneratePivotArguments::new(
+            num_train,
+            train_dim,
+            NUM_PQ_CENTROIDS,
+            pq_chunks,
+            NUM_KMEANS_REPS_PQ,
+        )?,
+        true,
+        &mut train_data,
+        &pq_storage,
+        &FileStorageProvider,
+        random_provider,
+        pool.as_ref(),
+    )?;
+    diskann_providers::model::pq::generate_pq_data_from_pivots::<f32, _>(
+        NUM_PQ_CENTROIDS,
+        pq_chunks,
+        &mut pq_storage,
+        &FileStorageProvider,
+        0,
+        pool.as_ref(),
+    )?;
+
+    if train_dim != dimension {
+        bail!("PQ training dimension {train_dim} does not match dataset dimension {dimension}");
+    }
+    Ok(())
+}
+
 fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
     fs::create_dir_all(&files.root)?;
     let dataset = args.text("--dataset")?;
@@ -328,50 +403,15 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
         .join(format!("{dataset}_base.fvecs"));
     let (base_count, dimension) = convert_fvecs_to_fbin(&source, &files.converted_base)?;
     let pq_chunks = dimension.div_ceil(2);
-    let threads = std::thread::available_parallelism().map_or(1, usize::from);
-    let graph_config = config::Builder::new_with(
-        R,
-        config::MaxDegree::default_slack(),
-        L_BUILD,
-        Metric::L2.into(),
-        |builder| {
-            builder.alpha(ALPHA);
-            builder.saturate_after_prune(true);
-        },
-    )
-    .build()?;
-    let index_configuration = IndexConfiguration::new(
-        Metric::L2,
-        dimension,
-        base_count,
-        ONE,
-        threads,
-        graph_config,
-    )
-    .with_pseudo_rng_from_seed(args.number("--seed")?);
-    let build_ram_gib = std::env::var("QGRAPH05_DISKANN_BUILD_RAM_GIB")
-        .ok()
-        .and_then(|value| value.parse::<f64>().ok())
-        .unwrap_or(16.0);
-    let build_parameters = DiskIndexBuildParameters::new(
-        MemoryBudget::try_from_gb(build_ram_gib)?,
-        QuantizationType::FP,
-        NumPQChunks::new_with(pq_chunks, dimension)?,
-    );
+    let started = Instant::now();
+    prepare_official_diskann_inputs(args, files, base_count, dimension, pq_chunks)?;
     let writer = DiskIndexWriter::new(
         files.converted_base.to_string_lossy().into_owned(),
         files.prefix.clone(),
         None,
         DISK_SECTOR_LEN,
     )?;
-    let started = Instant::now();
-    let mut builder = DiskIndexBuilder::<AdHoc<f32>, FileStorageProvider>::new(
-        &FileStorageProvider,
-        build_parameters,
-        index_configuration,
-        writer,
-    )?;
-    builder.build()?;
+    writer.create_disk_layout::<AdHoc<f32>, _>(&FileStorageProvider)?;
     let resident_bytes = fs::metadata(&files.pq_codes)?.len() as usize;
     let codebook_bytes = fs::metadata(&files.pq_pivots)?.len() as usize;
     let cached_node_bytes =
@@ -474,13 +514,15 @@ impl AlignedFileReader for MemoryAlignedReader {
         for request in requests {
             let start = request.offset() as usize;
             let end = start.saturating_add(request.aligned_buf().len());
-            let source = self.bytes.get(start..end).ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "memory-reader short read",
-                )
-            })?;
-            request.aligned_buf_mut().copy_from_slice(source);
+            let target = request.aligned_buf_mut();
+            if start >= self.bytes.len() {
+                target.fill(0);
+            } else {
+                let available_end = end.min(self.bytes.len());
+                let copied = available_end - start;
+                target[..copied].copy_from_slice(&self.bytes[start..available_end]);
+                target[copied..].fill(0);
+            }
         }
         Ok(())
     }
@@ -692,6 +734,19 @@ fn parse_positive_list(value: &str, flag: &str) -> Result<Vec<usize>> {
 }
 
 fn formal_widths(args: &Args) -> Result<Vec<usize>> {
+    if std::env::var("QG05_FAST").ok().as_deref() == Some("1") {
+        if let Ok(value) = std::env::var("QG05_FAST_WIDTHS") {
+            return parse_positive_list(&value, "QG05_FAST_WIDTHS");
+        }
+        let width = std::env::var("QG05_FAST_WIDTH")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(70);
+        if width == 0 {
+            bail!("QG05_FAST_WIDTH must be positive");
+        }
+        return Ok(vec![width]);
+    }
     if let Some(value) = args.optional("--integration-widths") {
         if !args.text("--run-id")?.starts_with("native_integration_") {
             bail!("--integration-widths is restricted to native integration runs");
@@ -1049,7 +1104,8 @@ fn run_search(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> Result<()> {
         }),
     )?;
     let phase = match args.text("--phase")? {
-        "validate" | "validation" => "validation",
+        "validate" => "validate",
+        "validation" => "validation",
         "test" => "test",
         other => bail!("unsupported measured phase {other}"),
     };

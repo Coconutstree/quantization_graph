@@ -89,10 +89,15 @@ native port 状态为 `ready`、二进制 SHA-256 固定、4 KiB `O_DIRECT` 和 
 
 ```text
 results/
+├── memory_environment/{01_quantizer_fair,02_diskann_fair,03_system_fair} -> in-memory results
+├── disk_environment/
+│   ├── 01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}  # disk 05A
+│   ├── 02_diskann_fair/<dataset>/{csv,logs,figures,manifests}    # disk 05B
+│   ├── 03_system_fair/<dataset>/{csv,logs,figures,manifests}     # disk 05C
+│   └── .formal_runs/runs/<run-id>/                              # immutable 05 run workspace
 ├── 01_quantizer_fair/<dataset>/{csv,logs,manifests}
 ├── 02_diskann_fair/<dataset>/{csv,logs,indexes,manifests}
 ├── 03_system_fair/<dataset>/{csv,logs,indexes,figures,manifests,audit}
-├── 05_disk_system_fair/runs/<run-id>/{manifests,05A_disk_quantizer_io,05B_diskann_shared_graph,05C_disk_system_fair}
 └── paper_tables/
 ```
 
@@ -267,26 +272,27 @@ DATASETS=gist OUT_ROOT=results PYTHON=python3 bash scripts/run_master_round2.sh
 # 4) 在独占 NVMe 上跑 GIST 的正式 05
 RUN_ID=formal_nvme_gist
 PORTS=experiments/05_disk_system_fair/ports.local.json
-DISK_ROOT=/mnt/exclusive_nvme/qgraph
+DISK_ROOT=/home/msy2025/qgraph_nvme
+OUT_ROOT=results/disk_environment/.formal_runs
 
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase doctor --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase export --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase validate --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase tune --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase run --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme \
-  --workers 1,16 --repeats 5
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT" \
+  --workers 1,32 --repeats 5
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase plot --run-id "$RUN_ID" --layers all --datasets gist
+  --phase plot --run-id "$RUN_ID" --layers all --datasets gist --out-root "$OUT_ROOT"
 ```
 
 正式 05 复现命令如下，所有阶段使用同一个 `RUN_ID`：
@@ -294,37 +300,38 @@ python experiments/05_disk_system_fair/run_disk_suite.py \
 ```bash
 RUN_ID=formal_nvme_20260822
 PORTS=experiments/05_disk_system_fair/ports.local.json
-DISK_ROOT=/mnt/exclusive_nvme/qgraph
+DISK_ROOT=/home/msy2025/qgraph_nvme
+OUT_ROOT=results/disk_environment/.formal_runs
 
 # 只读诊断：工具链、依赖锁、数据、03 query split、02 图、port registry、磁盘 preflight
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase doctor --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 
 # 导出磁盘索引/载荷 artifacts
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase export --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 
 # validation parity / contract gate
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase validate --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 
 # validation tuning lock；正式 run 必须先有同 RUN_ID 的 tuning.lock.json
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase tune --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT"
 
-# 正式 test：workers=1,16，repeats 固定为 5；GIST 自动追加 worker/budget 诊断点
+# 正式 test：workers=1,32，repeats 固定为 5；GIST 自动追加 worker/budget 诊断点
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase run --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme \
-  --workers 1,16 --repeats 5
+  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile nvme --out-root "$OUT_ROOT" \
+  --workers 1,32 --repeats 5
 
 # 聚合 CSV 和 05 图；plot 阶段不需要 disk-root
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase plot --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia
+  --phase plot --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia --out-root "$OUT_ROOT"
 ```
 
 只复现某一层或某个数据集时，用 `--layers 05a` / `--layers 05b,05c` 和
@@ -338,9 +345,10 @@ HDD/RAID 不作为本仓库默认复现路径。
 - 索引：`results/<suite>/<dataset>/indexes/`；图：`results/03_system_fair/<dataset>/figures/`；
 - 审计：`results/03_system_fair/<dataset>/audit/`；汇总表：`results/paper_tables/`；
 - 运行日志：`logs/round2.*`（总状态 `logs/round2.status`）。
-- 05 正式运行：
-  `results/05_disk_system_fair/runs/<run-id>/`，包含 invocation/preflight/fio manifests、
-  每个 native artifact、query traces、terminal logs、聚合 CSV 和 SVG/PDF/PNG/TIFF 图。
+- 05 正式运行中间产物：`results/disk_environment/.formal_runs/runs/<run-id>/`；
+- 05 公开结果按内存实验编号发布：`results/disk_environment/01_quantizer_fair`、
+  `results/disk_environment/02_diskann_fair`、`results/disk_environment/03_system_fair`，
+  每个数据集下包含 `csv/`、`logs/`、`figures/` 和 `manifests/`。
 
 ## 8. 引用与许可（Citation & License）
 

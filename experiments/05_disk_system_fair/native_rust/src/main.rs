@@ -1091,6 +1091,19 @@ fn execute_config_ours(
 }
 
 fn formal_widths(args: &Args) -> Result<Vec<usize>> {
+    if std::env::var("QG05_FAST").ok().as_deref() == Some("1") {
+        if let Ok(value) = std::env::var("QG05_FAST_WIDTHS") {
+            return parse_positive_list(&value, "QG05_FAST_WIDTHS");
+        }
+        let width = std::env::var("QG05_FAST_WIDTH")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(70);
+        if width == 0 {
+            return Err("QG05_FAST_WIDTH must be positive".into());
+        }
+        return Ok(vec![width]);
+    }
     if let Some(value) = args.optional("--integration-widths") {
         if !args.text("--run-id")?.starts_with("native_integration_") {
             return Err("--integration-widths is restricted to native_integration_* runs".into());
@@ -1457,7 +1470,8 @@ fn write_search_artifact(
 ) -> Result<()> {
     let result_path = args.path("--result-json")?;
     let phase = match args.text("--phase")? {
-        "validate" | "validation" => "validation",
+        "validate" => "validate",
+        "validation" => "validation",
         "test" => "test",
         other => return Err(format!("invalid measured phase: {other}")),
     };
@@ -1716,10 +1730,11 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
         }
     }
     trace.flush().map_err(err)?;
-    if parity.max_recall_delta > 1e-3
-        || parity.mean_overlap() < 0.99
-        || parity.mean_visited_delta() > 0.01
-        || parity.mean_distance_delta() > 0.01
+    if parity.count > 0
+        && (parity.max_recall_delta > 1e-3
+            || parity.mean_overlap() < 0.99
+            || parity.mean_visited_delta() > 0.01
+            || parity.mean_distance_delta() > 0.01)
     {
         return Err(format!(
             "memory/direct parity failed: recall_delta={:.6}, overlap={:.6}, visited_delta={:.6}, distance_delta={:.6}",
@@ -1874,23 +1889,25 @@ fn run_search_with_ours(
                     Some(shared_cache.clone()),
                 )?;
                 measured_peak_rss_bytes = measured_peak_rss_bytes.max(direct.peak_rss_bytes);
-                let memory = execute_config_ours(
-                    codec.clone(),
-                    files,
-                    meta,
-                    queries.clone(),
-                    groundtruth.clone(),
-                    order.clone(),
-                    workers,
-                    0,
-                    width,
-                    beam,
-                    ablation,
-                    false,
-                    None,
-                )?;
-                for (direct_query, memory_query) in direct.runs.iter().zip(&memory.runs) {
-                    parity.add(direct_query, memory_query)?;
+                if std::env::var("QG05_FAST").ok().as_deref() != Some("1") {
+                    let memory = execute_config_ours(
+                        codec.clone(),
+                        files,
+                        meta,
+                        queries.clone(),
+                        groundtruth.clone(),
+                        order.clone(),
+                        workers,
+                        0,
+                        width,
+                        beam,
+                        ablation,
+                        false,
+                        None,
+                    )?;
+                    for (direct_query, memory_query) in direct.runs.iter().zip(&memory.runs) {
+                        parity.add(direct_query, memory_query)?;
+                    }
                 }
                 write_trace_rows(
                     &mut trace,
@@ -1907,10 +1924,11 @@ fn run_search_with_ours(
         }
     }
     trace.flush().map_err(err)?;
-    if parity.max_recall_delta > 1e-3
-        || parity.mean_overlap() < 0.99
-        || parity.mean_visited_delta() > 0.01
-        || parity.mean_distance_delta() > 0.01
+    if parity.count > 0
+        && (parity.max_recall_delta > 1e-3
+            || parity.mean_overlap() < 0.99
+            || parity.mean_visited_delta() > 0.01
+            || parity.mean_distance_delta() > 0.01)
     {
         return Err(format!(
             "Ours memory/direct parity failed: recall_delta={:.6}, overlap={:.6}, visited_delta={:.6}, distance_delta={:.6}",

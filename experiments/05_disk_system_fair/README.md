@@ -85,45 +85,50 @@ Use one stable run ID across all phases:
 ```bash
 RUN_ID=formal_nvme_20260822
 PORTS=experiments/05_disk_system_fair/ports.local.json
-NVME=/mnt/exclusive_nvme/qgraph
+NVME=/home/msy2025/qgraph_nvme
+OUT_ROOT=results/disk_environment/.formal_runs
 
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase doctor --layer all --ports "$PORTS" --disk-root "$NVME"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase export --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME"
+  --phase export --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase validate --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME"
+  --phase validate --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase tune --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME"
+  --phase tune --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase run --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" \
-  --workers 1,16 --repeats 5
+  --phase run --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT" \
+  --workers 1,32 --repeats 5
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase plot --run-id "$RUN_ID"
+  --phase plot --run-id "$RUN_ID" --out-root "$OUT_ROOT"
 ```
 
 Datasets run serially, so they cannot contend for the same NVMe. Method order
-is rotated across repeats while 05A storage modes stay paired. GIST
-automatically adds workers 4, 8 and 32, DRAM budgets 1/4 GiB, and the B=2 GiB
-`C=0` diagnostic for 05B/05C. The run phase refuses to start without the
-validation tuning lock.
+is rotated across repeats while 05A storage modes stay paired. The default
+formal workers are `1,32`: worker 1 is for latency/P95 and worker 32 matches the
+current 32-core in-memory GIST runs for QPS. GIST automatically adds workers 4,
+8 and 16, DRAM budgets 1/4 GiB, and the B=2 GiB `C=0` diagnostic for 05B/05C.
+The run phase refuses to start without the validation tuning lock.
 
 ## Result isolation
 
-Every formal run is immutable and isolated:
+Every formal run is immutable under `.formal_runs`; after aggregation/plotting,
+CSV files, terminal logs and figures are published into the public numbered disk
+environment directories:
 
 ```text
-results/05_disk_system_fair/runs/<run-id>/
-  manifests/
-  05A_disk_quantizer_io/<dataset>/
-  05B_diskann_shared_graph/<dataset>/
-  05C_disk_system_fair/<dataset>/
+results/disk_environment/
+  01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}/   # disk 05A
+  02_diskann_fair/<dataset>/{csv,logs,figures,manifests}/     # disk 05B
+  03_system_fair/<dataset>/{csv,logs,figures,manifests}/      # disk 05C
+  .formal_runs/runs/<run-id>/{manifests,05A_disk_quantizer_io,05B_diskann_shared_graph,05C_disk_system_fair}/
 ```
 
 Native artifacts are never appended. Aggregation is atomic and only occurs
 after the complete method × storage-mode × worker × five-repeat matrix passes.
 The plotter verifies artifact hashes and refuses smoke, memory, validation,
-mixed-run or incomplete data.
+mixed-run or incomplete data. For `QG05_FAST=1` diagnostics, `--methods` may be
+used to publish a partial curve without claiming it as a complete formal run.
 
 ## Figures
 

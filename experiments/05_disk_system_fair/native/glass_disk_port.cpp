@@ -353,6 +353,7 @@ struct QueryStats {
     double prep_us = 0.0;
     double traverse_us = 0.0;
     double sort_us = 0.0;
+    double io_wait_us = 0.0;
     std::uint64_t graph_pages = 0;
     std::uint64_t code_pages = 0;
     std::uint64_t bytes_read = 0;
@@ -380,7 +381,9 @@ struct DiskAccess {
         const auto page = graph_layout.page(id);
         auto it = graph_cache.find(page);
         if (it == graph_cache.end()) {
+            const auto io_start = Clock::now();
             auto batch = graph_reader.read_pages({page});
+            stats->io_wait_us += std::chrono::duration<double, std::micro>(Clock::now() - io_start).count();
             auto view = batch.page(page);
             std::vector<char> bytes(kPage);
             std::memcpy(bytes.data(), view.data(), kPage);
@@ -399,7 +402,9 @@ struct DiskAccess {
         const auto page = code_layout.page(id);
         auto it = code_cache.find(page);
         if (it == code_cache.end()) {
+            const auto io_start = Clock::now();
             auto batch = code_reader.read_pages({page});
+            stats->io_wait_us += std::chrono::duration<double, std::micro>(Clock::now() - io_start).count();
             auto view = batch.page(page);
             std::vector<char> bytes(kPage);
             std::memcpy(bytes.data(), view.data(), kPage);
@@ -501,7 +506,7 @@ void write_artifact(
         int ef,
         double wall_seconds) {
     std::vector<double> latencies;
-    double recall = 0.0, prep = 0.0, traverse = 0.0, sort = 0.0;
+    double recall = 0.0, prep = 0.0, traverse = 0.0, sort = 0.0, io_wait = 0.0;
     std::uint64_t bytes = 0, io_requests = 0, sectors = 0, visited = 0, dist = 0;
     for (const auto& s : stats) {
         latencies.push_back(s.latency_us);
@@ -509,6 +514,7 @@ void write_artifact(
         prep += s.prep_us;
         traverse += s.traverse_us;
         sort += s.sort_us;
+        io_wait += s.io_wait_us;
         bytes += s.bytes_read;
         io_requests += s.io_requests;
         sectors += s.bytes_read / kPage;
@@ -595,7 +601,7 @@ void write_artifact(
     out << "    \"io_requests_per_query\": " << (static_cast<double>(io_requests) / n) << ",\n";
     out << "    \"sectors_4k_per_query\": " << (static_cast<double>(sectors) / n) << ",\n";
     out << "    \"bytes_read_per_query\": " << (static_cast<double>(bytes) / n) << ",\n";
-    out << "    \"io_wait_us\": 0,\n";
+    out << "    \"io_wait_us\": " << (io_wait / n) << ",\n";
     out << "    \"distance_compute_us\": " << (traverse / n) << ",\n";
     out << "    \"query_prep_us\": " << (prep / n) << ",\n";
     out << "    \"queue_compute_us\": " << (traverse / n) << ",\n";
@@ -718,7 +724,7 @@ void run_search(const Args& args) {
               << ",\"latency_us\":" << s.latency_us
               << ",\"query_prep_us\":" << s.prep_us
               << ",\"queue_compute_us\":" << s.traverse_us
-              << ",\"io_wait_us\":0,\"distance_compute_us\":" << s.traverse_us
+              << ",\"io_wait_us\":" << s.io_wait_us << ",\"distance_compute_us\":" << s.traverse_us
               << ",\"rerank_us\":" << s.sort_us
               << ",\"visited_nodes\":" << s.visited_nodes
               << ",\"distance_evaluations\":" << s.distance_calls

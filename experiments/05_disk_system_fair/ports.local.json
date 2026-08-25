@@ -55,7 +55,7 @@
       "source_kernel": "DiskANN FixedChunkPQTable 4-bit",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-pq4-release-native-odirect-v1",
-      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
+      "binary_sha256": "e6e6c79256ad95b51c8d118bbbab06a79a06533b6be77e2bc68d4f13f9cb7b30"
     },
     "05b:SQ-DiskANN-Disk": {
       "status": "ready",
@@ -66,7 +66,7 @@
       "source_kernel": "DiskANN ScalarQuantizer<4>",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-sq4-release-native-odirect-v1",
-      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
+      "binary_sha256": "e6e6c79256ad95b51c8d118bbbab06a79a06533b6be77e2bc68d4f13f9cb7b30"
     },
     "05b:SAQ-DiskANN-Disk": {
       "status": "ready",
@@ -77,7 +77,7 @@
       "source_kernel": "DiskANN spherical::Impl<4>",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-shared-graph-saq4-release-native-odirect-v1",
-      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
+      "binary_sha256": "e6e6c79256ad95b51c8d118bbbab06a79a06533b6be77e2bc68d4f13f9cb7b30"
     },
     "05b:Ours-Disk": {
       "status": "ready",
@@ -88,7 +88,7 @@
       "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05b-ours-release-native-odirect-v2",
-      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
+      "binary_sha256": "e6e6c79256ad95b51c8d118bbbab06a79a06533b6be77e2bc68d4f13f9cb7b30"
     },
     "05c:Ours-Disk": {
       "status": "ready",
@@ -99,7 +99,7 @@
       "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-ours-release-native-odirect-v2",
-      "binary_sha256": "3cc4120cadeda52ff7617d2a6f48c66286d9c25ee87b9f7b9decbea937370f7d"
+      "binary_sha256": "e6e6c79256ad95b51c8d118bbbab06a79a06533b6be77e2bc68d4f13f9cb7b30"
     },
     "05c:SymphonyQG-DiskPort": {
       "status": "ready",
@@ -110,7 +110,7 @@
       "source_kernel": "official SymphonyQG FastScan LUT+SIMD",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-v1",
-      "binary_sha256": "303fdede1df8cddc463b9de3ea9841030cd7fbe65ef75bdb4708196a9364f0b0"
+      "binary_sha256": "15aa8fbf92d469f572b1c0298b94597dbcbcaacaf2603ca99e88b50b8a9b007f"
     },
     "05c:OG-LVQ-DiskPort": {
       "status": "ready",
@@ -121,7 +121,7 @@
       "source_kernel": "official SVS LVQ4 distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-og-lvq-svs-layout-native-odirect-v1",
-      "binary_sha256": "3ed1f15f58b92d3f80552fa779b7e8e0735a82a767194e3dc7f45cf792822a9a"
+      "binary_sha256": "40be890355f448e551666ce776282ce0bb29e3ffbe32c0a7bf32e8ff03f0fcbb"
     },
     "05c:Glass-NSG-DiskPort": {
       "status": "ready",
@@ -132,7 +132,7 @@
       "source_kernel": "official Glass NSG SQ4U distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1",
-      "binary_sha256": "5ff8f8414fb5eb3625adb46d335a2cab49fffcf9e9f717198fff64cef15c19a5"
+      "binary_sha256": "aaabdad3f2005368f245d14826027215b2d7b52f2de4e07def5af5f34c771ce4"
     },
     "05c:DiskANN-PQ-Disk": {
       "status": "ready",
@@ -143,7 +143,7 @@
       "source_kernel": "official diskann-disk PQ search",
       "port_kind": "official_native_disk",
       "implementation_fingerprint": "05c-official-diskann-pq-release-io-uring-v1",
-      "binary_sha256": "029188192cae956a056438bc0a8c9992dc1bdcf42a079a3cb5bd03aec1a2ed81"
+      "binary_sha256": "ac62e61d6097b57738a6b4c500cd439d1352e13201b8f9c30117c3b7c12fef63"
     }
   }
 }

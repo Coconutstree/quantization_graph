@@ -64,7 +64,13 @@ LAYER_DIRS = {
     "05b": "05B_diskann_shared_graph",
     "05c": "05C_disk_system_fair",
 }
+PUBLISH_LAYER_DIRS = {
+    "05a": "01_quantizer_fair",
+    "05b": "02_diskann_fair",
+    "05c": "03_system_fair",
+}
 _VERIFIED_INPUT_MANIFESTS: dict[Path, str] = {}
+FAST_MODE = os.environ.get("QG05_FAST") == "1"
 
 
 def _csv_list(value: str) -> tuple[str, ...]:
@@ -177,9 +183,9 @@ def _ours_graph(dataset: str) -> Path:
     return (
         REPO_ROOT
         / "results"
-        / "02_diskann_fair"
         / dataset
         / "indexes"
+        / "02_diskann_fair"
         / "Ours"
         / f"{dataset}_Ours_R64_Lbuild400.graph.bin"
     )
@@ -220,7 +226,7 @@ def _work_items(
                 for spec in ordered
                 for mode in spec.storage_modes
             )
-    if dataset == "gist" and layer in ("05b", "05c"):
+    if dataset == "gist" and layer in ("05b", "05c") and not FAST_MODE:
         for budget_gib, cache_mode in ((1.0, "standard"), (4.0, "standard"), (2.0, "c0")):
             for repeat_id in range(repeats):
                 shift = repeat_id % len(specs)
@@ -246,6 +252,45 @@ def _artifact_path(
         f"__w{item.workers}__r{item.repeat_id}.json"
     )
     return run_root / LAYER_DIRS[layer] / dataset / "artifacts" / phase / stem
+
+
+def _publish_root(out_root: Path) -> Path:
+    if out_root.name == ".formal_runs" and out_root.parent.name == "disk_environment":
+        return out_root.parent
+    return Path(os.environ.get("QG05_PUBLISH_ROOT", str(REPO_ROOT / "results" / "disk_environment"))).resolve()
+
+
+def _publish_disk_environment(run_root: Path, out_root: Path, run_id: str, layer: str, dataset: str) -> None:
+    """Publish 05A/05B/05C outputs as disk_environment/01/02/03.
+
+    The strict runner keeps immutable artifacts under .formal_runs/runs/<run-id>.
+    This public copy mirrors the memory experiments' numbered layout so figures,
+    CSVs and logs are easy to compare with results/memory_environment/01/02/03.
+    """
+    source = run_root / LAYER_DIRS[layer] / dataset
+    if not source.exists():
+        return
+    destination = _publish_root(out_root) / PUBLISH_LAYER_DIRS[layer] / dataset
+    for name in ("csv", "logs", "figures", "manifests", "artifacts", "aggregate"):
+        (destination / name).mkdir(parents=True, exist_ok=True)
+
+    aggregate = source / "aggregate"
+    for csv_path in aggregate.glob("*.csv"):
+        shutil.copy2(csv_path, destination / "csv" / csv_path.name)
+        shutil.copy2(csv_path, destination / "csv" / f"{csv_path.stem}_{run_id}{csv_path.suffix}")
+    for manifest_path in aggregate.glob("*.json"):
+        shutil.copy2(manifest_path, destination / "manifests" / manifest_path.name)
+        shutil.copy2(manifest_path, destination / "manifests" / f"{manifest_path.stem}_{run_id}{manifest_path.suffix}")
+    for manifest_path in (source / "manifests").glob("*"):
+        if manifest_path.is_file():
+            shutil.copy2(manifest_path, destination / "manifests" / manifest_path.name)
+    for figure in (source / "figures").glob("*"):
+        if figure.is_file():
+            shutil.copy2(figure, destination / "figures" / figure.name)
+    for log_path in (source / "artifacts").glob("**/*.terminal.log"):
+        if log_path.is_file():
+            target = destination / "logs" / f"{log_path.parent.name}__{log_path.name}"
+            shutil.copy2(log_path, target)
 
 
 def _fvec_count(path: Path) -> int:
@@ -545,6 +590,38 @@ def _build_tuning_lock(
     return path
 
 
+def _write_fast_tuning_lock(
+    run_root: Path,
+    layer: str,
+    dataset: str,
+    specs: list[MethodSpec],
+) -> Path:
+    selected = {}
+    for spec in specs:
+        for mode in spec.storage_modes:
+            selected[f"{spec.method}::{mode}"] = {
+                "config_id": "beam1",
+                "target_recall": None,
+                "target_reached": None,
+                "max_measured_recall": None,
+                "validation_artifact": "",
+                "validation_artifact_sha256": "",
+                "note": "QG05_FAST=1: fixed configuration inherited from the in-memory run; tune sweep skipped.",
+            }
+    lock = {
+        "schema_version": 2,
+        "layer": layer,
+        "dataset": dataset,
+        "phase": "validation",
+        "selection_target": None,
+        "selected": selected,
+        "fast_mode": True,
+    }
+    path = run_root / LAYER_DIRS[layer] / dataset / "manifests" / "tuning.lock.json"
+    atomic_write_json(path, lock)
+    return path
+
+
 def _pareto_front(rows: list[dict[str, Any]], yfield: str = "qps") -> list[dict[str, Any]]:
     """Recall-cost Pareto envelope over measured rows.
 
@@ -727,6 +804,16 @@ def _run_layer_dataset(
     dataset: str,
 ) -> None:
     specs = specs_for(layer)
+    if getattr(args, "methods", ()):
+        wanted = set(args.methods)
+        specs = [spec for spec in specs if spec.method in wanted]
+        missing = wanted - {spec.method for spec in specs}
+        if missing:
+            raise ContractError(
+                f"unknown method(s) for {layer}: {', '.join(sorted(missing))}"
+            )
+        if not specs:
+            raise ContractError(f"no methods selected for {layer}")
     input_manifest, input_manifest_sha256 = _dataset_input_manifest(
         run_root, layer, dataset, args.data_root
     )
@@ -746,10 +833,12 @@ def _run_layer_dataset(
     )
 
     workers = args.workers
-    if dataset == "gist" and layer in ("05b", "05c") and native_phase == "test":
+    if dataset == "gist" and layer in ("05b", "05c") and native_phase == "test" and not FAST_MODE:
         workers = tuple(dict.fromkeys((*workers, 1, 4, 8, 16, 32)))
     items = _work_items(specs, native_phase, workers, args.repeats, dataset)
     tuning_lock = run_root / LAYER_DIRS[layer] / dataset / "manifests" / "tuning.lock.json"
+    if native_phase == "test" and FAST_MODE and not tuning_lock.exists():
+        tuning_lock = _write_fast_tuning_lock(run_root, layer, dataset, specs)
     if native_phase == "test" and not tuning_lock.exists():
         raise ContractError(
             f"missing validation lock {tuning_lock}; run --phase tune with the same --run-id first"
@@ -798,7 +887,7 @@ def _run_layer_dataset(
         print(
             f"[{layer}/{dataset}] {index}/{len(items)} {native_phase} "
             f"{item.spec.method} {item.storage_mode} B={item.budget_gib:g} "
-            f"cache={item.cache_mode} w={item.workers} r={item.repeat_id}",
+            f"cache={item.cache_mode} workers={item.workers} repeat={item.repeat_id}",
             flush=True,
         )
         artifact = _invoke_port(
@@ -827,16 +916,17 @@ def _run_layer_dataset(
         _write_tuning_frontier(run_root, layer, dataset, artifacts)
     if native_phase == "test":
         rows = [row for path, artifact in artifacts for row in flatten_artifact(path, artifact)]
-        validate_layer_completeness(
-            rows,
-            layer=layer,
-            dataset=dataset,
-            repeats=args.repeats,
-            workers=workers,
-        )
+        if not FAST_MODE:
+            validate_layer_completeness(
+                rows,
+                layer=layer,
+                dataset=dataset,
+                repeats=args.repeats,
+                workers=workers,
+            )
         aggregate = run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_rows.csv"
         atomic_write_csv(aggregate, rows)
-        median_rows = _median_test_rows(rows)
+        median_rows = rows if FAST_MODE else _median_test_rows(rows)
         frontier_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in median_rows:
             key = (
@@ -866,7 +956,7 @@ def _run_layer_dataset(
                 "layer": layer,
                 "dataset": dataset,
                 "rows": len(rows),
-                "methods": list(LAYER_METHODS[layer]),
+                "methods": [spec.method for spec in specs],
                 "workers": list(workers),
                 "repeats": args.repeats,
                 "frontier_csv": str(frontier_path),
@@ -876,6 +966,7 @@ def _run_layer_dataset(
                 ],
             },
         )
+        _publish_disk_environment(run_root, args.out_root, args.run_id, layer, dataset)
 
 
 def make_parser(default_layer: str | None = None) -> argparse.ArgumentParser:
@@ -908,7 +999,8 @@ def make_parser(default_layer: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--out-root", type=Path, default=RESULTS_ROOT)
     parser.add_argument("--search-dram-budget-gib", type=float, default=2.0)
     parser.add_argument("--storage-modes", default="resident,payload_on_ssd")
-    parser.add_argument("--workers", default="1,16")
+    parser.add_argument("--workers", default="1,32")
+    parser.add_argument("--methods", default="", help="optional comma-separated method filter")
     parser.add_argument("--repeats", type=int, default=FORMAL_REPEATS)
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--val-queries", type=int, default=1000)
@@ -923,6 +1015,7 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
         args.datasets = _csv_list(args.datasets)
         args.workers = _int_list(args.workers)
         args.storage_modes = _csv_list(args.storage_modes)
+        args.methods = _csv_list(args.methods)
         args.data_root = args.data_root.resolve()
         args.out_root = args.out_root.resolve()
         args.run_id = args.run_id or _default_run_id()
@@ -942,7 +1035,7 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 disk_root=args.disk_root,
                 disk_profile=args.disk_profile,
             )
-        if args.repeats != FORMAL_REPEATS and args.phase == "run":
+        if args.repeats != FORMAL_REPEATS and args.phase == "run" and not FAST_MODE:
             raise ContractError(f"formal test requires exactly {FORMAL_REPEATS} repeats")
         if args.search_dram_budget_gib != 2.0:
             raise ContractError(
@@ -963,7 +1056,15 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 "--layers", ",".join(args.layers),
                 "--datasets", ",".join(args.datasets),
             ]
-            return subprocess.call(command)
+            if args.methods:
+                command.extend(["--methods", ",".join(args.methods)])
+            status = subprocess.call(command)
+            if status == 0:
+                run_root = args.out_root / "runs" / args.run_id
+                for layer in args.layers:
+                    for dataset in args.datasets:
+                        _publish_disk_environment(run_root, args.out_root, args.run_id, layer, dataset)
+            return status
         if args.disk_root is None:
             raise ContractError("--disk-root is mandatory for every non-plot formal phase")
         args.disk_root = args.disk_root.resolve()

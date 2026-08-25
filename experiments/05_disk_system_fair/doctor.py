@@ -223,9 +223,9 @@ def run_doctor(
             ours_graph = (
                 repo_root
                 / "results"
-                / "02_diskann_fair"
                 / dataset
                 / "indexes"
+                / "02_diskann_fair"
                 / "Ours"
                 / f"{dataset}_Ours_R64_Lbuild400.graph.bin"
             )

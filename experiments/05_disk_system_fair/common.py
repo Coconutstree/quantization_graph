@@ -18,7 +18,7 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data"
-RESULTS_ROOT = REPO_ROOT / "results" / "05_disk_system_fair"
+RESULTS_ROOT = REPO_ROOT / "results" / "disk_environment" / ".formal_runs"
 WORK_ROOT = REPO_ROOT / "work" / "05_disk_system_fair"
 
 SEED = 20260813

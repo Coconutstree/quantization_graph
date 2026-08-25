@@ -13,8 +13,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}" || exit 1
 
 PY="${PYTHON:-python3}"
-BIN01="${BIN01:-${ROOT}/build/01_quantizer_fair/faiss_quantizer_smoke}"
-BIN01_CAND="${BIN01_CAND:-${ROOT}/build/01_quantizer_fair/faiss_hard_negative_candidates}"
+BIN01="${BIN01:-${ROOT}/build/formal_local/01_quantizer_fair/faiss_quantizer_smoke}"
+BIN01_CAND="${BIN01_CAND:-${ROOT}/build/formal_local/01_quantizer_fair/faiss_hard_negative_candidates}"
 BIN02="${BIN02:-${ROOT}/experiments/02_diskann_fair/target/release/run_diskann_fair}"
 OUT="${OUT_ROOT:-results}"
 LOG_DIR="${ROOT}/logs"
@@ -23,6 +23,13 @@ RERANK="10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,40,50,60,
 M="${M:-64}"
 L="${L:-400}"
 DATASETS="${DATASETS:-agnews gist dbpedia}"
+THREADS="${THREADS:-32}"
+LOCAL_PREFIX="${ROOT}/baselines/deps/local"
+LOCAL_LIB="${LOCAL_PREFIX}/usr/lib/x86_64-linux-gnu"
+LOCAL_OPENBLAS_LIB="${LOCAL_LIB}/openblas-pthread"
+export LD_LIBRARY_PATH="${LOCAL_LIB}:${LOCAL_OPENBLAS_LIB}:${LD_LIBRARY_PATH:-}"
+export LIBRARY_PATH="${LOCAL_LIB}:${LOCAL_OPENBLAS_LIB}:${LIBRARY_PATH:-}"
+export CPLUS_INCLUDE_PATH="${LOCAL_PREFIX}/usr/include:${CPLUS_INCLUDE_PATH:-}"
 
 log() { echo "[r2] $(date '+%F %T') $*" | tee -a "${STATUS_LOG}"; }
 mkdir -p "${LOG_DIR}" "${OUT}"
@@ -67,6 +74,10 @@ run_01() {
   grep -E '^Ours_RaBitQ_K1 ' "${one_logs}/faiss_quantizer_smoke.log" > "${one_logs}/Ours_RaBitQ_K1/Ours.log" || true
   log "== 01 ${ds}: SAQ =="
   DATASETS="${ds}" RERANK_CANDIDATES="${RERANK}" OUT_ROOT="${OUT}" WORK_ROOT="work" \
+    SAQ_CXX_BIN="$(command -v g++)" \
+    SAQ_CMAKE_MODULE_PATH="${LOCAL_PREFIX}/usr/share/glog/cmake" \
+    SAQ_UNWIND_INCLUDE_DIR="${LOCAL_PREFIX}/usr/include" \
+    SAQ_UNWIND_LIBRARY="${LOCAL_LIB}/libunwind.so" \
     bash scripts/run_saq_fixed_candidates_fair.sh \
     > "${LOG_DIR}/round2_01_${ds}_saq.log" 2>&1 \
     || log "01 ${ds} SAQ FAILED"
@@ -120,7 +131,7 @@ EOF
   "${BIN02}" \
     --dataset "${ds}" --methods PQ,SQ,SAQ,Ours --max-degree "${M}" --build-beam "${L}" \
     --query-coarse-codec int8 \
-    --out-root "${OUT}" --repeats 1 --threads 64 --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
+    --out-root "${OUT}" --repeats 1 --threads "${THREADS}" --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
     --query-path "${split_root}/test_query.fvecs" \
     --gt-path "${split_root}/test_gt.ivecs" \
     > "${LOG_DIR}/round2_02_${ds}.log" 2>&1 \
@@ -183,7 +194,7 @@ print(f"fixed 03 configs written to {tuning}")
 EOF
   "${PY}" -u experiments/03_system_fair/run_system_fair.py \
     --dataset "${ds}" --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG \
-    --run --repeats 1 --threads 64 --val-queries "${valq}" --out-root "${OUT}" \
+    --run --repeats 1 --threads "${THREADS}" --val-queries "${valq}" --out-root "${OUT}" \
     > "${LOG_DIR}/round2_03_${ds}.log" 2>&1 \
     || log "03 ${ds} FAILED"
   "${PY}" scripts/plot_system_fair.py --dataset "${ds}" --out-root "${OUT}" \
