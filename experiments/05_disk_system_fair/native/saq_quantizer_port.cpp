@@ -547,11 +547,25 @@ int run_saq(int argc, char** argv) {
             candidate_path, query_offset, query_count, candidate_width);
     const std::vector<uint32_t> order = load_query_order(
             args.require("query-order"), query_count);
-    const std::vector<size_t> widths = {
+    std::vector<size_t> widths;
+    if (const char* env = std::getenv("QG05_FAST_WIDTHS")) {
+        std::istringstream stream(env);
+        std::string token;
+        while (std::getline(stream, token, ',')) {
+            char* end = nullptr;
+            const long value = std::strtol(token.c_str(), &end, 10);
+            if (!token.empty() && end && *end == '\0' && value > 0) {
+                widths.push_back(static_cast<size_t>(value));
+            }
+        }
+    }
+    if (widths.empty()) {
+        widths = {
             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
             40, 50, 60, 70, 80, 90, 100, 140, 180, 220,
             260, 300, 340, 380, 420, 460};
+    }
     const size_t max_width = *std::max_element(widths.begin(), widths.end());
     const std::vector<float> exact_full = exact_distances(
             base_info, raw_queries, candidates, query_count,

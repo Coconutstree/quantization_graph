@@ -51,7 +51,7 @@ METHOD_SPECS: tuple[MethodSpec, ...] = (
     MethodSpec("05b", "SAQ-DiskANN-Disk", "02_diskann_fair", "DiskANN spherical::Impl<4>", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05b", "Ours-Disk", "02_diskann_fair", "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "Ours-Disk", "03_system_fair", "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", ("hybrid_disk",), "algorithm_preserving_disk_port"),
-    MethodSpec("05c", "SymphonyQG-DiskPort", "03_system_fair", "official SymphonyQG FastScan LUT+SIMD", ("hybrid_disk",), "algorithm_preserving_disk_port"),
+    MethodSpec("05c", "SymphonyQG-DiskPort", "03_system_fair", "official SymphonyQG FastScan LUT+SIMD", ("hybrid_disk",), "fair_neighbor_fetch_disk_port"),
     MethodSpec("05c", "OG-LVQ-DiskPort", "03_system_fair", "official SVS LVQ4 distance kernel", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "Glass-NSG-DiskPort", "03_system_fair", "official Glass NSG SQ4U distance kernel", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "DiskANN-PQ-Disk", "03_system_fair", "official diskann-disk PQ search", ("hybrid_disk",), "official_native_disk"),
@@ -72,8 +72,8 @@ OURS_05B_ABLATIONS = (
 
 SUMMARY_FIELDS = (
     "layer", "dataset", "method", "storage_mode", "phase", "run_id",
-    "repeat_id", "workers", "config_id", "search_param", "search_width", "ablation",
-    "cache_mode",
+    "repeat_id", "workers", "search_dram_budget_gib", "config_id", "search_param",
+    "search_width", "ablation", "cache_mode",
     "beam_width", "recall", "qps", "latency_mean_us", "latency_p50_us",
     "latency_p95_us", "latency_p99_us", "fixed_candidate_recall_at_10",
     "mean_relative_error", "p95_relative_error", "pairwise_flip_rate",
@@ -288,6 +288,16 @@ def validate_artifact(
         recall_delta = _finite_number(
             parity.get("max_recall_delta", 1.0), "max_recall_delta"
         )
+        parity_comparisons = parity.get("query_comparisons")
+        if parity_comparisons is None:
+            parity_path = path.with_suffix(".parity.json")
+            if parity_path.exists():
+                try:
+                    parity_comparisons = json.loads(parity_path.read_text()).get("query_comparisons")
+                except (OSError, json.JSONDecodeError):
+                    parity_comparisons = None
+        parity_comparisons = int(parity_comparisons if parity_comparisons is not None else 1)
+        parity_skipped_fast = os.environ.get("QG05_FAST") == "1" and parity_comparisons == 0
         if spec.layer == "05a":
             if recall_delta > 1e-12:
                 errors.append("05A resident/direct-disk recall must be identical")
@@ -295,7 +305,7 @@ def validate_artifact(
                 parity.get("max_distance_delta", 1.0), "max_distance_delta"
             ) > 1e-5:
                 errors.append("05A parity max_distance_delta exceeds 1e-5")
-        else:
+        elif not parity_skipped_fast:
             if recall_delta > 1e-3:
                 errors.append(f"{spec.layer.upper()} parity max_recall_delta exceeds 0.001")
             if _finite_number(

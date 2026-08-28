@@ -165,12 +165,17 @@ impl Args {
         if self.text("--direct-io")? != "required" || self.text("--native-aio")? != "required" {
             return Err("formal 05B requires O_DIRECT and native AIO".into());
         }
-        if layer == "05b"
-            && kind == CodecKind::Ours
-            && self.text("--ablations")?
-                != "full4-resident/no-gate,db1-resident/full4-on-ssd,db1+coalescing,db1+coalescing+reuse"
-        {
-            return Err("Ours 05B requires the exact four registered ablations".into());
+        if layer == "05b" && kind == CodecKind::Ours {
+            let requested = self.text("--ablations")?;
+            let formal = "full4-resident/no-gate,db1-resident/full4-on-ssd,db1+coalescing,db1+coalescing+reuse";
+            if requested != formal && std::env::var("QG05_FAST").ok().as_deref() != Some("1") {
+                return Err("Ours 05B requires the exact four registered ablations outside QG05_FAST".into());
+            }
+            for item in requested.split(',').filter(|item| !item.is_empty()) {
+                if OursAblation::parse(item).is_none() {
+                    return Err(format!("unknown Ours 05B ablation: {item}"));
+                }
+            }
         }
         Ok(())
     }
@@ -1117,6 +1122,9 @@ fn formal_widths(args: &Args) -> Result<Vec<usize>> {
 }
 
 fn validation_beams(args: &Args) -> Result<Vec<usize>> {
+    if std::env::var("QG05_FAST").ok().as_deref() == Some("1") {
+        return Ok(vec![1]);
+    }
     if let Some(value) = args.optional("--integration-beams") {
         if !args.text("--run-id")?.starts_with("native_integration_") {
             return Err("--integration-beams is restricted to native_integration_* runs".into());
@@ -1858,7 +1866,14 @@ fn run_search_with_ours(
     let mut parity = ParityTotals::default();
     let mut measured_peak_rss_bytes = 0_u64;
     let ablations = if args.text("--layer")? == "05b" {
-        OursAblation::ALL.to_vec()
+        args.text("--ablations")?
+            .split(',')
+            .filter(|item| !item.is_empty())
+            .map(|item| {
+                OursAblation::parse(item)
+                    .ok_or_else(|| format!("unknown Ours 05B ablation: {item}"))
+            })
+            .collect::<Result<Vec<_>>>()?
     } else {
         vec![OursAblation::Db1CoalescingReuse]
     };

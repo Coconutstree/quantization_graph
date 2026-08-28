@@ -424,7 +424,10 @@ def _invoke_port(
     if item.spec.layer == "05b" and item.spec.method == "Ours-Disk":
         args += [
             "--ablations",
-            "full4-resident/no-gate,db1-resident/full4-on-ssd,db1+coalescing,db1+coalescing+reuse",
+            os.environ.get(
+                "QG05_OURS_ABLATIONS",
+                "full4-resident/no-gate,db1-resident/full4-on-ssd,db1+coalescing,db1+coalescing+reuse",
+            ),
         ]
     if tuning_lock is not None:
         args += ["--tuning-lock", str(tuning_lock.resolve())]
@@ -590,6 +593,19 @@ def _build_tuning_lock(
     return path
 
 
+FAST_CONFIG_IDS = {
+    ("05c", "Ours-Disk"): "beam1",
+    ("05c", "SymphonyQG-DiskPort"): "QG_R64_EF400_t3",
+    ("05c", "OG-LVQ-DiskPort"): "LVQ4_R64_W400",
+    ("05c", "Glass-NSG-DiskPort"): "NSG_R64_L100_SQ4U",
+    ("05c", "DiskANN-PQ-Disk"): "DiskANN_PQ_R64_L400",
+}
+
+
+def _fast_config_id(layer: str, method: str) -> str:
+    return FAST_CONFIG_IDS.get((layer, method), "beam1")
+
+
 def _write_fast_tuning_lock(
     run_root: Path,
     layer: str,
@@ -600,7 +616,7 @@ def _write_fast_tuning_lock(
     for spec in specs:
         for mode in spec.storage_modes:
             selected[f"{spec.method}::{mode}"] = {
-                "config_id": "beam1",
+                "config_id": _fast_config_id(layer, spec.method),
                 "target_recall": None,
                 "target_reached": None,
                 "max_measured_recall": None,
@@ -819,7 +835,14 @@ def _run_layer_dataset(
     )
     splits = prepare_query_splits(dataset, args.data_root, run_root / "query_splits", args.val_queries)
     native_phase = "validation" if args.phase == "tune" else ("test" if args.phase == "run" else args.phase)
-    if native_phase in ("validation", "validate"):
+    # 05A mirrors memory experiment 01: evaluate the FULL query set
+    # (agnews/gist=1000, dbpedia=5000) with candidate_row_offset=0 so the
+    # fixed-candidate recall/QPS are directly comparable to results/01.
+    full_test_05a = layer == "05a" and native_phase == "test"
+    if full_test_05a:
+        ds_paths = dataset_paths(dataset, args.data_root)
+        query_path, gt_path = ds_paths["query"], ds_paths["gt"]
+    elif native_phase in ("validation", "validate"):
         query_path, gt_path = splits["validation_query"], splits["validation_gt"]
     elif native_phase == "test":
         query_path, gt_path = splits["test_query"], splits["test_gt"]
@@ -827,9 +850,9 @@ def _run_layer_dataset(
         query_path, gt_path = splits["validation_query"], splits["validation_gt"]
     split_sha256 = hashlib_pair(query_path, gt_path)
     candidate_row_offset = (
-        _fvec_count(splits["validation_query"])
-        if native_phase == "test"
-        else 0
+        0
+        if full_test_05a
+        else (_fvec_count(splits["validation_query"]) if native_phase == "test" else 0)
     )
 
     workers = args.workers

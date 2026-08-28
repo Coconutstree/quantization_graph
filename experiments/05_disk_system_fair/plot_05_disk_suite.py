@@ -342,14 +342,21 @@ def _plot_05a(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
 def _plot_05b(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
     fig_dir = run_root / LAYER_DIRS["05b"] / dataset / "figures"
     full_variant = "db1+coalescing+reuse"
+    ours_ablations = {full_variant}
+    if os.environ.get("QG05_FAST") == "1":
+        ours_ablations.update(
+            item for item in os.environ.get("QG05_OURS_ABLATIONS", "").split(",") if item
+        )
     primary = [
         r for r in rows
-        if r.get("ablation", "") in ("", full_variant)
+        if (r.get("ablation", "") == "" or r.get("ablation", "") in ours_ablations)
         and float(r["search_dram_budget_gib"]) == 2.0
         and r.get("cache_mode") == "standard"
     ]
     qps_rows = [r for r in primary if int(r["workers"]) == 32]
     latency_rows = [r for r in primary if int(r["workers"]) == 1]
+    if not latency_rows:
+        latency_rows = qps_rows
     _save(
         _curve_figure(qps_rows, LAYER_METHODS["05b"], yfield="qps", ylabel="QPS (32 workers)", maximize=True, logy=True),
         fig_dir,
@@ -385,6 +392,14 @@ def _plot_05b(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
         and float(r["search_dram_budget_gib"]) == 2.0
         and r.get("cache_mode") == "standard"
     ]
+    if not ours_rows:
+        ours_rows = [
+            r for r in rows
+            if r["method"] == "Ours-Disk"
+            and int(r["workers"]) == 32
+            and float(r["search_dram_budget_gib"]) == 2.0
+            and r.get("cache_mode") == "standard"
+        ]
     ablations = (
         "full4-resident/no-gate",
         "db1-resident/full4-on-ssd",
@@ -396,20 +411,21 @@ def _plot_05b(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
         sub = [r for r in ours_rows if r.get("ablation") == ablation]
         value = _at_recall(sub, "latency_p95_us", 0.95)
         ablation_values.append(value)
-    fig, ax = plt.subplots(figsize=(3.5, 2.55))
     available = [(name, value) for name, value in zip(ablations, ablation_values) if value is not None]
-    ax.plot(
-        range(len(available)),
-        [value for _, value in available],
-        color=COLORS["Ours-Disk"],
-        marker="o",
-        linewidth=1.5,
-    )
-    ax.set_xticks(range(len(available)), [name for name, _ in available], rotation=24, ha="right")
-    ax.set_ylabel("P95 latency (µs) at R@10=0.95")
-    ax.grid(axis="y", color=GRID, linewidth=0.55)
-    fig.tight_layout()
-    _save(fig, fig_dir, "ours_disk_ablation_at_95recall")
+    if available:
+        fig, ax = plt.subplots(figsize=(3.5, 2.55))
+        ax.plot(
+            range(len(available)),
+            [value for _, value in available],
+            color=COLORS["Ours-Disk"],
+            marker="o",
+            linewidth=1.5,
+        )
+        ax.set_xticks(range(len(available)), [name for name, _ in available], rotation=24, ha="right")
+        ax.set_ylabel("P95 latency (µs) at R@10=0.95")
+        ax.grid(axis="y", color=GRID, linewidth=0.55)
+        fig.tight_layout()
+        _save(fig, fig_dir, "ours_disk_ablation_at_95recall")
 
     if dataset == "gist":
         _plot_gist_sensitivity(fig_dir, rows, LAYER_METHODS["05b"])
@@ -424,6 +440,8 @@ def _plot_05c(run_root: Path, dataset: str, rows: list[dict[str, Any]]) -> None:
     ]
     qps_rows = [r for r in primary if int(r["workers"]) == 32]
     latency_rows = [r for r in primary if int(r["workers"]) == 1]
+    if not latency_rows:
+        latency_rows = qps_rows
     _save(
         _curve_figure(qps_rows, LAYER_METHODS["05c"], yfield="qps", ylabel="QPS (32 workers)", maximize=True),
         fig_dir,
@@ -475,6 +493,7 @@ def _plot_gist_sensitivity(
     methods: tuple[str, ...],
 ) -> None:
     fig, ax = plt.subplots(figsize=(3.5, 2.55))
+    any_points = False
     for index, method in enumerate(methods):
         points = []
         for budget in (1.0, 2.0, 4.0):
@@ -490,22 +509,27 @@ def _plot_gist_sensitivity(
             if value is not None:
                 points.append((budget, value))
         if points:
+            any_points = True
             ax.plot(
                 [x for x, _ in points],
                 [y for _, y in points],
                 label=method,
                 **_style(method, index),
             )
-    ax.set_xlabel("Search DRAM budget (GiB)")
-    ax.set_ylabel("P95 latency (µs) at R@10=0.95")
-    ax.set_xticks((1, 2, 4))
-    ax.set_yscale("log")
-    ax.grid(axis="y", color=GRID, linewidth=0.55)
-    ax.legend(loc="best")
-    fig.tight_layout()
-    _save(fig, fig_dir, "gist_dram_budget_sensitivity")
+    if not any_points:
+        plt.close(fig)
+    else:
+        ax.set_xlabel("Search DRAM budget (GiB)")
+        ax.set_ylabel("P95 latency (µs) at R@10=0.95")
+        ax.set_xticks((1, 2, 4))
+        ax.set_yscale("log")
+        ax.grid(axis="y", color=GRID, linewidth=0.55)
+        ax.legend(loc="best")
+        fig.tight_layout()
+        _save(fig, fig_dir, "gist_dram_budget_sensitivity")
 
     fig, ax = plt.subplots(figsize=(3.5, 2.55))
+    any_points = False
     for index, method in enumerate(methods):
         points = []
         for workers in (1, 4, 8, 16, 32):
@@ -521,21 +545,25 @@ def _plot_gist_sensitivity(
             if value is not None:
                 points.append((workers, value))
         if points:
+            any_points = True
             ax.plot(
                 [x for x, _ in points],
                 [y for _, y in points],
                 label=method,
                 **_style(method, index),
             )
-    ax.set_xlabel("Query workers")
-    ax.set_ylabel("QPS at R@10=0.95")
-    ax.set_xticks((1, 4, 8, 16, 32))
-    ax.set_xscale("log", base=2)
-    ax.set_yscale("log")
-    ax.grid(axis="y", color=GRID, linewidth=0.55)
-    ax.legend(loc="best")
-    fig.tight_layout()
-    _save(fig, fig_dir, "gist_worker_scaling")
+    if not any_points:
+        plt.close(fig)
+    else:
+        ax.set_xlabel("Query workers")
+        ax.set_ylabel("QPS at R@10=0.95")
+        ax.set_xticks((1, 4, 8, 16, 32))
+        ax.set_xscale("log", base=2)
+        ax.set_yscale("log")
+        ax.grid(axis="y", color=GRID, linewidth=0.55)
+        ax.legend(loc="best")
+        fig.tight_layout()
+        _save(fig, fig_dir, "gist_worker_scaling")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -555,7 +583,9 @@ def main(argv: list[str] | None = None) -> int:
                 rows = _load_complete(args.run_root.resolve(), layer, dataset) if not methods else _read_rows(args.run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_rows.csv")
                 if methods:
                     rows = [row for row in rows if row["method"] in methods]
-                rows = _selected_rows(args.run_root.resolve(), layer, dataset, rows)
+                # 05A evaluates the full fixed-candidate sweep as its result;
+                # only 05B/05C select a beam config from the tuning lock.
+                rows = rows if layer == "05a" else _selected_rows(args.run_root.resolve(), layer, dataset, rows)
                 rows = rows if methods else _median_rows(rows)
                 aggregate = args.run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_median.csv"
                 atomic_write_csv(aggregate, rows)

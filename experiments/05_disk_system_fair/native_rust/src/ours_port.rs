@@ -73,6 +73,16 @@ impl OursAblation {
         }
     }
 
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "full4-resident/no-gate" => Some(Self::Full4ResidentNoGate),
+            "db1-resident/full4-on-ssd" => Some(Self::Db1ResidentFull4Ssd),
+            "db1+coalescing" => Some(Self::Db1Coalescing),
+            "db1+coalescing+reuse" => Some(Self::Db1CoalescingReuse),
+            _ => None,
+        }
+    }
+
     pub fn uses_gate(self) -> bool {
         self != Self::Full4ResidentNoGate
     }

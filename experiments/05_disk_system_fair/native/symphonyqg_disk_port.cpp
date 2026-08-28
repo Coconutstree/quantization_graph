@@ -7,6 +7,7 @@
 #include "space/l2.hpp"
 
 #include <openssl/evp.h>
+#include <omp.h>
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -38,7 +40,7 @@ constexpr const char* kMethod = "SymphonyQG-DiskPort";
 constexpr const char* kLayer = "05c";
 constexpr const char* kSourceSuite = "03_system_fair";
 constexpr const char* kSourceKernel = "official SymphonyQG FastScan LUT+SIMD";
-constexpr const char* kPortKind = "algorithm_preserving_disk_port";
+constexpr const char* kPortKind = "fair_neighbor_fetch_disk_port";
 
 struct Args {
     std::unordered_map<std::string, std::string> values;
@@ -426,6 +428,10 @@ std::vector<int32_t> search_one(
         for (std::size_t i = 0; i < meta.degree; ++i) {
             const auto v = neighbors[i];
             if (v == symqg::kPidMax || v >= meta.n || seen.count(v)) continue;
+            // The in-memory SymphonyQG row stores the neighbor's fast-scan payload next
+            // to the edge. For disk-system fairness, charge the candidate node row
+            // before admitting it, matching ports that fetch neighbor payloads from SSD.
+            rows.row(v);
             insert_candidate(pool, seen, v, appro[i], ef, meta.n);
         }
     }
@@ -626,7 +632,7 @@ void write_export_artifact(
     out << "}\n";
 }
 
-void run_search(const Args& args) {
+void run_search_single(const Args& args) {
     fs::path root(args.require("disk-index-dir"));
     if (!fs::exists(root / "index.meta")) export_index(args);
     Meta meta = read_meta(root / "index.meta");
@@ -640,24 +646,26 @@ void run_search(const Args& args) {
         std::ifstream input(root / "rotator.bin", std::ios::binary);
         rotator.load(input);
     }
-    symqg::QGScanner scanner(meta.padded_dim, meta.degree);
     const int ef = args.values.count("integration-widths") ? static_cast<int>(args.number("integration-widths")) : 100;
+    const int workers = std::max<int>(1, static_cast<int>(args.number("workers")));
     std::vector<QueryStats> stats(queries.rows);
     fs::create_directories(fs::path(args.require("query-trace")).parent_path());
     const auto wall_start = Clock::now();
+#pragma omp parallel for schedule(dynamic) num_threads(workers)
     for (std::size_t pos = 0; pos < order.size(); ++pos) {
         const std::size_t qid = order[pos];
         QueryStats local;
         const auto t0 = Clock::now();
+        symqg::QGScanner local_scanner(meta.padded_dim, meta.degree);
         symqg::QGQuery q_obj(queries.data.data() + qid * queries.dim, meta.padded_dim);
-        q_obj.query_prepare(rotator, scanner);
+        q_obj.query_prepare(rotator, local_scanner);
         const auto t1 = Clock::now();
         RowReader reader(root / "node_rows.pages", meta, &local);
         auto ids = search_one(
                 reader,
                 meta,
                 q_obj,
-                scanner,
+                local_scanner,
                 queries.data.data() + qid * queries.dim,
                 ef,
                 local);
@@ -713,6 +721,142 @@ void run_search(const Args& args) {
             stats,
             ef,
             wall_seconds);
+}
+
+
+std::vector<int> requested_widths(const Args& args) {
+    std::vector<int> widths;
+    auto parse_csv = [&](const std::string& text) {
+        std::stringstream ss(text);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            if (item.empty()) continue;
+            const int value = std::stoi(item);
+            if (value <= 0) throw std::runtime_error("search width must be positive");
+            widths.push_back(value);
+        }
+    };
+    if (const char* env = std::getenv("QG05_FAST_WIDTHS")) {
+        parse_csv(env);
+    } else if (args.values.count("integration-widths")) {
+        parse_csv(args.values.at("integration-widths"));
+    } else {
+        widths.push_back(100);
+    }
+    if (widths.empty()) throw std::runtime_error("empty search width list");
+    return widths;
+}
+
+std::string read_text_file(const fs::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+std::string extract_summary_body(const std::string& text) {
+    const std::string key = "\"summary_rows\": [";
+    const auto begin_key = text.find(key);
+    if (begin_key == std::string::npos) throw std::runtime_error("summary_rows not found");
+    const auto begin = begin_key + key.size();
+    int depth = 1;
+    bool in_string = false;
+    bool escaped = false;
+    for (std::size_t i = begin; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (escaped) { escaped = false; continue; }
+        if (ch == '\\') { escaped = in_string; continue; }
+        if (ch == '"') { in_string = !in_string; continue; }
+        if (in_string) continue;
+        if (ch == '[') ++depth;
+        if (ch == ']') {
+            --depth;
+            if (depth == 0) return text.substr(begin, i - begin);
+        }
+    }
+    throw std::runtime_error("summary_rows array did not terminate");
+}
+
+std::string replace_summary_body(const std::string& text, const std::string& body) {
+    const std::string key = "\"summary_rows\": [";
+    const auto begin_key = text.find(key);
+    if (begin_key == std::string::npos) throw std::runtime_error("summary_rows not found");
+    const auto begin = begin_key + key.size();
+    int depth = 1;
+    bool in_string = false;
+    bool escaped = false;
+    for (std::size_t i = begin; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (escaped) { escaped = false; continue; }
+        if (ch == '\\') { escaped = in_string; continue; }
+        if (ch == '"') { in_string = !in_string; continue; }
+        if (in_string) continue;
+        if (ch == '[') ++depth;
+        if (ch == ']') {
+            --depth;
+            if (depth == 0) return text.substr(0, begin) + body + text.substr(i);
+        }
+    }
+    throw std::runtime_error("summary_rows array did not terminate");
+}
+
+void replace_all(std::string& text, const std::string& from, const std::string& to) {
+    if (from.empty()) return;
+    std::size_t pos = 0;
+    while ((pos = text.find(from, pos)) != std::string::npos) {
+        text.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+}
+
+void run_search(const Args& args) {
+    const auto widths = requested_widths(args);
+    const fs::path final_json(args.require("result-json"));
+    const fs::path final_trace(args.require("query-trace"));
+    std::vector<fs::path> jsons;
+    std::vector<fs::path> traces;
+    for (int width : widths) {
+        Args one = args;
+        one.values["integration-widths"] = std::to_string(width);
+        fs::path tmp_json = final_json;
+        tmp_json += ".w" + std::to_string(width) + ".tmp";
+        fs::path tmp_trace = final_trace;
+        tmp_trace += ".w" + std::to_string(width) + ".tmp";
+        one.values["result-json"] = tmp_json.string();
+        one.values["query-trace"] = tmp_trace.string();
+        run_search_single(one);
+        jsons.push_back(tmp_json);
+        traces.push_back(tmp_trace);
+    }
+
+    fs::create_directories(final_trace.parent_path());
+    {
+        std::ofstream out(final_trace, std::ios::binary);
+        for (const auto& trace : traces) {
+            std::ifstream in(trace, std::ios::binary);
+            out << in.rdbuf();
+        }
+    }
+
+    std::vector<std::string> bodies;
+    for (const auto& json : jsons) {
+        std::string body = extract_summary_body(read_text_file(json));
+        const auto first = body.find_first_not_of(" \n\r\t");
+        const auto last = body.find_last_not_of(" \n\r\t");
+        bodies.push_back(first == std::string::npos ? std::string() : body.substr(first, last - first + 1));
+    }
+    std::ostringstream joined;
+    for (std::size_t i = 0; i < bodies.size(); ++i) {
+        if (i) joined << ",\n";
+        joined << bodies[i];
+    }
+
+    std::string final_doc = replace_summary_body(read_text_file(jsons.front()), joined.str());
+    replace_all(final_doc, json_string(fs::absolute(traces.front()).string()), json_string(fs::absolute(final_trace).string()));
+    replace_all(final_doc, json_string(sha256(traces.front())), json_string(sha256(final_trace)));
+    fs::create_directories(final_json.parent_path());
+    std::ofstream out(final_json, std::ios::binary);
+    out << final_doc;
 }
 
 }  // namespace

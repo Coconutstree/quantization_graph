@@ -171,8 +171,20 @@ impl IndexFiles {
 }
 
 #[derive(Debug, Clone)]
+struct SharedGraphInfo {
+    path: PathBuf,
+    file_size: u64,
+    max_degree: u32,
+    medoid: usize,
+    frozen_count: usize,
+    node_count: usize,
+    start_index: usize,
+}
+
+#[derive(Debug, Clone)]
 struct IndexMeta {
     base_count: usize,
+    source_base_count: usize,
     dimension: usize,
     pq_chunks: usize,
     resident_bytes: usize,
@@ -188,6 +200,7 @@ impl IndexMeta {
             "implementation": "official microsoft DiskANN diskann-disk",
             "metric": "squared_l2",
             "base_count": self.base_count,
+            "source_base_count": self.source_base_count,
             "dimension": self.dimension,
             "R": R,
             "L_build": L_BUILD,
@@ -222,6 +235,10 @@ impl IndexMeta {
         }
         Ok(Self {
             base_count: number("base_count")?,
+            source_base_count: value["source_base_count"]
+                .as_u64()
+                .map(|v| v as usize)
+                .unwrap_or_else(|| number("base_count").unwrap_or(0)),
             dimension: number("dimension")?,
             pq_chunks: number("pq_chunks")?,
             resident_bytes: number("resident_bytes")?,
@@ -252,14 +269,40 @@ fn inspect_fvecs(path: &Path) -> Result<(usize, usize)> {
     Ok(((bytes / record_bytes) as usize, dim as usize))
 }
 
-fn convert_fvecs_to_fbin(source: &Path, destination: &Path) -> Result<(usize, usize)> {
-    let (rows, dim) = inspect_fvecs(source)?;
+fn convert_fvecs_to_fbin(
+    source: &Path,
+    destination: &Path,
+    graph: &SharedGraphInfo,
+) -> Result<(usize, usize, usize)> {
+    let (source_rows, dim) = inspect_fvecs(source)?;
+    if graph.start_index >= source_rows {
+        bail!(
+            "shared graph start_index {} is outside source base rows {}",
+            graph.start_index,
+            source_rows
+        );
+    }
+    if graph.node_count < source_rows {
+        bail!(
+            "shared graph has fewer nodes ({}) than source base rows ({source_rows})",
+            graph.node_count
+        );
+    }
+    if graph.medoid >= graph.node_count {
+        bail!(
+            "shared graph medoid {} is outside graph node count {}",
+            graph.medoid,
+            graph.node_count
+        );
+    }
+
     let mut input = BufReader::with_capacity(1 << 20, File::open(source)?);
+    let mut rows = Vec::with_capacity(source_rows);
     let mut output = BufWriter::with_capacity(1 << 20, File::create(destination)?);
-    output.write_all(&(rows as u32).to_le_bytes())?;
+    output.write_all(&(graph.node_count as u32).to_le_bytes())?;
     output.write_all(&(dim as u32).to_le_bytes())?;
     let mut row = vec![0_u8; dim * 4];
-    for row_id in 0..rows {
+    for row_id in 0..source_rows {
         let got_dim = read_i32(&mut input)?;
         if got_dim != dim as i32 {
             bail!(
@@ -269,9 +312,20 @@ fn convert_fvecs_to_fbin(source: &Path, destination: &Path) -> Result<(usize, us
         }
         input.read_exact(&mut row)?;
         output.write_all(&row)?;
+        rows.push(row.clone());
+    }
+
+    let start_row = rows[graph.start_index].clone();
+    for row_id in source_rows..graph.node_count {
+        let filler = if row_id == graph.medoid || graph.frozen_count > 0 {
+            &start_row
+        } else {
+            &rows[row_id % source_rows]
+        };
+        output.write_all(filler)?;
     }
     output.flush()?;
-    Ok((rows, dim))
+    Ok((source_rows, graph.node_count, dim))
 }
 
 fn write_json(path: &Path, value: &Value) -> Result<()> {
@@ -325,6 +379,68 @@ fn shared_graph_path(args: &Args) -> Result<PathBuf> {
         .join("diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"))
 }
 
+fn parse_start_index(meta_path: &Path) -> Result<usize> {
+    let text = fs::read_to_string(meta_path)
+        .with_context(|| format!("reading shared graph metadata {}", meta_path.display()))?;
+    for line in text.lines() {
+        if let Some(value) = line.strip_prefix("start_index=") {
+            return value
+                .parse::<usize>()
+                .with_context(|| format!("invalid start_index in {}", meta_path.display()));
+        }
+    }
+    bail!("missing start_index in {}", meta_path.display())
+}
+
+fn inspect_shared_graph(args: &Args) -> Result<SharedGraphInfo> {
+    let path = shared_graph_path(args)?;
+    if !path.is_file() {
+        bail!("missing source shared graph: {}", path.display());
+    }
+    let mut reader = BufReader::new(File::open(&path)?);
+    let file_size = {
+        let mut bytes = [0_u8; 8];
+        reader.read_exact(&mut bytes)?;
+        u64::from_le_bytes(bytes)
+    };
+    let max_degree = {
+        let mut bytes = [0_u8; 4];
+        reader.read_exact(&mut bytes)?;
+        u32::from_le_bytes(bytes)
+    };
+    let medoid = {
+        let mut bytes = [0_u8; 4];
+        reader.read_exact(&mut bytes)?;
+        u32::from_le_bytes(bytes) as usize
+    };
+    let frozen_count = {
+        let mut bytes = [0_u8; 8];
+        reader.read_exact(&mut bytes)?;
+        u64::from_le_bytes(bytes) as usize
+    };
+    let mut position = 24_u64;
+    let mut node_count = 0_usize;
+    while position < file_size {
+        let mut bytes = [0_u8; 4];
+        reader.read_exact(&mut bytes)?;
+        let degree = u32::from_le_bytes(bytes) as u64;
+        let skip = (degree * 4) as i64;
+        reader.seek_relative(skip)?;
+        position += 4 + degree * 4;
+        node_count += 1;
+    }
+    let start_index = parse_start_index(&path.with_extension("json"))?;
+    Ok(SharedGraphInfo {
+        path,
+        file_size,
+        max_degree,
+        medoid,
+        frozen_count,
+        node_count,
+        start_index,
+    })
+}
+
 fn prepare_official_diskann_inputs(
     args: &Args,
     files: &IndexFiles,
@@ -334,10 +450,7 @@ fn prepare_official_diskann_inputs(
 ) -> Result<()> {
     let mem_index = PathBuf::from(get_mem_index_file(&files.prefix));
     if !mem_index.is_file() {
-        let source_graph = shared_graph_path(args)?;
-        if !source_graph.is_file() {
-            bail!("missing source shared graph: {}", source_graph.display());
-        }
+            let source_graph = inspect_shared_graph(args)?.path;
         fs::copy(&source_graph, &mem_index).with_context(|| {
             format!(
                 "copying shared graph {} to {}",
@@ -401,7 +514,18 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
         .path("--data-root")?
         .join(dataset)
         .join(format!("{dataset}_base.fvecs"));
-    let (base_count, dimension) = convert_fvecs_to_fbin(&source, &files.converted_base)?;
+    let graph = inspect_shared_graph(args)?;
+    let (source_base_count, base_count, dimension) =
+        convert_fvecs_to_fbin(&source, &files.converted_base, &graph)?;
+    if graph.max_degree as usize > R + 32 {
+        eprintln!(
+            "warning: shared graph max_degree={} exceeds formal R={} by more than slack",
+            graph.max_degree, R
+        );
+    }
+    if graph.file_size != fs::metadata(&graph.path)?.len() {
+        bail!("shared graph header file_size does not match actual length");
+    }
     let pq_chunks = dimension.div_ceil(2);
     let started = Instant::now();
     prepare_official_diskann_inputs(args, files, base_count, dimension, pq_chunks)?;
@@ -419,6 +543,7 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
             .next_multiple_of(64);
     let meta = IndexMeta {
         base_count,
+        source_base_count,
         dimension,
         pq_chunks,
         resident_bytes,
@@ -760,6 +885,9 @@ fn formal_widths(args: &Args) -> Result<Vec<usize>> {
 }
 
 fn validation_beams(args: &Args) -> Result<Vec<usize>> {
+    if std::env::var("QG05_FAST").ok().as_deref() == Some("1") {
+        return Ok(vec![1]);
+    }
     if let Some(value) = args.optional("--integration-beams") {
         if !args.text("--run-id")?.starts_with("native_integration_") {
             bail!("--integration-beams is restricted to native integration runs");
