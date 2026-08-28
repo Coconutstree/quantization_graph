@@ -43,9 +43,33 @@ target/
 *.centroids
 
 data/
-results/
 downloads/
 work/01_quantizer_fair/
+
+# Keep generated results local; publish only lightweight CSV summaries and figures.
+results/*
+!results/disk_environment/
+!results/disk_environment/**/
+results/disk_environment/.formal_runs/
+results/disk_environment/**/*
+!results/disk_environment/**/
+!results/disk_environment/**/csv
+!results/disk_environment/**/csv/
+!results/disk_environment/**/csv/**
+!results/disk_environment/**/figures
+!results/disk_environment/**/figures/
+!results/disk_environment/**/figures/**
+results/disk_environment/.formal_runs/**
+!results/memory_environment/
+!results/memory_environment/**/
+results/memory_environment/**/*
+!results/memory_environment/**/
+!results/memory_environment/**/csv
+!results/memory_environment/**/csv/
+!results/memory_environment/**/csv/**
+!results/memory_environment/**/figures
+!results/memory_environment/**/figures/
+!results/memory_environment/**/figures/**
 
 # Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
 baselines/builds/
