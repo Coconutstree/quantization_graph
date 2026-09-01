@@ -18,14 +18,14 @@
 | SAQ-DiskANN | 40.32（共享） | 5.44 | 45.77 | — | 3.75 | shared meta + export build_stats |
 | Ours（native） | 2.46 | 6.67 | 9.13 | 6.80 | 3.89 | Ours_OursDiskANN_M64_build.json + export build_stats |
 | OG-LVQ | 3.59 | 0.07 | 3.66 | 3.34 | 3.36 | OG-LVQ_LVQ4_R64_W400_build.json + export build_stats |
-| Glass-NSG | 1.62 | 0.62 | 2.24 | 8.38 | 5.71 | Glass-NSG_R64_L100_build.json + export build_stats |
+| Glass-NSG | 2.82 | 0.62 | 3.44 | 8.36 | 5.71 | Glass-NSG_R64_L400_build.json + export build_stats |
 | SymphonyQG | 3.07 | 27.88 | 30.95 | 14.77 | 26.63 | SymphonyQG_R64_EF400_t3_build.json + export build_stats |
 
 统一口径：本表“构图耗时”一律取 **from-scratch 官方 build record**（`*_build.json` 的 `build_time_ms`；Ours 取 total 2.46 min），`graph_build_mode=reused_graph` 的记录不计入构图耗时；“磁盘索引导出”为 05 层 export 的 `.build_stats.json`（payload 编码 + 写盘，wall 耗时与 peak RSS）。
 
 Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77 s / encode 17.47 s / total 24.25 s，其 `graph_build_mode=reused_graph`，属于复用图加载 + payload 编码，不是 from-scratch 构建；官方从零构建记录为 `Ours_OursDiskANN_M64_build.json`（graph 2.34 min / total 2.46 min / peak 6.80 GiB）。两者是两套口径（reused 加载 vs from-scratch 构建），不直接比较。M64 官方记录未记录 Lbuild/alpha；磁盘查询图参数（R64/Lbuild400/alpha1.2、ExRaBitQ4-symmetric）来自 02 manifest。
 
-构建成本分析：总成本排序为 PQ（55.19）> SAQ（45.77）> SQ（40.68）> SymphonyQG（30.95）> Ours（9.13）> OG-LVQ（3.66）> Glass-NSG（2.24）min。PQ/SQ/SAQ 的总成本被共享图构建（40.32 min，仅发生一次）主导，其边际导出成本只有 14.87 / 0.36 / 5.44 min（差异来自 payload 编码方式：PQ 训 codebook、SAQ 球面变换、SQ 纯标量）。SymphonyQG 总成本几乎全在磁盘索引导出（约 90%），是第三方系统里导出最重的；Ours 构图轻（2.46 min）且导出 6.67 min，总 9.13 min，显著低于 SymphonyQG 与“按全额共享图口径”的 DiskANN 家族；OG-LVQ / Glass-NSG 最轻（<4 min）。
+构建成本分析：总成本排序为 PQ（55.19）> SAQ（45.77）> SQ（40.68）> SymphonyQG（30.95）> Ours（9.13）> OG-LVQ（3.66）> Glass-NSG（3.44）min。PQ/SQ/SAQ 的总成本被共享图构建（40.32 min，仅发生一次）主导，其边际导出成本只有 14.87 / 0.36 / 5.44 min（差异来自 payload 编码方式：PQ 训 codebook、SAQ 球面变换、SQ 纯标量）。SymphonyQG 总成本几乎全在磁盘索引导出（约 90%），是第三方系统里导出最重的；Ours 构图轻（2.46 min）且导出 6.67 min，总 9.13 min，显著低于 SymphonyQG 与“按全额共享图口径”的 DiskANN 家族；OG-LVQ / Glass-NSG 最轻（<4 min）。
 
 ### Ours 索引大小（4bit / 8bit）
 
@@ -96,13 +96,22 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 
 ### Ours 进一步优化
 
-按收益排序：
+按收益排序（数据：AGNews 05C、w32、2 GiB DRAM 预算）：
 
-1. 把 2 GiB cache 真正用起来（当前 `cache_bytes` 仅约 25 MiB）。
-2. 压低 full4 读：收紧 DB1 门控；同页候选合并读；4bit 与 residual 尽量同页。
-3. 继续提升页面顺序性、prefetch 和 AIO depth。
-4. 按目标 recall 选最小 width，避免无谓读盘。
-5. 尝试热页面 / 分层缓存，把高频 payload 页留在 DRAM。
+1. **把预算里空着的约 1 GiB 真正用去缓存 4-bit payload 页。**
+   现状：内存里只有 1-bit 常驻码（0.95 GiB）+ 26 MB 邻接表缓存，约 0.98 GiB，2 GiB 预算还剩约 1 GiB 空着；而且那个 26 MB 缓存被写死成“最多缓存 10% 节点”，缓存的是邻接表、不是真正吃 IO 的 4-bit 数据，所以每查询约 810 次 full4 页读仍全落盘。做法：去掉 10% 上限，把剩余预算用来缓存高频 4-bit payload 页（4-bit 全量仅 0.38 GiB，1-bit + 4-bit 合计 1.33 GiB，仍远低于 2 GiB）。这是收益最大的一项。
+
+2. **压低 full4 读量。**
+   现在 DB1 1bit 初筛扫 3362 个候选、留下 810 个进 full4，随后几乎每个 full4 候选都要单独读一页（810 页/query）。可做：收紧 DB1 门控（让更少候选进 full4）、把同页候选合并成一次读、让 4bit 与 residual 落在同一页一次读回。
+
+3. **提升页读取的顺序性与并发。**
+   HDD 随机读慢（实测整盘约 62 MB/s，w32 已打满）。把要读的页按地址排序、加强 prefetch、加大 AIO depth，能让同样读字节下有效吞吐更高、查询更快。
+
+4. **按目标 recall 选最小 width。**
+   width 越大 recall 越高但读盘越多（width 10→580，延迟 144→2076 ms）。目标 recall 一定时，用刚好达标的 width，避免无谓读盘。
+
+5. **热页 / 分层缓存。**
+   对访问最频繁的 payload 页做长期驻留（热缓存），冷页仍从盘读，用足 2 GiB 预算但不超（只有把整张索引全塞内存才会到约 2.04 GiB）。
 
 ## 数据与口径
 
