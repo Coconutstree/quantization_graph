@@ -73,13 +73,62 @@ def soften_axis(ax: plt.Axes) -> None:
     ax.margins(x=0.04)
 
 
+def _current_rid() -> str:
+    rid_path = Path("/tmp/agnews_05c_rerun_rid.txt")
+    if rid_path.exists():
+        return rid_path.read_text().strip()
+    return "agnews_05c_rerun_20260901_152210"
+
+
+def _ours_local_rows() -> pd.DataFrame:
+    p = Path(
+        f"results/disk_environment/.formal_runs/runs/{_current_rid()}/05C_disk_system_fair/"
+        "agnews/artifacts/test/Ours-Disk__hybrid_disk__B2__standard__w32__r0.json"
+    )
+    if not p.exists():
+        return pd.DataFrame()
+    d = json.loads(p.read_text())
+    rows = pd.DataFrame(d["summary_rows"])
+    constant = {
+        "layer": "05c",
+        "dataset": d.get("dataset"),
+        "method": d.get("method"),
+        "storage_mode": d.get("storage_mode"),
+        "cache_mode": d.get("cache_mode"),
+        "workers": d.get("workers"),
+        "search_dram_budget_gib": d.get("search_dram_budget_gib"),
+        "direct_io": d.get("direct_io"),
+        "native_aio": d.get("native_aio"),
+        "page_size": d.get("page_size"),
+        "source_kernel": d.get("source_kernel"),
+        "implementation_fingerprint": d.get("implementation_fingerprint"),
+        "implementation_parity": d.get("implementation_parity"),
+        "run_id": d.get("run_id"),
+        "git_commit": d.get("git_commit"),
+        "cache_bytes": d.get("cache_bytes"),
+        "cache_nodes": d.get("cache_nodes"),
+        "ours_4bit_payload_bytes": d.get("ours_4bit_payload_bytes"),
+        "ours_8bit_payload_bytes": d.get("ours_8bit_payload_bytes"),
+        "ours_adjacency_bytes": d.get("ours_adjacency_bytes"),
+        "ours_fp32_base_bytes": d.get("ours_fp32_base_bytes"),
+    }
+    for key, value in constant.items():
+        rows[key] = value
+    return rows
+
+
 def read_rows() -> pd.DataFrame:
     base = Path("results/disk_environment/03_system_fair/agnews/csv")
-    old = pd.read_csv(base / "formal_test_rows_formal_diskenv_20260826_114755_bc_agnews.csv")
-    old = old[old["method"].ne("SymphonyQG-DiskPort")].copy()
-    fixed = pd.read_csv(base / "formal_test_rows.csv")
-    fixed = fixed[fixed["method"].eq("SymphonyQG-DiskPort")].copy()
-    df = pd.concat([old, fixed], ignore_index=True)
+    new = pd.read_csv(base / "formal_test_rows.csv")
+    new = new[new["method"].isin(["OG-LVQ-DiskPort", "Glass-NSG-DiskPort"])].copy()
+    fix_agg = Path(
+        "results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/"
+        "05C_disk_system_fair/agnews/aggregate/formal_test_rows.csv"
+    )
+    sym = pd.read_csv(fix_agg)
+    sym = sym[sym["method"].eq("SymphonyQG-DiskPort")].copy()
+    ours = _ours_local_rows()
+    df = pd.concat([new, sym, ours], ignore_index=True)
     numeric = [
         "workers",
         "search_width",
@@ -113,25 +162,31 @@ def read_rows() -> pd.DataFrame:
 
 def read_build_stats() -> pd.DataFrame:
     rows = []
-    root = Path("results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957")
-    specs = [
-        ("05b", root / "05B_diskann_shared_graph/agnews/artifacts/export"),
-        ("05c", root / "05C_disk_system_fair/agnews/artifacts/export"),
+    roots = [
+        Path("results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957"),
+        Path(f"results/disk_environment/.formal_runs/runs/{_current_rid()}"),
     ]
-    for layer, d in specs:
-        for path in sorted(d.glob("*.build_stats.json")):
-            obj = json.loads(path.read_text())
-            method = path.name.split("__")[0]
-            rows.append(
-                {
-                    "layer": layer,
-                    "method": method,
-                    "method_display": DISPLAY_METHOD.get(method, method),
-                    "wall_seconds": obj.get("wall_seconds", math.nan),
-                    "peak_rss_gib": obj.get("peak_rss_bytes", math.nan) / (1024**3),
-                    "read_mb": obj.get("read_bytes", math.nan) / (1024**2),
-                }
-            )
+    for root in roots:
+        specs = [
+            ("05b", root / "05B_diskann_shared_graph/agnews/artifacts/export"),
+            ("05c", root / "05C_disk_system_fair/agnews/artifacts/export"),
+        ]
+        for layer, d in specs:
+            if not d.exists():
+                continue
+            for path in sorted(d.glob("*.build_stats.json")):
+                obj = json.loads(path.read_text())
+                method = path.name.split("__")[0]
+                rows.append(
+                    {
+                        "layer": layer,
+                        "method": method,
+                        "method_display": DISPLAY_METHOD.get(method, method),
+                        "wall_seconds": obj.get("wall_seconds", math.nan),
+                        "peak_rss_gib": obj.get("peak_rss_bytes", math.nan) / (1024**3),
+                        "read_mb": obj.get("read_bytes", math.nan) / (1024**2),
+                    }
+                )
     return pd.DataFrame(rows)
 
 
@@ -265,6 +320,10 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
             return "—"
         return fmt(sub[col].max() / scale, 2)
 
+    def first(method: str, col: str) -> str:
+        s = rows[rows["method"].eq(method)][col].dropna()
+        return str(s.iloc[0]) if not s.empty else "—"
+
     def img(feishu: bool, name: str, caption: str) -> str:
         src = f"@./docs/analysis/{name}" if feishu else name
         return f"![{caption}]({src})"
@@ -291,41 +350,64 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
 
 {local_note}
 
-数据来源：`results/disk_environment/03_system_fair/agnews/csv/` 的 05C formal 数据。查询对比使用 05C system 层的四个方法：Ours-Disk、OG-LVQ、Glass-NSG、SymphonyQG。其中 SymphonyQG 使用 `fix_w32_diskpayload_symphony_20260831_140957` 修正后的完整 sweep，其余三个方法使用 `formal_diskenv_20260826_114755_bc_agnews` 的 32 线程 sweep。
+数据来源：AGNews 05C 四个方法。Ours-Disk、OG-LVQ、Glass-NSG 使用本机新 run `{_current_rid()}` 的 w32 sweep；SymphonyQG 使用 `fix_w32_diskpayload_symphony_20260831_140957` 修正后的完整 sweep。
 
 ## 构建
 
-02 shared graph（DiskANN fp32 Vamana，本机重跑）的构建信息记录在 graph meta：总构建时间约 {fmt(graph_build_min)} min，distance evaluations 约 {graph_build_dist}，graph bytes 约 {fmt(graph_mib)} MiB。没有保留 progress-stage 分段日志（GIST 的 02build 日志同样是最终汇总格式，不含分段），所以不能拆 train/encode/graph build 三段。
+02 graph build 是共享的：DiskANN 家族（PQ-DiskANN / SQ-DiskANN / SAQ-DiskANN）共用同一张 fp32 Vamana shared graph，本机重跑一次，graph meta 记录总构建时间约 {fmt(graph_build_min)} min、distance evaluations 约 {graph_build_dist}、graph bytes 约 {fmt(graph_mib)} MiB。Ours 使用独立的 ours_native 图。没有保留 progress-stage 分段日志（GIST 的 02build 日志同样只有最终汇总格式），所以不能拆 train/encode/graph build 三段。
 
-05 层导出阶段的 `build_stats` 只同步到本机一部分；Ours-Disk / OG-LVQ / Glass-NSG 的 export build_stats 仍在另一台机器的 run 里，本机只有汇总 CSV。
+### 构图时间
 
-| 方法 | 磁盘索引构建/导出 (min) | 构建 peak RSS (GiB) |
+| 方法 | 构图/构建时间 | 峰值内存 | 来源 |
+|---|---:|---:|---|
+| Shared fp32 Vamana（PQ/SQ/SAQ 共用） | {fmt(graph_build_min)} min | — | shared_graph meta |
+| Ours（native） | graph 2.34 / total 2.46 min | 6.80 GiB | Ours_OursDiskANN_M64_build.json |
+| OG-LVQ | 3.59 min | 3.34 GiB | OG-LVQ_LVQ4_R64_W400_build.json |
+| Glass-NSG | 1.62 min | 8.38 GiB | Glass-NSG_R64_L100_build.json |
+| SymphonyQG | 3.07 min | 14.77 GiB | SymphonyQG_R64_EF400_t3_build.json |
+
+统一口径：本表“构图/构建时间”一律取 **from-scratch 官方 build record**（`*_build.json` 的 `build_time_ms`；Ours 额外给出 `graph_build_time_ms` 拆分），`graph_build_mode=reused_graph` 的记录不计入构图耗时。
+
+Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77 s / encode 17.47 s / total 24.25 s，其 `graph_build_mode=reused_graph`，属于复用图加载 + payload 编码，不是 from-scratch 构建；官方从零构建记录为 `Ours_OursDiskANN_M64_build.json`（graph 2.34 min / total 2.46 min / peak 6.80 GiB）。两者是两套口径（reused 加载 vs from-scratch 构建），不直接比较。M64 官方记录未记录 Lbuild/alpha；磁盘查询图参数（R64/Lbuild400/alpha1.2、ExRaBitQ4-symmetric）来自 02 manifest。如需把构建耗时严格绑定到磁盘查询图本身，可在 Ours 图上补一次 from-scratch 插桩构建。
+
+下面的“磁盘索引导出”是 02 构图完成后，把 payload 编码并写盘的时间。PQ / SQ / SAQ 虽然共用同一张图，但 payload 量化方式不同，所以导出耗时不同（PQ 训 codebook、SAQ 球面变换、SQ 纯标量量化）。
+
+05 层导出阶段的 `build_stats`：Ours-Disk、OG-LVQ、Glass-NSG 均来自本机新 run。
+
+| 方法 | 磁盘索引导出（payload 编码 + 写盘）(min) | 导出 peak RSS (GiB) |
 |---|---:|---:|
 | PQ-DiskANN | {bcell("PQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("PQ-DiskANN-Disk", "peak_rss_gib")} |
 | SQ-DiskANN | {bcell("SQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("SQ-DiskANN-Disk", "peak_rss_gib")} |
 | SAQ-DiskANN | {bcell("SAQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("SAQ-DiskANN-Disk", "peak_rss_gib")} |
 | SymphonyQG | {bcell("SymphonyQG-DiskPort", "wall_seconds", 60)} | {bcell("SymphonyQG-DiskPort", "peak_rss_gib")} |
+| Ours-Disk | {bcell("Ours-Disk", "wall_seconds", 60)} | {bcell("Ours-Disk", "peak_rss_gib")} |
+| OG-LVQ | {bcell("OG-LVQ-DiskPort", "wall_seconds", 60)} | {bcell("OG-LVQ-DiskPort", "peak_rss_gib")} |
+| Glass-NSG | {bcell("Glass-NSG-DiskPort", "wall_seconds", 60)} | {bcell("Glass-NSG-DiskPort", "peak_rss_gib")} |
 
-说明：SymphonyQG 导出耗时约 {bcell("SymphonyQG-DiskPort", "wall_seconds", 60)} min、peak RSS 约 {bcell("SymphonyQG-DiskPort", "peak_rss_gib")} GiB，是已有数据里最重的；Ours-Disk 的 AGNews 导出耗时本次缺失，无法与它直接比较。
+说明：PQ/SQ/SAQ 的导出时间差异来自 payload 编码，不是构图（三者共用同一张 shared graph）。SymphonyQG 是第三方系统，其导出最重；Ours-Disk 已由本机新 run 补齐。
+
+### Ours 索引大小（4bit / 8bit）
+
+| 组成 | 大小 |
+|---|---:|
+| 4-bit payload | {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1e6, 0)} MB |
+| 8-bit payload（4-bit + residual） | {fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1e6, 0)} MB |
+| adjacency | {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1e6, 0)} MB |
+| fp32 base（单独存放） | 0 |
+| 4-bit 索引（4-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_4bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB |
+| 8-bit 索引（8-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_8bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB |
 
 ## 查询
 
 ### Ours 查询参数与口径
 
-| 参数 | 值 |
+| 项 | 值 |
 |---|---|
-| dataset / base_count / dimension | agnews / 769,382 / 1024 |
-| workers | 32 |
-| search_dram_budget_gib | 2.0 |
-| storage_mode / cache_mode | hybrid_disk / standard |
-| kernel | ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search |
-| direct_io / native_aio | True / True |
-| page_size | 4096 |
-| search_width sweep | 10 到 580（40 个点），beam_width=1 |
-| ablation | db1+coalescing+reuse |
-| query_count | 800 |
-| index_size_mb | {fmt(num("Ours-Disk", "index_size_mb", "max"), 2)} |
-| resident / peak RSS | {fmt(num("Ours-Disk", "resident_bytes", "max") / 1024**3, 2)} GiB / {fmt(num("Ours-Disk", "peak_rss_bytes", "max") / 1024**3, 2)} GiB |
+| 数据集 | agnews（769k × 1024） |
+| 存储 | 4-bit payload {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1e6, 0)} MB + 8-bit payload（4bit+residual）{fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1e6, 0)} MB + adjacency {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1e6, 0)} MB；fp32 base 单独存放 |
+| 查询 | 32 workers、2 GiB budget、hybrid_disk、direct I/O + native AIO、page 4096 |
+| sweep | width 10–580（40 点）、beam=1、ablation=db1+coalescing+reuse |
+| parity | {first("Ours-Disk", "implementation_parity")} |
 
 ### 05C 方法指标对比
 
@@ -343,15 +425,21 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
 
 注意：OG-LVQ、Glass-NSG、SymphonyQG 没有暴露 DB1 / full4 内部计数，其 distance/queue 字段基本等于总耗时，无法与 Ours 的 distance compute 单独拆分口径对比，所以这些格标为“—”。
 
-### Figure 2：Recall/QPS/I-O 曲线
+### Figure 2：05B shared graph Recall-QPS（02 层）
 
-{img(feishu, "fig02_w32_recall_qps_io_curves_agnews.png", "Figure 2. AGNews 05C Recall/QPS/I-O 曲线")}
+![Figure 2. AGNews 05B Recall-QPS]({"@./" if feishu else ""}results/disk_environment/02_diskann_fair/agnews/figures_w32/disk05b_shared_graph_recall_qps.png)
 
-图读法：只看 05C system 层。左图是 Recall@10 与 QPS；右图是达到相同 recall 时的 I/O requests/query。
+图读法：02 层共享图方法（PQ-DiskANN / SQ-DiskANN / SAQ-DiskANN / Ours-Disk）的 Recall@10–QPS。
 
-### Figure 3：Ours-Disk 查询时间拆分
+### Figure 3：05C system Recall-QPS（03 层）
 
-{img(feishu, "fig03_ours_query_time_decomposition_w32_agnews.png", "Figure 3. AGNews Ours-Disk 查询时间拆分")}
+{img(feishu, "fig05c_recall_qps_agnews_paper.png", "Figure 3. AGNews 05C Recall-QPS")}
+
+图读法：03 层完整磁盘系统（Ours / SymphonyQG / OG-LVQ / Glass-NSG）的 Recall@10–QPS，使用本机最新数据（log-y）。
+
+### Figure 4：Ours-Disk 查询时间拆分
+
+{img(feishu, "fig03_ours_query_time_decomposition_w32_agnews_paper.png", "Figure 4. AGNews Ours-Disk 查询时间拆分")}
 
 图读法：只看 Ours-Disk。左图是 total latency 与 I/O wait；中图是非 I/O 的 prep/queue/distance/rerank；右图是每 query 的 DB1/full4/rerank 平均计数。
 
@@ -360,7 +448,18 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
 - **Recall 上限**：Ours-Disk 最高，约 {fmt(num("Ours-Disk", "recall", "max"), 4)}；SymphonyQG 约 {fmt(num("SymphonyQG-DiskPort", "recall", "max"), 4)}；OG-LVQ 约 {fmt(num("OG-LVQ-DiskPort", "recall", "max"), 4)}；Glass-NSG 约 {fmt(num("Glass-NSG-DiskPort", "recall", "max"), 4)}。
 - **Latency / QPS**：Ours-Disk 平均 latency 约 {cell("Ours-Disk", "latency_mean_us", 2, 1000)} ms/query、最高 QPS 约 {cell("Ours-Disk", "qps", 2, 1.0, "max")}，在四个方法里吞吐最高且延迟最低；SymphonyQG 平均 latency 约 {cell("SymphonyQG-DiskPort", "latency_mean_us", 2, 1000)} ms/query。
 - **I/O 成本**：同 recall 下 Ours-Disk 的 I/O requests/query 和 bytes read/query 明显低于其他三个方法。平均来看 Ours-Disk 约 {cell("Ours-Disk", "io_requests_per_query", 1)} 次/query、{cell("Ours-Disk", "bytes_read_per_query", 2, 1024**2)} MiB；Glass-NSG 约 {cell("Glass-NSG-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("Glass-NSG-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB；OG-LVQ 约 {cell("OG-LVQ-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("OG-LVQ-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB；SymphonyQG 约 {cell("SymphonyQG-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("SymphonyQG-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB。
-- **瓶颈**：四个方法都以 I/O wait 为主（Ours-Disk {fmt(share("Ours-Disk", "io_wait_us", "latency_mean_us"))}%、OG-LVQ {fmt(share("OG-LVQ-DiskPort", "io_wait_us", "latency_mean_us"))}%、Glass-NSG {fmt(share("Glass-NSG-DiskPort", "io_wait_us", "latency_mean_us"))}%、SymphonyQG {fmt(share("SymphonyQG-DiskPort", "io_wait_us", "latency_mean_us"))}%）。Ours-Disk 的 distance compute 只有 {fmt(share("Ours-Disk", "distance_compute_us", "latency_mean_us"))}%，说明 Ours 不是距离核慢，而是随机读盘等待慢。
+- **瓶颈**：四个方法都以 I/O wait 为主（Ours-Disk {fmt(share("Ours-Disk", "io_wait_us", "latency_mean_us"))}%、OG-LVQ {fmt(share("OG-LVQ-DiskPort", "io_wait_us", "latency_mean_us"))}%、Glass-NSG {fmt(share("Glass-NSG-DiskPort", "io_wait_us", "latency_mean_us"))}%、SymphonyQG {fmt(share("SymphonyQG-DiskPort", "io_wait_us", "latency_mean_us"))}%）。Ours-Disk 的 distance compute 只有 {fmt(share("Ours-Disk", "distance_compute_us", "latency_mean_us"))}%，说明 Ours 不是距离核慢，而是读盘等待慢。
+- **Ours 为什么快**：Ours-Disk 的 DB1 1bit 初筛把 full4 候选压到约 {cell("Ours-Disk", "full4_candidates", 1)} 个/query，只读 4bit 页面（{cell("Ours-Disk", "bytes_read_per_query", 2, 1024**2)} MiB/query），且页面访问已顺序化（约 200–350 MB/s），所以吞吐远高于以随机读为主的 OG-LVQ / Glass-NSG / SymphonyQG。同时 Ours 索引只有 1.36 GB（SymphonyQG 约 12.6 GB），磁盘 footprint 也更小。
+
+### Ours 进一步优化
+
+按收益排序：
+
+1. 把 2 GiB cache 真正用起来（当前 `cache_bytes` 仅约 25 MiB）。
+2. 压低 full4 读：收紧 DB1 门控；同页候选合并读；4bit 与 residual 尽量同页。
+3. 继续提升页面顺序性、prefetch 和 AIO depth。
+4. 按目标 recall 选最小 width，避免无谓读盘。
+5. 尝试热页面 / 分层缓存，把高频 payload 页留在 DRAM。
 
 ## 数据与口径
 

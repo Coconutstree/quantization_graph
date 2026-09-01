@@ -36,6 +36,9 @@ target/
 *.hdf5
 *.bin
 *.payload
+*.pages
+*.tiff
+*_raw.csv
 *.rabitq
 *.residual
 *.refine4
@@ -44,7 +47,7 @@ target/
 
 data/
 downloads/
-work/01_quantizer_fair/
+work/
 
 # Keep generated results local; publish only lightweight CSV summaries and figures.
 results/*
@@ -59,6 +62,8 @@ results/disk_environment/**/*
 !results/disk_environment/**/figures
 !results/disk_environment/**/figures/
 !results/disk_environment/**/figures/**
+!results/disk_environment/**/figures_w32/
+!results/disk_environment/**/figures_w32/**
 results/disk_environment/.formal_runs/**
 !results/memory_environment/
 !results/memory_environment/**/
@@ -70,6 +75,8 @@ results/memory_environment/**/*
 !results/memory_environment/**/figures
 !results/memory_environment/**/figures/
 !results/memory_environment/**/figures/**
+!results/memory_environment/**/figures_w32/
+!results/memory_environment/**/figures_w32/**
 
 # Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
 baselines/builds/
