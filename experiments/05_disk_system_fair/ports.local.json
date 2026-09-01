@@ -132,7 +132,7 @@
       "source_kernel": "official Glass NSG SQ4U distance kernel",
       "port_kind": "algorithm_preserving_disk_port",
       "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1",
-      "binary_sha256": "c6954872331b14342ffdfa2b6ca592903af41c83dc1c07c01b9ae41e978d138c"
+      "binary_sha256": "7c84382f7b8527718c54c517f8172bfdd60fd8f07338e82beb86c78d58a3f5db"
     },
     "05c:DiskANN-PQ-Disk": {
       "status": "ready",

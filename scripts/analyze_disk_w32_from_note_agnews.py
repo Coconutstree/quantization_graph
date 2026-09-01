@@ -320,6 +320,15 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
             return "—"
         return fmt(sub[col].max() / scale, 2)
 
+    def export_min(method: str) -> float:
+        sub = build[build["method"].eq(method)]
+        if sub.empty:
+            return math.nan
+        return float(sub["wall_seconds"].max()) / 60.0
+
+    def build_total(graph_min: float, method: str) -> float:
+        return graph_min + export_min(method)
+
     def first(method: str, col: str) -> str:
         s = rows[rows["method"].eq(method)][col].dropna()
         return str(s.iloc[0]) if not s.empty else "—"
@@ -356,35 +365,24 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
 
 02 graph build 是共享的：DiskANN 家族（PQ-DiskANN / SQ-DiskANN / SAQ-DiskANN）共用同一张 fp32 Vamana shared graph，本机重跑一次，graph meta 记录总构建时间约 {fmt(graph_build_min)} min、distance evaluations 约 {graph_build_dist}、graph bytes 约 {fmt(graph_mib)} MiB。Ours 使用独立的 ours_native 图。没有保留 progress-stage 分段日志（GIST 的 02build 日志同样只有最终汇总格式），所以不能拆 train/encode/graph build 三段。
 
-### 构图时间
+### 构建成本（总 = 构图 + 磁盘索引导出）
 
-| 方法 | 构图/构建时间 | 峰值内存 | 来源 |
-|---|---:|---:|---|
-| Shared fp32 Vamana（PQ/SQ/SAQ 共用） | {fmt(graph_build_min)} min | — | shared_graph meta |
-| Ours（native） | graph 2.34 / total 2.46 min | 6.80 GiB | Ours_OursDiskANN_M64_build.json |
-| OG-LVQ | 3.59 min | 3.34 GiB | OG-LVQ_LVQ4_R64_W400_build.json |
-| Glass-NSG | 1.62 min | 8.38 GiB | Glass-NSG_R64_L100_build.json |
-| SymphonyQG | 3.07 min | 14.77 GiB | SymphonyQG_R64_EF400_t3_build.json |
+| 方法 | 构图耗时 (min) | 磁盘索引导出 (min) | 总构建成本 (min) | 构图 peak RSS (GiB) | 导出 peak RSS (GiB) | 来源 |
+|---|---:|---:|---:|---:|---:|---|
+| Shared fp32 Vamana（PQ/SQ/SAQ 共用） | {fmt(graph_build_min)} | — | {fmt(graph_build_min)}（共享一次） | — | — | shared_graph meta |
+| PQ-DiskANN | {fmt(graph_build_min)}（共享） | {fmt(export_min("PQ-DiskANN-Disk"), 2)} | {fmt(build_total(graph_build_min, "PQ-DiskANN-Disk"), 2)} | — | {bcell("PQ-DiskANN-Disk", "peak_rss_gib")} | shared meta + export build_stats |
+| SQ-DiskANN | {fmt(graph_build_min)}（共享） | {fmt(export_min("SQ-DiskANN-Disk"), 2)} | {fmt(build_total(graph_build_min, "SQ-DiskANN-Disk"), 2)} | — | {bcell("SQ-DiskANN-Disk", "peak_rss_gib")} | shared meta + export build_stats |
+| SAQ-DiskANN | {fmt(graph_build_min)}（共享） | {fmt(export_min("SAQ-DiskANN-Disk"), 2)} | {fmt(build_total(graph_build_min, "SAQ-DiskANN-Disk"), 2)} | — | {bcell("SAQ-DiskANN-Disk", "peak_rss_gib")} | shared meta + export build_stats |
+| Ours（native） | 2.46 | {fmt(export_min("Ours-Disk"), 2)} | {fmt(build_total(2.46, "Ours-Disk"), 2)} | 6.80 | {bcell("Ours-Disk", "peak_rss_gib")} | Ours_OursDiskANN_M64_build.json + export build_stats |
+| OG-LVQ | 3.59 | {fmt(export_min("OG-LVQ-DiskPort"), 2)} | {fmt(build_total(3.59, "OG-LVQ-DiskPort"), 2)} | 3.34 | {bcell("OG-LVQ-DiskPort", "peak_rss_gib")} | OG-LVQ_LVQ4_R64_W400_build.json + export build_stats |
+| Glass-NSG | 2.82 | {fmt(export_min("Glass-NSG-DiskPort"), 2)} | {fmt(build_total(2.82, "Glass-NSG-DiskPort"), 2)} | 8.36 | {bcell("Glass-NSG-DiskPort", "peak_rss_gib")} | Glass-NSG_R64_L400_build.json + export build_stats |
+| SymphonyQG | 3.07 | {fmt(export_min("SymphonyQG-DiskPort"), 2)} | {fmt(build_total(3.07, "SymphonyQG-DiskPort"), 2)} | 14.77 | {bcell("SymphonyQG-DiskPort", "peak_rss_gib")} | SymphonyQG_R64_EF400_t3_build.json + export build_stats |
 
-统一口径：本表“构图/构建时间”一律取 **from-scratch 官方 build record**（`*_build.json` 的 `build_time_ms`；Ours 额外给出 `graph_build_time_ms` 拆分），`graph_build_mode=reused_graph` 的记录不计入构图耗时。
+统一口径：本表“构图耗时”一律取 **from-scratch 官方 build record**（`*_build.json` 的 `build_time_ms`；Ours 取 total 2.46 min），`graph_build_mode=reused_graph` 的记录不计入构图耗时；“磁盘索引导出”为 05 层 export 的 `.build_stats.json`（payload 编码 + 写盘，wall 耗时与 peak RSS）。
 
-Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77 s / encode 17.47 s / total 24.25 s，其 `graph_build_mode=reused_graph`，属于复用图加载 + payload 编码，不是 from-scratch 构建；官方从零构建记录为 `Ours_OursDiskANN_M64_build.json`（graph 2.34 min / total 2.46 min / peak 6.80 GiB）。两者是两套口径（reused 加载 vs from-scratch 构建），不直接比较。M64 官方记录未记录 Lbuild/alpha；磁盘查询图参数（R64/Lbuild400/alpha1.2、ExRaBitQ4-symmetric）来自 02 manifest。如需把构建耗时严格绑定到磁盘查询图本身，可在 Ours 图上补一次 from-scratch 插桩构建。
+Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77 s / encode 17.47 s / total 24.25 s，其 `graph_build_mode=reused_graph`，属于复用图加载 + payload 编码，不是 from-scratch 构建；官方从零构建记录为 `Ours_OursDiskANN_M64_build.json`（graph 2.34 min / total 2.46 min / peak 6.80 GiB）。两者是两套口径（reused 加载 vs from-scratch 构建），不直接比较。M64 官方记录未记录 Lbuild/alpha；磁盘查询图参数（R64/Lbuild400/alpha1.2、ExRaBitQ4-symmetric）来自 02 manifest。
 
-下面的“磁盘索引导出”是 02 构图完成后，把 payload 编码并写盘的时间。PQ / SQ / SAQ 虽然共用同一张图，但 payload 量化方式不同，所以导出耗时不同（PQ 训 codebook、SAQ 球面变换、SQ 纯标量量化）。
-
-05 层导出阶段的 `build_stats`：Ours-Disk、OG-LVQ、Glass-NSG 均来自本机新 run。
-
-| 方法 | 磁盘索引导出（payload 编码 + 写盘）(min) | 导出 peak RSS (GiB) |
-|---|---:|---:|
-| PQ-DiskANN | {bcell("PQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("PQ-DiskANN-Disk", "peak_rss_gib")} |
-| SQ-DiskANN | {bcell("SQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("SQ-DiskANN-Disk", "peak_rss_gib")} |
-| SAQ-DiskANN | {bcell("SAQ-DiskANN-Disk", "wall_seconds", 60)} | {bcell("SAQ-DiskANN-Disk", "peak_rss_gib")} |
-| SymphonyQG | {bcell("SymphonyQG-DiskPort", "wall_seconds", 60)} | {bcell("SymphonyQG-DiskPort", "peak_rss_gib")} |
-| Ours-Disk | {bcell("Ours-Disk", "wall_seconds", 60)} | {bcell("Ours-Disk", "peak_rss_gib")} |
-| OG-LVQ | {bcell("OG-LVQ-DiskPort", "wall_seconds", 60)} | {bcell("OG-LVQ-DiskPort", "peak_rss_gib")} |
-| Glass-NSG | {bcell("Glass-NSG-DiskPort", "wall_seconds", 60)} | {bcell("Glass-NSG-DiskPort", "peak_rss_gib")} |
-
-说明：PQ/SQ/SAQ 的导出时间差异来自 payload 编码，不是构图（三者共用同一张 shared graph）。SymphonyQG 是第三方系统，其导出最重；Ours-Disk 已由本机新 run 补齐。
+构建成本分析：总成本排序为 PQ（55.19）> SAQ（45.77）> SQ（40.68）> SymphonyQG（30.95）> Ours（9.13）> OG-LVQ（3.66）> Glass-NSG（3.44）min。PQ/SQ/SAQ 的总成本被共享图构建（{fmt(graph_build_min)} min，仅发生一次）主导，其边际导出成本只有 14.87 / 0.36 / 5.44 min（差异来自 payload 编码方式：PQ 训 codebook、SAQ 球面变换、SQ 纯标量）。SymphonyQG 总成本几乎全在磁盘索引导出（约 90%），是第三方系统里导出最重的；Ours 构图轻（2.46 min）且导出 6.67 min，总 9.13 min，显著低于 SymphonyQG 与“按全额共享图口径”的 DiskANN 家族；OG-LVQ / Glass-NSG 最轻（<4 min）。
 
 ### Ours 索引大小（4bit / 8bit）
 
@@ -424,6 +422,8 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 | full4 page reads/query | {cell("Ours-Disk", "full4_page_reads", 1)} | — | — | — |
 
 注意：OG-LVQ、Glass-NSG、SymphonyQG 没有暴露 DB1 / full4 内部计数，其 distance/queue 字段基本等于总耗时，无法与 Ours 的 distance compute 单独拆分口径对比，所以这些格标为“—”。
+
+05C 指标分析：在 Recall@10 0.93–0.994 的论文工作区里，Ours-Disk 的 recall–QPS 前沿整体占优——最高 QPS 202.13、平均 latency 586.72 ms/query、I/O 请求 931.4 次与 3.64 MiB/query 均为四个方法里最低。四个方法都以 I/O wait 为主（≥94.7%），磁盘读取是共同瓶颈；Ours 的 distance compute 仅 0.08%，其瓶颈在 DB1 1bit 初筛后的 full4 页读取（809.7 页/query）。SymphonyQG 把 recall 上限推到 0.9992，但 QPS 只有 5.18（约 Ours 的 1/39）、每查询读 57.95 MiB（约 Ours 的 16×），高 recall 靠高 I/O 成本换取；OG-LVQ（QPS ≤56.7、recall ≤0.953）与 Glass-NSG（QPS ≤135.5、recall ≤0.945）位于中间带。
 
 ### Figure 2：05B shared graph Recall-QPS（02 层）
 

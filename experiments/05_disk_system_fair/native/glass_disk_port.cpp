@@ -299,7 +299,7 @@ void export_index(const Args& args) {
 
     const auto start = Clock::now();
     const int R = 64;
-    const int L = 100;
+    const int L = 400;
     std::cerr << "[Glass export] building official NSG graph\n";
     auto builder = glass::create_nsg("SQ4U", R, L);
     if (!builder) throw std::runtime_error("failed to create official Glass NSG builder");
@@ -585,7 +585,7 @@ void write_artifact(
     out << "  \"query_trace_path\": " << json_string(fs::absolute(trace_path).string()) << ",\n";
     out << "  \"query_trace_sha256\": " << json_string(sha256(trace_path)) << ",\n";
     out << "  \"summary_rows\": [{\n";
-    out << "    \"config_id\": \"NSG_R64_L100_SQ4U\",\n";
+    out << "    \"config_id\": \"NSG_R64_L400_SQ4U\",\n";
     out << "    \"search_param\": \"ef=" << ef << "\",\n";
     out << "    \"search_width\": " << ef << ",\n";
     out << "    \"beam_width\": 1,\n";
@@ -715,7 +715,7 @@ void run_search_single(const Args& args) {
               << "\"layer\":\"05c\",\"storage_mode\":\"hybrid_disk\",\"cache_mode\":"
               << json_string(args.require("cache-mode"))
               << ",\"dataset\":" << json_string(args.require("dataset"))
-              << ",\"method\":\"Glass-NSG-DiskPort\",\"config_id\":\"NSG_R64_L100_SQ4U\","
+              << ",\"method\":\"Glass-NSG-DiskPort\",\"config_id\":\"NSG_R64_L400_SQ4U\","
               << "\"repeat_id\":" << args.require("repeat-id")
               << ",\"query_id\":" << qid
               << ",\"search_width\":" << ef

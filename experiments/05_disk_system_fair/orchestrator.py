@@ -706,7 +706,7 @@ FAST_CONFIG_IDS = {
     ("05c", "Ours-Disk"): "beam1",
     ("05c", "SymphonyQG-DiskPort"): "QG_R64_EF400_t3",
     ("05c", "OG-LVQ-DiskPort"): "LVQ4_R64_W400",
-    ("05c", "Glass-NSG-DiskPort"): "NSG_R64_L100_SQ4U",
+    ("05c", "Glass-NSG-DiskPort"): "NSG_R64_L400_SQ4U",
     ("05c", "DiskANN-PQ-Disk"): "DiskANN_PQ_R64_L400",
 }
 
