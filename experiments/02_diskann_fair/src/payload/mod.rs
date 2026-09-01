@@ -47,6 +47,7 @@ pub struct PreparedPayload {
     pub residual_bytes: Option<u64>,
     pub fp32_base_bytes: Option<u64>,
     pub graph_build_distance: String,
+    pub graph_build_distance_evaluations: Option<u64>,
     pub peak_rss_mb: Option<f64>,
     pub search_results: Vec<SearchResult>,
     pub note: String,

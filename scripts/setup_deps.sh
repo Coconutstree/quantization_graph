@@ -113,7 +113,7 @@ else
   cmake --build "${SAQ_BUILD_DIR}" --target create_index test_qps test_relative_error -j "${JOBS}" || die "SAQ build failed"
 fi
 echo "NOTE: SAQ 实验还需 baselines/saq/data/<dataset>（PCA 后的库/查询/质心）。"
-echo "      该数据由你的数据集生成（见 BASELINE_EXPERIMENT_PLAN_MS_V2.md 的 SAQ 数据准备），"
+echo "      该数据由你的数据集生成（见 docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md 的 SAQ 数据准备），"
 echo "      私有数据需你自己准备后放入对应目录。"
 
 # ---------- 3. SymphonyQG ----------

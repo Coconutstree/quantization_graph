@@ -114,6 +114,7 @@ unsafe extern "C" {
         paper_factors_out: *mut std::ffi::c_void,
         paper_msb_stride_out: *mut usize,
         paper_factor_bytes_out: *mut usize,
+        distance_evaluations_out: *mut u64,
     ) -> bool;
     fn rabitq_paper_msb_code_bytes(space: *const std::ffi::c_void) -> usize;
     fn rabitq_paper_factor_bytes() -> usize;
@@ -2074,14 +2075,14 @@ pub fn build_ours_vamana_graph<D, Ctx>(
     refine_passes: usize,
     prune_candidate_cap: usize,
     build_early_stop_hops: usize,
-) -> ANNResult<u64>
+) -> ANNResult<(u64, u64)>
 where
     D: Send + Sync,
     Ctx: ExecutionContext,
 {
     let record_count = provider.capacity();
     if record_count == 0 {
-        return Ok(0);
+        return Ok((0, 0));
     }
     let mut degrees = vec![0_u32; record_count];
     let mut edges = vec![0_u32; record_count * r];
@@ -2091,6 +2092,7 @@ where
     let mut factor_sidecar = vec![0_u8; record_count * factor_bytes];
     let mut msb_stride_out = 0_usize;
     let mut factor_bytes_out = 0_usize;
+    let mut distance_evaluations_out = 0_u64;
     let ok = unsafe {
         rabitq_build_vamana_graph(
             provider.aux_vectors.space.ptr,
@@ -2115,6 +2117,7 @@ where
             factor_sidecar.as_mut_ptr().cast::<std::ffi::c_void>(),
             &mut msb_stride_out,
             &mut factor_bytes_out,
+            &mut distance_evaluations_out,
         )
     };
     if !ok {
@@ -2141,7 +2144,7 @@ where
     for id in record_count..provider.total_points() {
         provider.neighbors().set_neighbors_sync(id, &[0])?;
     }
-    Ok(total_edges)
+    Ok((total_edges, distance_evaluations_out))
 }
 
 pub fn encode_ours_payloads<D, Ctx>(

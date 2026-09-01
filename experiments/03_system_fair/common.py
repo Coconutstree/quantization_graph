@@ -1,7 +1,7 @@
 """Shared helpers for the 03 system-fair experiment framework.
 
 This module is the Python equivalent of the C++ ``experiments/common``
-infrastructure listed in BASELINE_EXPERIMENT_PLAN_MS_V2.md (dataset loader,
+infrastructure listed in docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md (dataset loader,
 groundtruth/recall, timer, RSS / index-size, hardware info, CSV writer,
 repeat runner and thread pinning).  All measurements are wall-clock based and
 reported in the units required by the plan (query latency in microseconds,

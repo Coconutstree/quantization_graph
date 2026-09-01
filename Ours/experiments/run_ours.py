@@ -160,7 +160,7 @@ def main() -> int:
         help="training sample size used when K>1 becomes available",
     )
     ap.add_argument("--data-root", default=str(_REPO / "data"))
-    ap.add_argument("--out-root", default=str(_REPO / "results"))
+    ap.add_argument("--out-root", default=str(_REPO / "results" / "memory_environment"))
     ap.add_argument("--threads", type=int, default=64)
     ap.add_argument("--val-queries", type=int, default=1000)
     ap.add_argument("--repeats", type=int, default=1)

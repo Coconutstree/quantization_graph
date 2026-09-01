@@ -1,0 +1,18 @@
+{
+  "method": "Ours",
+  "selected_config": {
+    "config_id": "OursDiskANN_M64",
+    "M": 64,
+    "R": 64,
+    "L_build": 400,
+    "alpha": 1.2,
+    "rerank_candidates": 100,
+    "residual_bits": 4,
+    "centroid_count": 1,
+    "query_coarse_codec": "int8",
+    "selection_note": "fixed M=64/L=400"
+  },
+  "status": "ok",
+  "recall_target": 0.95,
+  "fixed": true
+}

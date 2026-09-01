@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\small
+\caption{End-to-end system comparison on gist (Recall@10, k=10, 64 threads). \textemdash{}: method cannot reach that recall; its max recall is shown in parentheses.}
+\label{tab:system_fair}
+\begin{tabular}{lcccccclrr}
+\toprule
+Method & Config & R@10 range & QPS@.90 & QPS@.93 & QPS@.95 & p95us@.95 & Build(ms) & Idx(MB) & RSS(MB) \\
+\midrule
+Glass-NSG & R64_L400 & 0.444..0.796 (0.7959) & — & — & — & — & 375711 & 244.1 & 8275.2 \\
+OG-LVQ & LVQ4_R64_W400 & 0.593..0.906 (0.9056) & 629.5 & — & — & — & 300328 & 744.8 & 787.3 \\
+Ours & OursDiskANN_M64 & 0.619..0.986 (0.9855) & 1046.5 & 836.8 & 677.3 & 1682.0 & 151988 & 1452.0 & 8559.8 \\
+SymphonyQG & R64_EF400_t3 & 0.511..0.991 (0.9908) & 6954.5 & 5285.9 & 4219.8 & 289.7 & 246433 & 12451.2 & 12488.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+

@@ -23,10 +23,13 @@ if "diskfair" not in sys.modules:
 from diskfair.native_contract import (  # noqa: E402
     ContractError,
     METHOD_SPECS,
+    SUMMARY_FIELDS,
+    flatten_artifact,
     sha256_file,
     validate_artifact,
     validate_registry,
 )
+from diskfair.orchestrator import _run_capture_build  # noqa: E402
 
 
 def _artifact(tmp: Path) -> tuple[Path, Path]:
@@ -172,6 +175,76 @@ def test_memory_row_cannot_claim_ssd(tmp: Path) -> None:
     raise AssertionError("memory payload was accepted as an SSD result")
 
 
+def test_05b_baselines_accept_disk_payload(tmp: Path) -> None:
+    """The shared-graph baselines have both hybrid and disk-payload contracts."""
+    for method in ("PQ-DiskANN-Disk", "SQ-DiskANN-Disk", "SAQ-DiskANN-Disk"):
+        spec = next(item for item in METHOD_SPECS if item.method == method)
+        assert spec.storage_modes == ("hybrid_disk", "disk_payload")
+
+        path, disk_root = _artifact(tmp / method.replace("-", "_"))
+        doc = json.loads(path.read_text())
+        doc.update(
+            {
+                "layer": spec.layer,
+                "method": spec.method,
+                "source_suite": spec.source_suite,
+                "source_kernel": spec.source_kernel,
+                "storage_mode": "disk_payload",
+                "cache_mode": "standard",
+                "graph_role": "shared_baseline",
+                "shared_graph_sha256": "shared-graph",
+                "source_graph_sha256": "shared-graph",
+                "whole_payload_in_memory": False,
+                "direct_io": True,
+                "native_aio": True,
+                "io_backend": "linux_native_aio_odirect",
+                "implementation_parity": "passed",
+                "parity": {
+                    "reference_artifact_sha256": "reference",
+                    "max_recall_delta": 0.0,
+                    "mean_top10_overlap": 1.0,
+                    "mean_visited_count_relative_delta": 0.0,
+                    "mean_distance_count_relative_delta": 0.0,
+                },
+            }
+        )
+        trace = Path(doc["query_trace_path"])
+        trace_row = json.loads(trace.read_text())
+        trace_row.update(
+            {
+                "layer": spec.layer,
+                "method": spec.method,
+                "storage_mode": "disk_payload",
+                "cache_mode": "standard",
+                "io_requests": 1,
+                "sectors_4k": 1,
+                "bytes_read": 4096,
+                "io_wait_us": 1,
+            }
+        )
+        trace.write_text(json.dumps(trace_row) + "\n")
+        doc["query_trace_sha256"] = sha256_file(trace)
+        doc["summary_rows"][0]["io_requests_per_query"] = 1
+        doc["summary_rows"][0]["sectors_4k_per_query"] = 1
+        doc["summary_rows"][0]["bytes_read_per_query"] = 4096
+        path.write_text(json.dumps(doc))
+        validate_artifact(
+            path,
+            spec=spec,
+            expected={
+                "dataset": "gist",
+                "phase": "test",
+                "run_id": "contract_test",
+                "repeat_id": 0,
+                "workers": 1,
+                "storage_mode": "disk_payload",
+                "query_split_sha256": "split",
+                "warmup_queries": 100,
+            },
+            disk_root=disk_root,
+        )
+
+
 def test_pending_ports_fail() -> None:
     spec = METHOD_SPECS[0]
     ports = {
@@ -264,14 +337,123 @@ def test_official_diskann_requires_io_uring(tmp: Path) -> None:
     validate_artifact(path, spec=spec, expected=expected, disk_root=disk_root)
 
 
+def test_ours_index_size_fields_flow_into_rows(tmp: Path) -> None:
+    """Ours 4bit/8bit index-size fields survive flattening into the CSV rows."""
+    path, disk_root = _artifact(tmp)
+    doc = json.loads(path.read_text())
+    doc.update(
+        {
+            "layer": "05b",
+            "method": "Ours-Disk",
+            "source_suite": "02_diskann_fair",
+            "source_kernel": "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search",
+            "port_kind": "algorithm_preserving_disk_port",
+            "storage_mode": "hybrid_disk",
+            "cache_mode": "standard",
+            "ablation": "db1+coalescing+reuse",
+            "graph_role": "ours_native",
+            "source_graph_sha256": "source-graph",
+            "shared_graph_sha256": "",
+            "ablations": [
+                "full4-resident/no-gate",
+                "db1-resident/full4-on-ssd",
+                "db1+coalescing",
+                "db1+coalescing+reuse",
+            ],
+            "parity": {
+                "reference_artifact_sha256": "reference",
+                "max_recall_delta": 0.0,
+                "mean_top10_overlap": 1.0,
+                "mean_visited_count_relative_delta": 0.0,
+                "mean_distance_count_relative_delta": 0.0,
+            },
+            "whole_payload_in_memory": False,
+            "direct_io": True,
+            "native_aio": True,
+            "io_backend": "linux_native_aio_odirect",
+            "ours_4bit_payload_bytes": 480_000_000,
+            "ours_8bit_payload_bytes": 960_000_000,
+            "ours_adjacency_bytes": 256_000_000,
+            "ours_fp32_base_bytes": 0,
+        }
+    )
+    trace = Path(doc["query_trace_path"])
+    trace_row = json.loads(trace.read_text())
+    trace_row.update(
+        {
+            "layer": "05b",
+            "method": "Ours-Disk",
+            "storage_mode": "hybrid_disk",
+            "cache_mode": "standard",
+            "db1_checks": 10,
+            "db1_survivors": 5,
+            "full4_candidates": 20,
+            "full4_page_reads": 20,
+            "rerank_candidates": 3,
+            "rerank_page_reads": 3,
+        }
+    )
+    trace.write_text(json.dumps(trace_row) + "\n")
+    doc["query_trace_sha256"] = sha256_file(trace)
+    doc["summary_rows"][0]["bytes_read_per_query"] = 4096
+    path.write_text(json.dumps(doc))
+    artifact = validate_artifact(
+        path,
+        spec=next(item for item in METHOD_SPECS if item.method == "Ours-Disk"),
+        expected={
+            "dataset": "gist",
+            "phase": "test",
+            "run_id": "contract_test",
+            "repeat_id": 0,
+            "workers": 1,
+            "storage_mode": "hybrid_disk",
+            "query_split_sha256": "split",
+            "warmup_queries": 100,
+        },
+        disk_root=disk_root,
+    )
+    rows = flatten_artifact(path, artifact)
+    assert rows
+    assert str(rows[0]["ours_4bit_payload_bytes"]) == "480000000"
+    assert str(rows[0]["ours_8bit_payload_bytes"]) == "960000000"
+    assert str(rows[0]["ours_adjacency_bytes"]) == "256000000"
+    assert str(rows[0]["ours_fp32_base_bytes"]) == "0"
+    for field in (
+        "ours_4bit_payload_bytes",
+        "ours_8bit_payload_bytes",
+        "ours_adjacency_bytes",
+        "ours_fp32_base_bytes",
+    ):
+        assert field in SUMMARY_FIELDS
+
+
+def test_capture_build_writes_sidecar(tmp: Path) -> None:
+    """QG05_CAPTURE_BUILD_STATS export wrapper writes a valid sidecar."""
+    stats_path = tmp / "artifact.build_stats.json"
+    log_path = tmp / "artifact.terminal.log"
+    with log_path.open("w") as log:
+        code = "import time; time.sleep(0.2)"
+        returncode = _run_capture_build(
+            [sys.executable, "-c", code], log, stats_path
+        )
+    assert returncode == 0
+    record = json.loads(stats_path.read_text())
+    assert record["wall_seconds"] > 0
+    assert record["peak_rss_bytes"] > 0
+    assert record["read_bytes"] >= 0
+
+
 def main() -> int:
     failed = 0
     cases = [
         (test_valid_resident_artifact, True),
         (test_memory_row_cannot_claim_ssd, True),
+        (test_05b_baselines_accept_disk_payload, True),
         (test_pending_ports_fail, False),
         (test_plan_parity_thresholds_are_enforced, False),
         (test_official_diskann_requires_io_uring, True),
+        (test_ours_index_size_fields_flow_into_rows, True),
+        (test_capture_build_writes_sidecar, True),
     ]
     for fn, needs_tmp in cases:
         try:
@@ -300,9 +482,12 @@ def main() -> int:
     cases = (
         (test_valid_resident_artifact, (tmp,)),
         (test_memory_row_cannot_claim_ssd, (tmp,)),
+        (test_05b_baselines_accept_disk_payload, (tmp,)),
         (test_pending_ports_fail, ()),
         (test_plan_parity_thresholds_are_enforced, ()),
         (test_official_diskann_requires_io_uring, (tmp,)),
+        (test_ours_index_size_fields_flow_into_rows, (tmp,)),
+        (test_capture_build_writes_sidecar, (tmp,)),
     )
     failed = 0
     for fn, args in cases:

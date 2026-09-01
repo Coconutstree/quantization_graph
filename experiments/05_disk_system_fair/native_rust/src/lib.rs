@@ -41,6 +41,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 pub mod ours_port;
+pub mod baseline_disk;
 
 pub const PAGE_SIZE: usize = 4096;
 pub const MAX_INFLIGHT_IO: usize = 128;
@@ -515,7 +516,11 @@ pub trait ResidentCodec: Send + Sync {
     where
         Self: 'a;
 
-    fn prepare<'a>(&'a self, query: &[f32]) -> ANNResult<Self::Query<'a>>;
+    fn prepare<'a>(
+        &'a self,
+        query: &[f32],
+        stats: Arc<Mutex<IoStats>>,
+    ) -> ANNResult<Self::Query<'a>>;
 }
 
 /// Exact resident PQ navigation payload used by experiment 02.
@@ -575,6 +580,17 @@ impl PqCodec {
     pub fn resident_bytes(&self) -> usize {
         self.total() * self.code_bytes_per_vector()
     }
+
+    /// Return the immutable 4-bit PQ code for one node (export-time dump).
+    pub fn code_bytes(&self, id: u32) -> &[u8] {
+        // SAFETY: the payload is immutable after export; no writer exists.
+        unsafe { self.store.get_vector_sync(id as usize) }
+    }
+
+    /// Return the shared PQ codebook table.
+    pub fn table(&self) -> &FixedChunkPQTable {
+        &self.store.pq_chunk_table
+    }
 }
 
 fn path_text(path: &Path) -> ANNResult<&str> {
@@ -606,7 +622,11 @@ impl QueryDistance for PqQuery<'_> {
 impl ResidentCodec for PqCodec {
     type Query<'a> = PqQuery<'a>;
 
-    fn prepare<'a>(&'a self, query: &[f32]) -> ANNResult<Self::Query<'a>> {
+    fn prepare<'a>(
+        &'a self,
+        query: &[f32],
+        _stats: Arc<Mutex<IoStats>>,
+    ) -> ANNResult<Self::Query<'a>> {
         Ok(PqQuery {
             store: &self.store,
             computer: self.store.query_computer(query)?,
@@ -669,6 +689,12 @@ impl SqCodec {
     pub fn resident_bytes(&self) -> usize {
         self.total() * self.code_bytes_per_vector()
     }
+
+    /// Return the quantizer used by this store (used by the disk-payload
+    /// variant, which keeps only the quantizer resident).
+    pub fn quantizer(&self) -> &ScalarQuantizer {
+        self.store.quantizer()
+    }
 }
 
 pub struct SqQuery<'a> {
@@ -693,7 +719,11 @@ impl QueryDistance for SqQuery<'_> {
 impl ResidentCodec for SqCodec {
     type Query<'a> = SqQuery<'a>;
 
-    fn prepare<'a>(&'a self, query: &[f32]) -> ANNResult<Self::Query<'a>> {
+    fn prepare<'a>(
+        &'a self,
+        query: &[f32],
+        _stats: Arc<Mutex<IoStats>>,
+    ) -> ANNResult<Self::Query<'a>> {
         Ok(SqQuery {
             store: &self.store,
             computer: self.store.query_computer(query, true)?,
@@ -842,6 +872,74 @@ impl SaqCodec {
     pub fn resident_bytes(&self) -> usize {
         self.total() * self.code_bytes_per_vector()
     }
+
+    /// Return the raw compressed code for one node (export-time dump).
+    pub fn code_bytes(&self, id: u32) -> ANNResult<&[u8]> {
+        self.store.compressed_vector(id as usize)
+    }
+
+    /// Rebuild only the quantizer plan from metadata, without loading the
+    /// per-node codes (disk-payload variant).
+    pub fn load_computer_only(metadata: &Path) -> ANNResult<Self> {
+        let mut meta = BufReader::new(File::open(metadata)?);
+        let mut magic = [0_u8; 8];
+        meta.read_exact(&mut magic)?;
+        if &magic != b"QG05SAQ1" {
+            return Err(ann_error("invalid SAQ metadata magic"));
+        }
+        let transform_seed = read_u64(&mut meta)?;
+        let mean_norm = read_f32(&mut meta)?;
+        let pre_scale = read_f32(&mut meta)?;
+        let dim = read_u64(&mut meta)? as usize;
+        if dim == 0 {
+            return Err(ann_error("SAQ metadata dimension is zero"));
+        }
+        let mut scaled_shift = Vec::with_capacity(dim);
+        for _ in 0..dim {
+            scaled_shift.push(read_f32(&mut meta)?);
+        }
+
+        let shift = Poly::from_iter(scaled_shift.iter().copied(), GlobalAllocator)
+            .map_err(|error| ann_error(error.to_string()))?;
+        let mut rng = StdRng::seed_from_u64(transform_seed);
+        let metric = Metric::L2
+            .try_into()
+            .map_err(|error: spherical::UnsupportedMetric| ann_error(error.to_string()))?;
+        let quantizer = spherical::SphericalQuantizer::restore_from_scaled_shift(
+            shift,
+            mean_norm,
+            TransformKind::PaddingHadamard {
+                target_dim: TargetDim::Natural,
+            },
+            metric,
+            pre_scale,
+            &mut rng,
+            GlobalAllocator,
+        )
+        .map_err(|error| ann_error(error.to_string()))?;
+        let plan = spherical::iface::Impl::<4>::new(quantizer)
+            .map_err(|error| ann_error(error.to_string()))?;
+        let store = plan.create(0, Metric::L2, None);
+        let mut trailing = [0_u8; 1];
+        if meta.read(&mut trailing)? != 0 {
+            return Err(ann_error("SAQ metadata contains trailing bytes"));
+        }
+        Ok(Self {
+            store,
+            transform_seed,
+            scaled_shift,
+            mean_norm,
+            pre_scale,
+        })
+    }
+
+    /// The empty store keeps the query computer and exposes the plan-derived
+    /// `query_computer` without any per-node codes.
+    pub fn computer_store(
+        &self,
+    ) -> &diskann_providers::model::graph::provider::async_::inmem::spherical::SphericalStore {
+        &self.store
+    }
 }
 
 fn read_f32(reader: &mut impl Read) -> std::io::Result<f32> {
@@ -873,7 +971,11 @@ impl QueryDistance for SaqQuery<'_> {
 impl ResidentCodec for SaqCodec {
     type Query<'a> = SaqQuery<'a>;
 
-    fn prepare<'a>(&'a self, query: &[f32]) -> ANNResult<Self::Query<'a>> {
+    fn prepare<'a>(
+        &'a self,
+        query: &[f32],
+        _stats: Arc<Mutex<IoStats>>,
+    ) -> ANNResult<Self::Query<'a>> {
         Ok(SaqQuery {
             store: &self.store,
             computer: self
@@ -1120,7 +1222,7 @@ where
         query: &'a [f32],
     ) -> Result<Self::SearchAccessor, Self::SearchAccessorError> {
         let prepare_start = Instant::now();
-        let prepared = self.codec.prepare(query)?;
+        let prepared = self.codec.prepare(query, self.stats.clone())?;
         self.stats
             .lock()
             .map_err(|_| ann_error("stats lock poisoned"))?
@@ -1251,7 +1353,11 @@ mod tests {
     impl ResidentCodec for RawCodec {
         type Query<'a> = RawQuery<'a>;
 
-        fn prepare<'a>(&'a self, query: &[f32]) -> ANNResult<Self::Query<'a>> {
+        fn prepare<'a>(
+            &'a self,
+            query: &[f32],
+            _stats: Arc<Mutex<IoStats>>,
+        ) -> ANNResult<Self::Query<'a>> {
             Ok(RawQuery {
                 codec: self,
                 query: [query[0], query[1]],

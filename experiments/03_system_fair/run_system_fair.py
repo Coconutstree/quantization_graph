@@ -6,7 +6,7 @@ Usage:
       [--validate] [--run] [--repeats 5] [--threads 64]
 
 This is the Python equivalent of the ``run_system_fair.cpp`` entry point in
-BASELINE_EXPERIMENT_PLAN_MS_V2.md.
+docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--data-root", default="data")
-    ap.add_argument("--out-root", default="results")
+    ap.add_argument("--out-root", default="results/memory_environment")
     ap.add_argument(
         "--systems",
         default=",".join(ADAPTERS),

@@ -438,6 +438,8 @@ where
             last,
             previous_square_norm,
         );
+        // One full distance pass over the dataset for the newly selected center.
+        super::add_kmeans_distance_count(data.nrows() as u64);
 
         // Pick a threshold.
         // Due to the way we compute distances, values less than 0.0 are technically

@@ -110,24 +110,64 @@ pub struct OursPayloadLayout {
     pub compact_bytes: usize,
     pub residual_bytes: usize,
     pub record_bytes: usize,
+    pub records_per_page: usize,
     pub page_count: usize,
 }
 
 impl OursPayloadLayout {
-    fn pages_for(&self, id: u32) -> ANNResult<std::ops::RangeInclusive<u64>> {
+    fn new(record_count: usize, compact_bytes: usize, residual_bytes: usize) -> ANNResult<Self> {
+        let record_bytes = compact_bytes + residual_bytes;
+        if record_bytes == 0 {
+            return Err(ann_error("Ours payload record size is zero"));
+        }
+        let records_per_page = PAGE_SIZE / record_bytes;
+        let page_count = if records_per_page > 0 {
+            record_count.div_ceil(records_per_page)
+        } else {
+            record_count * record_bytes.div_ceil(PAGE_SIZE)
+        };
+        Ok(Self {
+            record_count,
+            compact_bytes,
+            residual_bytes,
+            record_bytes,
+            records_per_page,
+            page_count,
+        })
+    }
+
+    fn pages_per_record(&self) -> usize {
+        if self.records_per_page > 0 {
+            1
+        } else {
+            self.record_bytes.div_ceil(PAGE_SIZE)
+        }
+    }
+
+    fn record_offset(&self, id: u32) -> ANNResult<usize> {
         if id as usize >= self.record_count {
             return Err(ann_error(format!(
                 "Ours payload id {id} exceeds record_count {}",
                 self.record_count
             )));
         }
-        let begin = id as usize * self.record_bytes;
+        if self.records_per_page > 0 {
+            let page = id as usize / self.records_per_page;
+            let slot = id as usize % self.records_per_page;
+            Ok(page * PAGE_SIZE + slot * self.record_bytes)
+        } else {
+            Ok(id as usize * self.pages_per_record() * PAGE_SIZE)
+        }
+    }
+
+    fn pages_for(&self, id: u32) -> ANNResult<std::ops::RangeInclusive<u64>> {
+        let begin = self.record_offset(id)?;
         let end = begin + self.record_bytes - 1;
         Ok((begin / PAGE_SIZE) as u64..=(end / PAGE_SIZE) as u64)
     }
 
     fn extract(&self, pages: &HashMap<u64, Box<[u8; PAGE_SIZE]>>, id: u32) -> ANNResult<Vec<u8>> {
-        let begin = id as usize * self.record_bytes;
+        let begin = self.record_offset(id)?;
         let mut output = vec![0_u8; self.record_bytes];
         let mut copied = 0_usize;
         while copied < self.record_bytes {
@@ -146,17 +186,10 @@ impl OursPayloadLayout {
 
     /// Read one record directly from the resident payload image.
     ///
-    /// The payload file stores records back-to-back in page-aligned space, so
-    /// a record occupies one contiguous byte range regardless of page
-    /// boundaries. This avoids rebuilding a full page map on every read.
+    /// The payload file stores records in DiskANN-style 4 KiB sectors, so small
+    /// records never straddle sector boundaries.
     fn extract_from_bytes(&self, bytes: &[u8], id: u32) -> ANNResult<Vec<u8>> {
-        if id as usize >= self.record_count {
-            return Err(ann_error(format!(
-                "Ours payload id {id} exceeds record_count {}",
-                self.record_count
-            )));
-        }
-        let begin = id as usize * self.record_bytes;
+        let begin = self.record_offset(id)?;
         let end = begin + self.record_bytes;
         if end > bytes.len() {
             return Err(ann_error("Ours memory payload is truncated"));
@@ -225,15 +258,7 @@ impl OursIndexBuilder {
         let (msb, factors) = self.space.export_sidecar(&self.compact, self.count)?;
         let compact_bytes = self.space.compact_record_bytes();
         let residual_bytes = self.space.residual_record_bytes();
-        let record_bytes = compact_bytes + residual_bytes;
-        let page_count = (self.count * record_bytes).div_ceil(PAGE_SIZE);
-        let layout = OursPayloadLayout {
-            record_count: self.count,
-            compact_bytes,
-            residual_bytes,
-            record_bytes,
-            page_count,
-        };
+        let layout = OursPayloadLayout::new(self.count, compact_bytes, residual_bytes)?;
 
         let mut meta = BufWriter::new(File::create(metadata_path)?);
         meta.write_all(META_MAGIC)?;
@@ -259,13 +284,41 @@ impl OursIndexBuilder {
         sidecar.flush()?;
 
         let mut payload = BufWriter::new(File::create(payload_path)?);
-        for id in 0..self.count {
-            payload.write_all(&self.compact[id * compact_bytes..(id + 1) * compact_bytes])?;
-            payload.write_all(&self.residual[id * residual_bytes..(id + 1) * residual_bytes])?;
-        }
-        let padding = page_count * PAGE_SIZE - self.count * record_bytes;
-        if padding != 0 {
-            payload.write_all(&vec![0_u8; padding])?;
+        if layout.records_per_page > 0 {
+            let mut page = vec![0_u8; PAGE_SIZE];
+            let mut slot = 0_usize;
+            for id in 0..self.count {
+                let begin = slot * layout.record_bytes;
+                let compact_begin = id * compact_bytes;
+                let residual_begin = id * residual_bytes;
+                page[begin..begin + compact_bytes]
+                    .copy_from_slice(&self.compact[compact_begin..compact_begin + compact_bytes]);
+                page[begin + compact_bytes..begin + layout.record_bytes].copy_from_slice(
+                    &self.residual[residual_begin..residual_begin + residual_bytes],
+                );
+                slot += 1;
+                if slot == layout.records_per_page {
+                    payload.write_all(&page)?;
+                    page.fill(0);
+                    slot = 0;
+                }
+            }
+            if slot != 0 {
+                payload.write_all(&page)?;
+            }
+        } else {
+            let mut record = vec![0_u8; layout.pages_per_record() * PAGE_SIZE];
+            for id in 0..self.count {
+                let compact_begin = id * compact_bytes;
+                let residual_begin = id * residual_bytes;
+                record[..compact_bytes]
+                    .copy_from_slice(&self.compact[compact_begin..compact_begin + compact_bytes]);
+                record[compact_bytes..layout.record_bytes].copy_from_slice(
+                    &self.residual[residual_begin..residual_begin + residual_bytes],
+                );
+                payload.write_all(&record)?;
+                record.fill(0);
+            }
         }
         payload.flush()?;
 
@@ -336,16 +389,10 @@ impl OursResidentCodec {
         if sidecar.read(&mut trailing)? != 0 {
             return Err(ann_error("Ours sidecar contains trailing bytes"));
         }
-        let record_bytes = compact_bytes + residual_bytes;
+        let layout = OursPayloadLayout::new(record_count, compact_bytes, residual_bytes)?;
         Ok(Self {
             space,
-            layout: OursPayloadLayout {
-                record_count,
-                compact_bytes,
-                residual_bytes,
-                record_bytes,
-                page_count: (record_count * record_bytes).div_ceil(PAGE_SIZE),
-            },
+            layout,
             msb,
             factors,
             centroid_bytes: centroids.len() * 4,

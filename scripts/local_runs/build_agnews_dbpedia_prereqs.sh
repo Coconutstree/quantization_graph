@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build disk-suite prerequisites for agnews and dbpedia (gist already restored).
 set -uo pipefail
-REPO=/home/msy2025/quantization_graph
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
 export LD_LIBRARY_PATH="$REPO/baselines/deps/local/usr/lib/x86_64-linux-gnu:$REPO/baselines/deps/local/usr/lib/x86_64-linux-gnu/openblas-pthread:${LD_LIBRARY_PATH:-}"
 export LIBRARY_PATH="$REPO/baselines/deps/local/usr/lib/x86_64-linux-gnu:$REPO/baselines/deps/local/usr/lib/x86_64-linux-gnu/openblas-pthread:${LIBRARY_PATH:-}"
@@ -58,24 +58,25 @@ step_graphs() {
   log "== $ds: 02 shared + Ours graphs =="
   local shared="$REPO/results/$ds/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
   local ours="$REPO/results/$ds/indexes/02_diskann_fair/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
+  local legacy_ours="$REPO/results/memory_environment/02_diskann_fair/$ds/indexes/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
   if [[ ! -f "$shared" ]]; then
     "$BIN02" --dataset "$ds" --methods PQ --shared-graph --max-degree 64 --build-beam 400 \
       --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 --refine-passes 1 \
       --build-prune-cap 256 --build-early-stop-hops 2 \
-      --query-path "results/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
-      --gt-path "results/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_shared_graph.log" 2>&1
+      --query-path "results/memory_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
+      --gt-path "results/memory_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_shared_graph.log" 2>&1
     local rc=$?
     if [[ $rc -ne 0 ]]; then log "$ds shared graph FAILED rc=$rc"; return $rc; fi
     log "$ds shared graph done"
   else
     log "$ds shared graph exists; skip"
   fi
-  if [[ ! -f "$ours" ]]; then
+  if [[ ! -f "$ours" && ! -f "$legacy_ours" ]]; then
     "$BIN02" --dataset "$ds" --methods Ours --max-degree 64 --build-beam 400 \
       --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 --refine-passes 1 \
       --build-prune-cap 256 --build-early-stop-hops 2 \
-      --query-path "results/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
-      --gt-path "results/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_ours_graph.log" 2>&1
+      --query-path "results/memory_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
+      --gt-path "results/memory_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_ours_graph.log" 2>&1
     local rc=$?
     if [[ $rc -ne 0 ]]; then log "$ds Ours graph FAILED rc=$rc"; return $rc; fi
     log "$ds Ours graph done"
@@ -87,17 +88,17 @@ step_graphs() {
 step_oglvq() {
   local ds="$1" valq="$2"
   log "== $ds: 03 OG-LVQ index (LVQ4_R64_W400) =="
-  local idx="$REPO/results/03_system_fair/$ds/indexes/OG-LVQ/LVQ4_R64_W400"
+  local idx="$REPO/results/memory_environment/03_system_fair/$ds/indexes/OG-LVQ/LVQ4_R64_W400"
   if [[ -d "$idx" ]]; then
     log "$ds OG-LVQ index exists; skip"
     return 0
   fi
-  mkdir -p "results/03_system_fair/$ds/csv/tuning"
+  mkdir -p "results/memory_environment/03_system_fair/$ds/csv/tuning"
   python3 - "$ds" <<PYCFG
 import json, sys
 from pathlib import Path
 ds = sys.argv[1]
-tuning = Path(f"results/03_system_fair/{ds}/csv/tuning")
+tuning = Path(f"results/memory_environment/03_system_fair/{ds}/csv/tuning")
 tuning.mkdir(parents=True, exist_ok=True)
 cfg = {
     "config_id": "LVQ4_R64_W400",

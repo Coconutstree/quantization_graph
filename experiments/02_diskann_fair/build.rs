@@ -60,8 +60,12 @@ fn main() {
     );
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
-    println!("cargo:rustc-link-lib=static=rabitq_bridge");
+    println!("cargo:rustc-link-lib=static:+whole-archive=rabitq_bridge");
+    println!("cargo:rustc-link-arg-bins={}", archive.display());
     println!("cargo:rustc-link-lib=dylib=aio");
     println!("cargo:rustc-link-lib=dylib=gomp");
     println!("cargo:rustc-link-lib=dylib=stdc++");
+    println!("cargo:rustc-link-arg-bins=-laio");
+    println!("cargo:rustc-link-arg-bins=-lgomp");
+    println!("cargo:rustc-link-arg-bins=-lstdc++");
 }

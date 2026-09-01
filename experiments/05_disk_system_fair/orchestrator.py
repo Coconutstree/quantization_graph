@@ -32,11 +32,15 @@ if "diskfair" not in sys.modules:
 
 from diskfair.common import (  # noqa: E402
     DATA_ROOT,
+    DEFAULT_DISK_ROOT,
     RESULTS_ROOT,
     SEED,
     dataset_paths,
     hardware_info,
+    lsblk_rotational,
     prepare_query_splits,
+    resolve_executable,
+    resolve_repo_path,
     run_preflight,
 )
 from diskfair.native_contract import (  # noqa: E402
@@ -96,13 +100,19 @@ def _default_run_id() -> str:
 
 
 def _resolve_executable(argv0: str) -> str:
-    path = Path(argv0)
-    resolved = str(path) if path.is_absolute() else shutil.which(argv0)
-    if not resolved or not Path(resolved).exists():
+    try:
+        resolved = resolve_executable(argv0, REPO_ROOT)
+    except (FileNotFoundError, PermissionError):
         raise ContractError(f"native port executable not found: {argv0}")
-    if not os.access(resolved, os.X_OK):
-        raise ContractError(f"native port is not executable: {resolved}")
     return resolved
+
+
+def _auto_disk_profile(disk_root: Path) -> str:
+    disk_root.mkdir(parents=True, exist_ok=True)
+    rotational = lsblk_rotational(disk_root)
+    if rotational is True:
+        return "hdd_raid"
+    return "nvme"
 
 
 def _git_commit() -> str:
@@ -180,15 +190,23 @@ def _shared_graph(dataset: str) -> Path:
 
 def _ours_graph(dataset: str) -> Path:
     """The exact M=64 ExRaBitQ-symmetric graph used by experiments 02 and 03."""
-    return (
+    candidates = (
         REPO_ROOT
         / "results"
         / dataset
         / "indexes"
         / "02_diskann_fair"
         / "Ours"
-        / f"{dataset}_Ours_R64_Lbuild400.graph.bin"
+        / f"{dataset}_Ours_R64_Lbuild400.graph.bin",
+        REPO_ROOT
+        / "results"
+        / "02_diskann_fair"
+        / dataset
+        / "indexes"
+        / "Ours"
+        / f"{dataset}_Ours_R64_Lbuild400.graph.bin",
     )
+    return next((path for path in candidates if path.exists()), candidates[0])
 
 
 @dataclass(frozen=True)
@@ -207,14 +225,17 @@ def _work_items(
     workers: tuple[int, ...],
     repeats: int,
     dataset: str,
+    storage_modes: tuple[str, ...],
 ) -> list[WorkItem]:
     layer = specs[0].layer
     primary_cache = "c0" if layer == "05a" else "standard"
+    selected_modes = set(storage_modes)
     if phase != "test":
         return [
             WorkItem(spec, mode, 0, 1, 2.0, primary_cache)
             for spec in specs
             for mode in spec.storage_modes
+            if mode in selected_modes
         ]
     result: list[WorkItem] = []
     for repeat_id in range(repeats):
@@ -225,6 +246,7 @@ def _work_items(
                 WorkItem(spec, mode, repeat_id, worker, 2.0, primary_cache)
                 for spec in ordered
                 for mode in spec.storage_modes
+                if mode in selected_modes
             )
     if dataset == "gist" and layer in ("05b", "05c") and not FAST_MODE:
         for budget_gib, cache_mode in ((1.0, "standard"), (4.0, "standard"), (2.0, "c0")):
@@ -235,6 +257,7 @@ def _work_items(
                     WorkItem(spec, mode, repeat_id, 1, budget_gib, cache_mode)
                     for spec in ordered
                     for mode in spec.storage_modes
+                    if mode in selected_modes
                 )
     return result
 
@@ -284,6 +307,9 @@ def _publish_disk_environment(run_root: Path, out_root: Path, run_id: str, layer
     for manifest_path in (source / "manifests").glob("*"):
         if manifest_path.is_file():
             shutil.copy2(manifest_path, destination / "manifests" / manifest_path.name)
+    for old_figure in (destination / "figures").glob("*"):
+        if old_figure.is_file() and old_figure.suffix.lower() in {".svg", ".pdf", ".png", ".tiff"}:
+            old_figure.unlink()
     for figure in (source / "figures").glob("*"):
         if figure.is_file():
             shutil.copy2(figure, destination / "figures" / figure.name)
@@ -322,6 +348,70 @@ def _query_order_file(artifact_path: Path, query_path: Path, seed: int) -> tuple
             for query_id in order:
                 stream.write(struct.pack("<I", query_id))
     return order_path, sha256_file(order_path)
+
+
+def _proc_value(pid: int, key: str) -> int | None:
+    """Read one /proc/<pid>/status field (e.g. VmHWM) in bytes."""
+    try:
+        text = Path(f"/proc/{pid}/status").read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith(key + ":"):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                return int(parts[1]) * 1024
+    return None
+
+
+def _proc_read_bytes(pid: int) -> int | None:
+    """Actual storage bytes read by the process (``/proc/<pid>/io``)."""
+    try:
+        text = Path(f"/proc/{pid}/io").read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("read_bytes:"):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].lstrip("-").isdigit():
+                return int(parts[1])
+    return None
+
+
+def _run_capture_build(args: list[str], log, stats_path: Path) -> int:
+    """Run one native subprocess while sampling peak RSS and storage reads.
+
+    Used only for the export phase under ``QG05_CAPTURE_BUILD_STATS=1``. The
+    result is written next to the export artifact as ``*.build_stats.json`` and
+    never changes the formal artifact itself.
+    """
+    started = time.monotonic()
+    proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, text=True)
+    peak_rss_bytes = 0
+    read_bytes = 0
+    while proc.poll() is None:
+        rss = _proc_value(proc.pid, "VmHWM")
+        if rss is not None:
+            peak_rss_bytes = max(peak_rss_bytes, rss)
+        rb = _proc_read_bytes(proc.pid)
+        if rb is not None:
+            read_bytes = max(read_bytes, rb)
+        time.sleep(0.05)
+    elapsed_s = time.monotonic() - started
+    stats_path.parent.mkdir(parents=True, exist_ok=True)
+    stats_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "wall_seconds": round(elapsed_s, 6),
+                "peak_rss_bytes": peak_rss_bytes,
+                "read_bytes": read_bytes,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return proc.returncode if proc.returncode is not None else 1
 
 
 def _invoke_port(
@@ -432,13 +522,22 @@ def _invoke_port(
     if tuning_lock is not None:
         args += ["--tuning-lock", str(tuning_lock.resolve())]
 
+    capture_build = (
+        os.environ.get("QG05_CAPTURE_BUILD_STATS") == "1" and phase == "export"
+    )
+    build_stats_path = artifact_path.with_suffix(".build_stats.json")
     with log_path.open("w") as log:
         log.write("argv=" + json.dumps(args) + "\n")
         log.flush()
-        proc = subprocess.run(args, stdout=log, stderr=subprocess.STDOUT, text=True)
-    if proc.returncode:
+        if capture_build:
+            returncode = _run_capture_build(args, log, build_stats_path)
+        else:
+            returncode = subprocess.run(
+                args, stdout=log, stderr=subprocess.STDOUT, text=True
+            ).returncode
+    if returncode:
         raise ContractError(
-            f"native port failed ({proc.returncode}) for {item.spec.key}; terminal log: {log_path}"
+            f"native port failed ({returncode}) for {item.spec.key}; terminal log: {log_path}"
         )
     expected = {
         "dataset": dataset,
@@ -491,15 +590,12 @@ def _reuse_export_artifact(
         or artifact.get("repeat_id") != item.repeat_id
         or artifact.get("workers") != item.workers
         or artifact.get("cache_mode") != item.cache_mode
+        or artifact.get("port_kind") != port.get("port_kind")
         or artifact.get("implementation_fingerprint") != port.get("implementation_fingerprint")
         or not artifact.get("query_order_sha256")
         or artifact.get("query_order_seed") is None
         or artifact.get("search_dram_budget_gib") is None
-    ):
-        return None
-    if (
-        artifact.get("native_binary_sha256") != port.get("binary_sha256")
-        and item.spec.method == "Ours-Disk"
+        or artifact.get("native_binary_sha256") != port.get("binary_sha256")
     ):
         return None
     return artifact
@@ -545,7 +641,20 @@ def _reuse_measured_artifact(
             "warmup_queries": warmup_queries,
             "search_dram_budget_gib": item.budget_gib,
         }
-        return validate_artifact(path, spec=item.spec, expected=expected, disk_root=disk_root)
+        artifact = validate_artifact(
+            path, spec=item.spec, expected=expected, disk_root=disk_root
+        )
+        requested_widths = os.environ.get("QG05_FAST_WIDTHS")
+        if phase == "test" and FAST_MODE and requested_widths:
+            expected_widths = {
+                int(value) for value in requested_widths.split(",") if value.strip()
+            }
+            actual_widths = {
+                int(row["search_width"]) for row in artifact.get("summary_rows", [])
+            }
+            if actual_widths != expected_widths:
+                return None
+        return artifact
     except (OSError, json.JSONDecodeError, ContractError, KeyError, ValueError):
         return None
 
@@ -611,10 +720,14 @@ def _write_fast_tuning_lock(
     layer: str,
     dataset: str,
     specs: list[MethodSpec],
+    storage_modes: tuple[str, ...],
 ) -> Path:
     selected = {}
+    selected_modes = set(storage_modes)
     for spec in specs:
         for mode in spec.storage_modes:
+            if mode not in selected_modes:
+                continue
             selected[f"{spec.method}::{mode}"] = {
                 "config_id": _fast_config_id(layer, spec.method),
                 "target_recall": None,
@@ -725,16 +838,20 @@ def _write_tuning_frontier(
 ) -> Path:
     """Write the full validation recall-QPS Pareto frontier per method/ablation.
 
-    DISK_SYSTEM_EXPERIMENT_PLAN.md section 7 requires the complete validation
+    docs/plans/DISK_SYSTEM_EXPERIMENT_PLAN.md section 7 requires the complete validation
     recall-cost Pareto front, not only the single Recall@10=0.95 point frozen
     into the tuning lock.
     """
     rows: list[dict[str, Any]] = []
     for path, artifact in artifacts:
         rows.extend(flatten_artifact(path, artifact))
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for row in rows:
-        key = (str(row["method"]), str(row.get("ablation") or ""))
+        key = (
+            str(row["method"]),
+            str(row.get("storage_mode") or ""),
+            str(row.get("ablation") or ""),
+        )
         groups.setdefault(key, []).append(row)
     frontier: list[dict[str, Any]] = []
     for group in groups.values():
@@ -858,10 +975,15 @@ def _run_layer_dataset(
     workers = args.workers
     if dataset == "gist" and layer in ("05b", "05c") and native_phase == "test" and not FAST_MODE:
         workers = tuple(dict.fromkeys((*workers, 1, 4, 8, 16, 32)))
-    items = _work_items(specs, native_phase, workers, args.repeats, dataset)
+    items = _work_items(specs, native_phase, workers, args.repeats, dataset, args.storage_modes)
+    if not items:
+        raise ContractError(
+            f"no work items selected for {layer}/{dataset}; storage modes "
+            f"{args.storage_modes} do not match selected methods"
+        )
     tuning_lock = run_root / LAYER_DIRS[layer] / dataset / "manifests" / "tuning.lock.json"
     if native_phase == "test" and FAST_MODE and not tuning_lock.exists():
-        tuning_lock = _write_fast_tuning_lock(run_root, layer, dataset, specs)
+        tuning_lock = _write_fast_tuning_lock(run_root, layer, dataset, specs, args.storage_modes)
     if native_phase == "test" and not tuning_lock.exists():
         raise ContractError(
             f"missing validation lock {tuning_lock}; run --phase tune with the same --run-id first"
@@ -885,7 +1007,7 @@ def _run_layer_dataset(
                 )
                 artifacts.append((path, reused))
                 continue
-        elif native_phase in ("validation", "test"):
+        elif native_phase in ("validation", "validate", "test"):
             reused = _reuse_measured_artifact(
                 path,
                 item=item,
@@ -950,12 +1072,13 @@ def _run_layer_dataset(
         aggregate = run_root / LAYER_DIRS[layer] / dataset / "aggregate" / "formal_test_rows.csv"
         atomic_write_csv(aggregate, rows)
         median_rows = rows if FAST_MODE else _median_test_rows(rows)
-        frontier_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        frontier_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
         for row in median_rows:
             key = (
                 str(row["method"]),
                 str(row.get("ablation") or ""),
                 str(row["workers"]),
+                str(row.get("storage_mode") or ""),
             )
             frontier_groups.setdefault(key, []).append(row)
         frontier_rows: list[dict[str, Any]] = []
@@ -966,6 +1089,7 @@ def _run_layer_dataset(
                 str(row["method"]),
                 str(row.get("ablation") or ""),
                 int(row["workers"]),
+                str(row.get("storage_mode") or ""),
                 float(row["recall"]),
             )
         )
@@ -1012,9 +1136,9 @@ def make_parser(default_layer: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--disk-root", type=Path)
     parser.add_argument(
         "--disk-profile",
-        choices=("nvme", "hdd_raid"),
-        default="nvme",
-        help="physical disk profile for preflight; both profiles require O_DIRECT/native AIO",
+        choices=("auto", "nvme", "hdd_raid"),
+        default=os.environ.get("DISK_PROFILE", "auto"),
+        help="physical disk profile for preflight; auto maps ROTA=0 to nvme and ROTA=1 to hdd_raid",
     )
     parser.add_argument("--ports", type=Path, default=PACKAGE_DIR / "ports.local.json")
     parser.add_argument("--run-id", default="")
@@ -1039,8 +1163,9 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
         args.workers = _int_list(args.workers)
         args.storage_modes = _csv_list(args.storage_modes)
         args.methods = _csv_list(args.methods)
-        args.data_root = args.data_root.resolve()
-        args.out_root = args.out_root.resolve()
+        args.data_root = resolve_repo_path(args.data_root, REPO_ROOT)
+        args.out_root = resolve_repo_path(args.out_root, REPO_ROOT)
+        args.ports = resolve_repo_path(args.ports, REPO_ROOT)
         args.run_id = args.run_id or _default_run_id()
         if args.layers == ("all",):
             args.layers = tuple(LAYER_DIRS)
@@ -1054,7 +1179,7 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 layers=args.layers,
                 datasets=args.datasets,
                 data_root=args.data_root,
-                ports_path=args.ports.resolve(),
+                ports_path=args.ports,
                 disk_root=args.disk_root,
                 disk_profile=args.disk_profile,
             )
@@ -1089,9 +1214,11 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                         _publish_disk_environment(run_root, args.out_root, args.run_id, layer, dataset)
             return status
         if args.disk_root is None:
-            raise ContractError("--disk-root is mandatory for every non-plot formal phase")
-        args.disk_root = args.disk_root.resolve()
-        ports = load_port_registry(args.ports.resolve())
+            args.disk_root = DEFAULT_DISK_ROOT
+        args.disk_root = resolve_repo_path(args.disk_root, REPO_ROOT)
+        if args.disk_profile == "auto":
+            args.disk_profile = _auto_disk_profile(args.disk_root)
+        ports = load_port_registry(args.ports)
         validate_registry(ports, args.layers)
         _formal_preflight(args.disk_root, args.out_root, args.run_id, args.disk_profile)
         run_root = args.out_root / "runs" / args.run_id
@@ -1108,8 +1235,8 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 "seed": args.seed,
                 "search_dram_budget_gib": args.search_dram_budget_gib,
                 "disk_profile": args.disk_profile,
-                "ports_registry": str(args.ports.resolve()),
-                "ports_registry_sha256": sha256_file(args.ports.resolve()),
+                "ports_registry": str(args.ports),
+                "ports_registry_sha256": sha256_file(args.ports),
             },
         )
         for layer in args.layers:

@@ -21,7 +21,7 @@ from systemfair.pareto_builder import read_csv  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results")
+    ap.add_argument("--out-root", default="results/memory_environment")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
     base = Path(args.out_root) / args.suite / args.dataset
@@ -69,7 +69,7 @@ def main() -> int:
         f"- median rows: {len(median)}",
         f"- interpolated rows: {len(interp)}",
         "",
-        "## Known deviations from BASELINE_EXPERIMENT_PLAN_MS_V2.md",
+        "## Known deviations from docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md",
         "",
         "- The unified runner and adapters are implemented in Python "
         "(equivalent implementations of the listed C++ files); all baselines "

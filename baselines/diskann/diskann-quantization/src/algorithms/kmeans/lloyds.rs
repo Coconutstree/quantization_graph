@@ -60,6 +60,10 @@ pub fn distances_in_place(
         "dataset and nearest-buffer should have the same length"
     );
 
+    // Every (vector, center) pair contributes exactly one distance evaluation
+    // to the in-place kernel below.
+    super::add_kmeans_distance_count(dataset.nrows() as u64 * centers.nrows() as u64);
+
     const N: usize = 16;
     const N2: usize = N / 2;
 

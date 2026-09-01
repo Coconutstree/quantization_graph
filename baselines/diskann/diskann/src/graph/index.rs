@@ -1734,6 +1734,7 @@ where
                         *other_id,
                         computer.evaluate_similarity(candidate.reborrow(), other.reborrow()),
                     ));
+                    super::add_graph_build_distance_evaluations(1);
                 }
 
                 pool.sort_unstable_by(neighbor::ord::fast_distance);
@@ -1764,6 +1765,7 @@ where
                         *other_id,
                         computer.evaluate_similarity(candidate.reborrow(), other.reborrow()),
                     ));
+                    super::add_graph_build_distance_evaluations(1);
                 }
 
                 pool.sort_unstable_by(neighbor::ord::fast_distance);
@@ -1984,6 +1986,7 @@ where
                         scratch.visited.insert(id);
                         scratch.best.insert(Neighbor::new(id, distance));
                         scratch.cmps += 1;
+                        super::add_graph_build_distance_evaluations(1);
                     })
                     .await?;
             }
@@ -2019,6 +2022,7 @@ where
                     .for_each(|neighbor| scratch.best.insert(*neighbor));
 
                 scratch.cmps += neighbors.len() as u32;
+                super::add_graph_build_distance_evaluations(neighbors.len() as u64);
                 scratch.hops += scratch.beam_nodes.len() as u32;
             }
 
@@ -2467,6 +2471,7 @@ where
                             *id,
                             computer.evaluate_similarity(vector.reborrow(), other.reborrow()),
                         ));
+                        super::add_graph_build_distance_evaluations(1);
                     }
                 }
             }
@@ -2539,7 +2544,8 @@ where
                             id,
                             computer
                                 .evaluate_similarity(this_vector.reborrow(), element.reborrow()),
-                        ))
+                        ));
+                        super::add_graph_build_distance_evaluations(1);
                     }
                 }
             }
@@ -2737,7 +2743,10 @@ where
                     // and update the occlude factor.
                     let distance = match &cache[result_position] {
                         (_, Some(v)) => {
-                            computer.evaluate_similarity((*neighbor).reborrow(), v.reborrow())
+                            let computed =
+                                computer.evaluate_similarity((*neighbor).reborrow(), v.reborrow());
+                            super::add_graph_build_distance_evaluations(1);
+                            computed
                         }
                         (_, None) => f32::MAX,
                     };

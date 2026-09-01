@@ -1,0 +1,2 @@
+suite,dataset,method,metric,nominal_bpd,actual_bytes_per_vector,index_size_mb,train_time_ms,encode_time_ms,mean_relative_error,p95_relative_error,mean_ip_relative_error,p95_ip_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate,fixed_candidate_recall,query_count,candidate_size,threads,repeat_id,git_commit
+01_quantizer_fair,dbpedia,SQ_4bit,L2,4,768,725.109,309.184,6547.37,0.0273372,0.0428847,0.0140246,0.0219641,0.0102599,0.93929,0.0655179,0.93929,10000,1000,1,0,a424dcb809fd725c44dd976d9063febd4837d16a

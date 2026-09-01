@@ -81,8 +81,8 @@ PORTS = {
         "command": ["build/formal_local/05_disk_system_fair/qgraph05_symphonyqg_disk_port"],
         "source_suite": "03_system_fair",
         "source_kernel": "official SymphonyQG FastScan LUT+SIMD",
-        "port_kind": "algorithm_preserving_disk_port",
-        "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-v1",
+        "port_kind": "fair_neighbor_fetch_disk_port",
+        "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-neighborfetch-v2",
     },
     "05c:OG-LVQ-DiskPort": {
         "command": ["build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port"],

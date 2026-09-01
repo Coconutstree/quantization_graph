@@ -206,6 +206,7 @@ struct Meta {
     std::size_t pages_per_row = 0;
     std::uint32_t entry_point = 0;
     double build_time_ms = 0.0;
+    std::uint64_t build_distance_computations = 0;
 };
 
 Meta make_meta(std::size_t n, std::size_t dim, std::size_t degree) {
@@ -237,6 +238,7 @@ void write_meta(const fs::path& path, const Meta& meta) {
     out << "pages_per_row=" << meta.pages_per_row << "\n";
     out << "entry_point=" << meta.entry_point << "\n";
     out << "build_time_ms=" << std::setprecision(9) << meta.build_time_ms << "\n";
+    out << "build_distance_computations=" << meta.build_distance_computations << "\n";
 }
 
 Meta read_meta(const fs::path& path) {
@@ -261,6 +263,9 @@ Meta read_meta(const fs::path& path) {
     meta.pages_per_row = std::stoull(kv.at("pages_per_row"));
     meta.entry_point = static_cast<std::uint32_t>(std::stoul(kv.at("entry_point")));
     meta.build_time_ms = std::stod(kv.at("build_time_ms"));
+    meta.build_distance_computations = kv.count("build_distance_computations")
+            ? std::stoull(kv.at("build_distance_computations"))
+            : 0;
     return meta;
 }
 
@@ -291,6 +296,7 @@ void export_index(const Args& args) {
     qg.save_index(raw.c_str());
     const double build_ms =
             std::chrono::duration<double, std::milli>(Clock::now() - started).count();
+    meta.build_distance_computations = builder.build_distance_count();
 
     std::ifstream in(raw, std::ios::binary);
     if (!in) throw std::runtime_error("failed to read built SymphonyQG index");
@@ -521,6 +527,7 @@ void write_artifact(
     out << "  \"query_order_seed\": " << args.require("query-order-seed") << ",\n";
     out << "  \"index_path\": " << json_string(fs::absolute(index_root).string()) << ",\n";
     out << "  \"formal_ready\": true,\n";
+    out << "  \"build_distance_computations\": " << meta.build_distance_computations << ",\n";
     out << "  \"page_size\": 4096,\n";
     out << "  \"whole_graph_in_memory\": false,\n";
     out << "  \"whole_payload_in_memory\": false,\n";
@@ -603,6 +610,7 @@ void write_export_artifact(
     out << "  \"storage_mode\": \"hybrid_disk\",\n";
     out << "  \"cache_mode\": " << json_string(args.require("cache-mode")) << ",\n";
     out << "  \"phase\": \"export\",\n";
+    out << "  \"build_distance_computations\": " << meta.build_distance_computations << ",\n";
     out << "  \"run_id\": " << json_string(args.require("run-id")) << ",\n";
     out << "  \"repeat_id\": " << args.require("repeat-id") << ",\n";
     out << "  \"workers\": " << args.require("workers") << ",\n";

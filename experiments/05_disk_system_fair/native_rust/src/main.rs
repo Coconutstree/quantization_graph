@@ -10,6 +10,9 @@ use std::time::Instant;
 use diskann::graph::search::Knn;
 use diskann::graph::IdDistance;
 use diskann::provider::DefaultContext;
+use diskann_fair::disk_port::baseline_disk::{
+    self, BaselineCodec, BaselineKind, BaselinePayloadFactory, BaselinePayloadLayout,
+};
 use diskann_fair::disk_port::ours_port::{
     search_ours_disk_graph, OursAblation, OursDiskStats, OursIndexBuilder, OursPayloadFactory,
     OursResidentCodec,
@@ -23,6 +26,7 @@ use diskann_fair::diskann_runner::{percentile, read_fvecs_matrix, read_ivecs_top
 use diskann_fair::ours_diskann::RabitqSpace;
 use diskann_providers::index::diskann_async;
 use diskann_providers::utils::create_thread_pool;
+use diskann_quantization::CompressInto;
 use diskann_quantization::scalar::train::ScalarQuantizationParameters;
 use diskann_quantization::{
     algorithms::transforms::{TargetDim, TransformKind},
@@ -156,8 +160,13 @@ impl Args {
         if layer != "05b" && !(layer == "05c" && kind == CodecKind::Ours) {
             return Err("this binary implements 05B PQ/SQ/SAQ/Ours and 05C Ours only".into());
         }
-        if self.text("--storage-mode")? != "hybrid_disk" {
-            return Err("05B native codecs require storage-mode=hybrid_disk".into());
+        let storage_mode = self.text("--storage-mode")?;
+        let disk_payload_ok = kind != CodecKind::Ours && storage_mode == "disk_payload";
+        if storage_mode != "hybrid_disk" && !disk_payload_ok {
+            return Err(
+                "05B native codecs require storage-mode=hybrid_disk (disk_payload is available for PQ/SQ/SAQ)"
+                    .into(),
+            );
         }
         if self.number::<usize>("--page-size")? != PAGE_SIZE {
             return Err(format!("page size must be {PAGE_SIZE}"));
@@ -169,7 +178,10 @@ impl Args {
             let requested = self.text("--ablations")?;
             let formal = "full4-resident/no-gate,db1-resident/full4-on-ssd,db1+coalescing,db1+coalescing+reuse";
             if requested != formal && std::env::var("QG05_FAST").ok().as_deref() != Some("1") {
-                return Err("Ours 05B requires the exact four registered ablations outside QG05_FAST".into());
+                return Err(
+                    "Ours 05B requires the exact four registered ablations outside QG05_FAST"
+                        .into(),
+                );
             }
             for item in requested.split(',').filter(|item| !item.is_empty()) {
                 if OursAblation::parse(item).is_none() {
@@ -270,11 +282,16 @@ struct IndexFiles {
     graph_pages: PathBuf,
     pivots: PathBuf,
     codes: PathBuf,
+    pq_payload_pages: PathBuf,
+    pq_codebook: PathBuf,
     sq_prefix: PathBuf,
     sq_codes: PathBuf,
     sq_quantizer: PathBuf,
+    sq_payload_pages: PathBuf,
+    sq_codebook: PathBuf,
     saq_metadata: PathBuf,
     saq_codes: PathBuf,
+    saq_payload_pages: PathBuf,
     ours_metadata: PathBuf,
     ours_sidecar: PathBuf,
     ours_payload: PathBuf,
@@ -288,11 +305,16 @@ impl IndexFiles {
             graph_pages: root.join("shared_graph.pages"),
             pivots: root.join("pq_pivots.bin"),
             codes: root.join("pq_codes.bin"),
+            pq_payload_pages: root.join("pq_payload.pages"),
+            pq_codebook: root.join("pq_codebook.bin"),
             sq_prefix: root.join("sq"),
             sq_codes: root.join("sq_sq_compressed.bin"),
             sq_quantizer: root.join("sq_scalar_quantizer_proto.bin"),
+            sq_payload_pages: root.join("sq_payload.pages"),
+            sq_codebook: root.join("sq_codebook.bin"),
             saq_metadata: root.join("saq_quantizer.bin"),
             saq_codes: root.join("saq_codes.bin"),
+            saq_payload_pages: root.join("saq_payload.pages"),
             ours_metadata: root.join("ours_quantizer.bin"),
             ours_sidecar: root.join("ours_db1_sidecar.bin"),
             ours_payload: root.join("ours_full4_residual.pages"),
@@ -302,11 +324,26 @@ impl IndexFiles {
         }
     }
 
-    fn complete(&self, kind: CodecKind) -> bool {
+    fn complete(&self, kind: CodecKind, storage_mode: &str) -> bool {
+        let payload_required = storage_mode == "disk_payload";
         let codec_files_exist = match kind {
-            CodecKind::Pq => self.pivots.exists() && self.codes.exists(),
-            CodecKind::Sq => self.sq_codes.exists() && self.sq_quantizer.exists(),
-            CodecKind::Saq => self.saq_metadata.exists() && self.saq_codes.exists(),
+            CodecKind::Pq => {
+                self.pivots.exists()
+                    && self.codes.exists()
+                    && (!payload_required
+                        || (self.pq_payload_pages.exists() && self.pq_codebook.exists()))
+            }
+            CodecKind::Sq => {
+                self.sq_codes.exists()
+                    && self.sq_quantizer.exists()
+                    && (!payload_required
+                        || (self.sq_payload_pages.exists() && self.sq_codebook.exists()))
+            }
+            CodecKind::Saq => {
+                self.saq_metadata.exists()
+                    && self.saq_codes.exists()
+                    && (!payload_required || self.saq_payload_pages.exists())
+            }
             CodecKind::Ours => {
                 self.ours_metadata.exists()
                     && self.ours_sidecar.exists()
@@ -326,9 +363,23 @@ impl IndexFiles {
             self.resident_marker.as_path(),
         ];
         match kind {
-            CodecKind::Pq => paths.extend([self.pivots.as_path(), self.codes.as_path()]),
-            CodecKind::Sq => paths.extend([self.sq_codes.as_path(), self.sq_quantizer.as_path()]),
-            CodecKind::Saq => paths.extend([self.saq_metadata.as_path(), self.saq_codes.as_path()]),
+            CodecKind::Pq => paths.extend([
+                self.pivots.as_path(),
+                self.codes.as_path(),
+                self.pq_payload_pages.as_path(),
+                self.pq_codebook.as_path(),
+            ]),
+            CodecKind::Sq => paths.extend([
+                self.sq_codes.as_path(),
+                self.sq_quantizer.as_path(),
+                self.sq_payload_pages.as_path(),
+                self.sq_codebook.as_path(),
+            ]),
+            CodecKind::Saq => paths.extend([
+                self.saq_metadata.as_path(),
+                self.saq_codes.as_path(),
+                self.saq_payload_pages.as_path(),
+            ]),
             CodecKind::Ours => paths.extend([
                 self.ours_metadata.as_path(),
                 self.ours_sidecar.as_path(),
@@ -351,6 +402,9 @@ struct IndexMeta {
     resident_bytes: usize,
     codebook_bytes: usize,
     export_time_ms: f64,
+    ours_compact_record_bytes: usize,
+    ours_residual_record_bytes: usize,
+    ours_record_count: usize,
 }
 
 fn write_meta(path: &Path, meta: &IndexMeta) -> Result<()> {
@@ -360,7 +414,8 @@ fn write_meta(path: &Path, meta: &IndexMeta) -> Result<()> {
             "source_start_index={}\nsource_graph_sha256={}\ngraph_role={}\nnode_count={}\n",
             "max_degree={}\nstart_point={}\nadditional_points={}\nrecord_bytes={}\n",
             "nodes_per_page={}\npage_count={}\nresident_bytes={}\ncodebook_bytes={}\n",
-            "export_time_ms={:.6}\n"
+            "export_time_ms={:.6}\nours_compact_record_bytes={}\n",
+            "ours_residual_record_bytes={}\nours_record_count={}\n"
         ),
         meta.kind.method(),
         meta.base_count,
@@ -378,6 +433,9 @@ fn write_meta(path: &Path, meta: &IndexMeta) -> Result<()> {
         meta.resident_bytes,
         meta.codebook_bytes,
         meta.export_time_ms,
+        meta.ours_compact_record_bytes,
+        meta.ours_residual_record_bytes,
+        meta.ours_record_count,
     );
     fs::write(path, text).map_err(err)
 }
@@ -431,6 +489,18 @@ fn load_meta(path: &Path) -> Result<IndexMeta> {
         resident_bytes: map_number(&map, "resident_bytes")?,
         codebook_bytes: map_number(&map, "codebook_bytes")?,
         export_time_ms: map_number(&map, "export_time_ms")?,
+        ours_compact_record_bytes: map
+            .get("ours_compact_record_bytes")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        ours_residual_record_bytes: map
+            .get("ours_residual_record_bytes")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        ours_record_count: map
+            .get("ours_record_count")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
     })
 }
 
@@ -479,7 +549,7 @@ fn train_ours_k1_center(data: &Matrix<f32>) -> Result<Vec<f32>> {
     Ok(center)
 }
 
-fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
+fn export_index(args: &Args, files: &IndexFiles) -> Result<(IndexMeta, u64)> {
     let kind = CodecKind::from_method(args.text("--method")?)?;
     let (source_graph, expected_graph_hash, graph_role) = if kind == CodecKind::Ours {
         (
@@ -543,7 +613,9 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
         }
         0
     } else {
-        if layout.additional_points < 1 || layout.node_count < base.nrows() + layout.additional_points {
+        if layout.additional_points < 1
+            || layout.node_count < base.nrows() + layout.additional_points
+        {
             return Err(format!(
                 "baseline shared graph must contain at least N+additional nodes: graph={}, base={}, additional={}",
                 layout.node_count,
@@ -562,6 +634,10 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
         start_index
     };
 
+    let mut build_distance_computations = 0_u64;
+    let mut ours_compact_record_bytes = 0_usize;
+    let mut ours_residual_record_bytes = 0_usize;
+    let mut ours_record_count = 0_usize;
     let (resident_bytes, codebook_bytes) = match kind {
         CodecKind::Pq => {
             if base.ncols() % 2 != 0 {
@@ -581,6 +657,8 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
             let table =
                 diskann_async::train_pq(base.as_view(), base.ncols() / 2, &mut rng, pool.as_ref())
                     .map_err(err)?;
+            build_distance_computations =
+                diskann_quantization::algorithms::kmeans::take_kmeans_distance_count();
             eprintln!("05B export PQ: training done, encoding payload");
             let codec = PqCodec::new(table, layout.node_count);
             for id in 0..base.nrows() {
@@ -596,6 +674,12 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
             }
             eprintln!("05B export PQ: saving payload");
             codec.save(&files.pivots, &files.codes).map_err(err)?;
+            let _ = baseline_disk::export_pq_disk_payload(
+                &codec,
+                &files.pq_payload_pages,
+                &files.pq_codebook,
+            )
+            .map_err(err)?;
             (
                 codec.resident_bytes(),
                 256 * base.ncols() * std::mem::size_of::<f32>(),
@@ -618,6 +702,31 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
                     .map_err(err)?;
             }
             codec.save(&files.sq_prefix).map_err(err)?;
+            let sq_code_bytes = codec.code_bytes_per_vector();
+            let mut sq_codes = Vec::with_capacity(layout.node_count);
+            for id in 0..layout.node_count {
+                let vector = if id < base.nrows() {
+                    base.row(id)
+                } else {
+                    base.row(source_start_index)
+                };
+                let mut buf = vec![0_u8; sq_code_bytes];
+                let cv =
+                    diskann_quantization::scalar::MutCompensatedVectorRef::<4>::from_canonical_front_mut(
+                        &mut buf,
+                        base.ncols(),
+                    )
+                    .map_err(err)?;
+                codec.quantizer().compress_into(vector, cv).map_err(err)?;
+                sq_codes.push(buf);
+            }
+            let _ = baseline_disk::export_sq_disk_payload(
+                &codec,
+                &sq_codes,
+                &files.sq_payload_pages,
+                &files.sq_codebook,
+            )
+            .map_err(err)?;
             (codec.resident_bytes(), 0)
         }
         CodecKind::Saq => {
@@ -652,6 +761,8 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
             codec
                 .save(&files.saq_metadata, &files.saq_codes)
                 .map_err(err)?;
+            let _ = baseline_disk::export_saq_disk_payload(&codec, &files.saq_payload_pages)
+                .map_err(err)?;
             (codec.resident_bytes(), 0)
         }
         CodecKind::Ours => {
@@ -683,6 +794,9 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
             if payload_layout.record_count != base.nrows() {
                 return Err("Ours exported payload count changed unexpectedly".into());
             }
+            ours_compact_record_bytes = payload_layout.compact_bytes;
+            ours_residual_record_bytes = payload_layout.residual_bytes;
+            ours_record_count = payload_layout.record_count;
             // The artifact contains all four ablations.  Account the maximum
             // simultaneous resident footprint (sidecar + full4/residual) and
             // use one identical BFS cache for every ablation, so the measured
@@ -713,9 +827,12 @@ fn export_index(args: &Args, files: &IndexFiles) -> Result<IndexMeta> {
         resident_bytes,
         codebook_bytes,
         export_time_ms: started.elapsed().as_secs_f64() * 1_000.0,
+        ours_compact_record_bytes,
+        ours_residual_record_bytes,
+        ours_record_count,
     };
     write_meta(&files.metadata, &meta)?;
-    Ok(meta)
+    Ok((meta, build_distance_computations))
 }
 
 fn read_query_order(path: &Path, query_count: usize) -> Result<Vec<usize>> {
@@ -1155,7 +1272,8 @@ fn selected_test_beam(args: &Args) -> Result<usize> {
     let path = args.path("--tuning-lock")?;
     let text = fs::read_to_string(&path).map_err(err)?;
     let method = args.text("--method")?;
-    let marker = format!("\"{method}::hybrid_disk\"");
+    let storage_mode = args.text("--storage-mode")?;
+    let marker = format!("\"{method}::{storage_mode}\"");
     let section = text
         .split_once(&marker)
         .map(|(_, rest)| rest)
@@ -1369,6 +1487,7 @@ fn write_trace_rows(
     batch: &BatchRun,
     width: usize,
     beam: usize,
+    storage_mode: &str,
     cache_nodes: usize,
     cache_bytes: usize,
     resident_bytes: usize,
@@ -1387,8 +1506,7 @@ fn write_trace_rows(
         };
         let line = format!(
             concat!(
-                "{{\"layer\":{},\"storage_mode\":\"hybrid_disk\",",
-                "\"cache_mode\":{},\"dataset\":{},\"method\":{},",
+                "{{\"layer\":{},\"storage_mode\":{},\"cache_mode\":{},\"dataset\":{},\"method\":{},",
                 "\"config_id\":\"beam{}\",\"ablation\":{},\"repeat_id\":{},\"query_id\":{},",
                 "\"search_width\":{},\"beam_width\":{},\"workers\":{},",
                 "\"search_dram_budget_gib\":{},\"cache_nodes\":{},",
@@ -1407,6 +1525,7 @@ fn write_trace_rows(
                 "\"rerank_page_reads\":{}}}\n"
             ),
             json_escape(args.text("--layer")?),
+            json_escape(storage_mode),
             json_escape(args.text("--cache-mode")?),
             json_escape(args.text("--dataset")?),
             json_escape(args.text("--method")?),
@@ -1467,6 +1586,8 @@ fn write_search_artifact(
     args: &Args,
     files: &IndexFiles,
     meta: &IndexMeta,
+    storage_mode: &str,
+    resident_bytes: usize,
     summaries: &[SummaryRow],
     parity: &ParityTotals,
     parity_hash: &str,
@@ -1515,7 +1636,7 @@ fn write_search_artifact(
         ("layer", json_escape(args.text("--layer")?)),
         ("dataset", json_escape(args.text("--dataset")?)),
         ("method", json_escape(meta.kind.method())),
-        ("storage_mode", json_escape("hybrid_disk")),
+        ("storage_mode", json_escape(storage_mode)),
         ("cache_mode", json_escape(args.text("--cache-mode")?)),
         ("phase", json_escape(phase)),
         ("run_id", json_escape(args.text("--run-id")?)),
@@ -1541,8 +1662,36 @@ fn write_search_artifact(
         ("simd", json_escape(&meta.kind.simd_description())),
         ("base_count", meta.base_count.to_string()),
         ("dimension", meta.dimension.to_string()),
-        ("resident_bytes", meta.resident_bytes.to_string()),
+        ("resident_bytes", resident_bytes.to_string()),
         ("codebook_bytes", meta.codebook_bytes.to_string()),
+        (
+            "ours_4bit_payload_bytes",
+            (if meta.kind == CodecKind::Ours {
+                meta.ours_compact_record_bytes.saturating_mul(meta.ours_record_count)
+            } else {
+                0
+            })
+            .to_string(),
+        ),
+        (
+            "ours_8bit_payload_bytes",
+            (if meta.kind == CodecKind::Ours {
+                meta.ours_compact_record_bytes
+                    .saturating_add(meta.ours_residual_record_bytes)
+                    .saturating_mul(meta.ours_record_count)
+            } else {
+                0
+            })
+            .to_string(),
+        ),
+        (
+            "ours_adjacency_bytes",
+            fs::metadata(&files.graph_pages)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0)
+                .to_string(),
+        ),
+        ("ours_fp32_base_bytes", "0".to_string()),
         ("worker_scratch_bytes", worker_scratch_bytes.to_string()),
         ("cache_bytes", cache_bytes.to_string()),
         ("cache_nodes", cache_nodes.to_string()),
@@ -1618,11 +1767,13 @@ fn write_search_artifact(
     fs::write(result_path, json_object(fields)).map_err(err)
 }
 
-fn run_search_with_codec<C: ResidentCodec + 'static>(
+fn run_search_with_codec_factory<C: ResidentCodec + 'static>(
     args: &Args,
     files: &IndexFiles,
     meta: &IndexMeta,
-    codec: Arc<C>,
+    make_codec: impl Fn(bool) -> Arc<C>,
+    resident_payload_bytes: usize,
+    storage_mode: &str,
     queries: Arc<Matrix<f32>>,
     groundtruth: Arc<Vec<Vec<u32>>>,
     order: Arc<Vec<usize>>,
@@ -1633,8 +1784,8 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
     let budget_bytes =
         (args.number::<f64>("--search-dram-budget-gib")? * (1_u64 << 30) as f64).floor() as usize;
     let fixed_bytes = meta
-        .resident_bytes
-        .checked_add(meta.codebook_bytes)
+        .codebook_bytes
+        .checked_add(resident_payload_bytes)
         .and_then(|value| value.checked_add(worker_scratch_bytes))
         .ok_or_else(|| "DRAM accounting overflow".to_string())?;
     if fixed_bytes > budget_bytes {
@@ -1693,7 +1844,7 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
             );
             reset_peak_rss()?;
             let direct = execute_config(
-                codec.clone(),
+                make_codec(true),
                 files,
                 meta,
                 queries.clone(),
@@ -1708,7 +1859,7 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
             )?;
             measured_peak_rss_bytes = measured_peak_rss_bytes.max(direct.peak_rss_bytes);
             let memory = execute_config(
-                codec.clone(),
+                make_codec(false),
                 files,
                 meta,
                 queries.clone(),
@@ -1730,9 +1881,10 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
                 &direct,
                 width,
                 beam,
+                storage_mode,
                 cache_nodes,
                 cache_bytes,
-                meta.resident_bytes,
+                resident_payload_bytes,
             )?;
             summaries.push(SummaryRow::from_batch(&direct, width, beam));
         }
@@ -1785,6 +1937,8 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
         args,
         files,
         meta,
+        storage_mode,
+        resident_payload_bytes,
         &summaries,
         &parity,
         &sha256(&parity_path)?,
@@ -1793,6 +1947,28 @@ fn run_search_with_codec<C: ResidentCodec + 'static>(
         cache_bytes,
         worker_scratch_bytes,
         measured_peak_rss_bytes,
+    )
+}
+
+fn run_search_with_codec<C: ResidentCodec + 'static>(
+    args: &Args,
+    files: &IndexFiles,
+    meta: &IndexMeta,
+    codec: Arc<C>,
+    queries: Arc<Matrix<f32>>,
+    groundtruth: Arc<Vec<Vec<u32>>>,
+    order: Arc<Vec<usize>>,
+) -> Result<()> {
+    run_search_with_codec_factory(
+        args,
+        files,
+        meta,
+        move |_| codec.clone(),
+        meta.resident_bytes,
+        "hybrid_disk",
+        queries,
+        groundtruth,
+        order,
     )
 }
 
@@ -1930,6 +2106,7 @@ fn run_search_with_ours(
                     &direct,
                     width,
                     beam,
+                    "hybrid_disk",
                     cache_nodes,
                     cache_bytes,
                     meta.resident_bytes,
@@ -1989,6 +2166,8 @@ fn run_search_with_ours(
         args,
         files,
         meta,
+        "hybrid_disk",
+        meta.resident_bytes,
         &summaries,
         &parity,
         &sha256(&parity_path)?,
@@ -2040,22 +2219,56 @@ fn run_search_phase(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> Result
         ));
     }
     let order = Arc::new(read_query_order(&query_order_path, queries.nrows())?);
-    match meta.kind {
-        CodecKind::Pq => {
+    let storage_mode = args.text("--storage-mode")?;
+    match (meta.kind, storage_mode) {
+        (CodecKind::Pq, "disk_payload") => {
+            run_search_baseline_disk_payload(
+                args,
+                files,
+                meta,
+                BaselineKind::Pq,
+                queries,
+                groundtruth,
+                order,
+            )
+        }
+        (CodecKind::Sq, "disk_payload") => {
+            run_search_baseline_disk_payload(
+                args,
+                files,
+                meta,
+                BaselineKind::Sq,
+                queries,
+                groundtruth,
+                order,
+            )
+        }
+        (CodecKind::Saq, "disk_payload") => {
+            run_search_baseline_disk_payload(
+                args,
+                files,
+                meta,
+                BaselineKind::Saq,
+                queries,
+                groundtruth,
+                order,
+            )
+        }
+        (CodecKind::Pq, "hybrid_disk") => {
             let codec = Arc::new(PqCodec::load(&files.pivots, &files.codes).map_err(err)?);
             if codec.total() != meta.layout.node_count || codec.full_dim() != meta.dimension {
                 return Err("loaded PQ codes do not match graph metadata".into());
             }
             run_search_with_codec(args, files, meta, codec, queries, groundtruth, order)
         }
-        CodecKind::Sq => {
+        (CodecKind::Sq, "hybrid_disk") => {
             let codec = Arc::new(SqCodec::load(&files.sq_prefix).map_err(err)?);
             if codec.total() != meta.layout.node_count || codec.full_dim() != meta.dimension {
                 return Err("loaded SQ codes do not match graph metadata".into());
             }
             run_search_with_codec(args, files, meta, codec, queries, groundtruth, order)
         }
-        CodecKind::Saq => {
+        (CodecKind::Saq, "hybrid_disk") => {
             let codec =
                 Arc::new(SaqCodec::load(&files.saq_metadata, &files.saq_codes).map_err(err)?);
             if codec.total() != meta.layout.node_count || codec.full_dim() != meta.dimension {
@@ -2063,13 +2276,111 @@ fn run_search_phase(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> Result
             }
             run_search_with_codec(args, files, meta, codec, queries, groundtruth, order)
         }
-        CodecKind::Ours => {
+        (CodecKind::Ours, "hybrid_disk") => {
             let codec = Arc::new(
                 OursResidentCodec::load(&files.ours_metadata, &files.ours_sidecar).map_err(err)?,
             );
             run_search_with_ours(args, files, meta, codec, queries, groundtruth, order)
         }
+        _ => Err(format!(
+            "unsupported storage mode {storage_mode:?} for {}",
+            meta.kind.method()
+        )),
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_search_baseline_disk_payload(
+    args: &Args,
+    files: &IndexFiles,
+    meta: &IndexMeta,
+    kind: BaselineKind,
+    queries: Arc<Matrix<f32>>,
+    groundtruth: Arc<Vec<Vec<u32>>>,
+    order: Arc<Vec<usize>>,
+) -> Result<()> {
+    let (pq_table, sq_quantizer, saq_codec) = match kind {
+        BaselineKind::Pq => (
+            Some(baseline_disk::load_pq_codebook(&files.pq_codebook).map_err(err)?),
+            None,
+            None,
+        ),
+        BaselineKind::Sq => (
+            None,
+            Some(baseline_disk::load_sq_codebook(&files.sq_codebook).map_err(err)?),
+            None,
+        ),
+        BaselineKind::Saq => (
+            None,
+            None,
+            Some(Arc::new(
+                SaqCodec::load_computer_only(&files.saq_metadata).map_err(err)?,
+            )),
+        ),
+    };
+    let code_bytes = match kind {
+        BaselineKind::Pq => pq_table.as_ref().unwrap().get_num_chunks(),
+        BaselineKind::Sq => {
+            sq_quantizer.as_ref().unwrap().shift().len().div_ceil(2) + 4
+        }
+        BaselineKind::Saq => saq_codec.as_ref().unwrap().code_bytes_per_vector(),
+    };
+    let layout = BaselinePayloadLayout::new(meta.layout.node_count, code_bytes).map_err(err)?;
+    let payload_path = match kind {
+        BaselineKind::Pq => &files.pq_payload_pages,
+        BaselineKind::Sq => &files.sq_payload_pages,
+        BaselineKind::Saq => &files.saq_payload_pages,
+    };
+    let memory_factory =
+        BaselinePayloadFactory::memory(payload_path, layout.clone()).map_err(err)?;
+    let direct_factory =
+        BaselinePayloadFactory::direct(payload_path, layout.clone()).map_err(err)?;
+    let resident_payload_bytes = match kind {
+        BaselineKind::Pq => pq_table.as_ref().unwrap().get_pq_table().len() * 4,
+        BaselineKind::Sq => sq_quantizer.as_ref().unwrap().shift().len() * 4 + 8,
+        BaselineKind::Saq => 0,
+    };
+    let direct_codec = Arc::new(
+        BaselineCodec::new(
+            kind,
+            meta.dimension,
+            layout.clone(),
+            pq_table.clone(),
+            sq_quantizer.clone(),
+            saq_codec.clone(),
+            direct_factory,
+        )
+        .map_err(err)?,
+    );
+    let memory_codec = Arc::new(
+        BaselineCodec::new(
+            kind,
+            meta.dimension,
+            layout,
+            pq_table,
+            sq_quantizer,
+            saq_codec,
+            memory_factory,
+        )
+        .map_err(err)?,
+    );
+    run_search_with_codec_factory(
+        args,
+        files,
+        meta,
+        move |direct| {
+            if direct {
+                direct_codec.clone()
+            } else {
+                memory_codec.clone()
+            }
+        },
+        resident_payload_bytes,
+        "disk_payload",
+        queries,
+        groundtruth,
+        order,
+    )
 }
 
 fn json_escape(value: &str) -> String {
@@ -2102,16 +2413,38 @@ fn index_bytes(files: &IndexFiles) -> Result<u64> {
         })
 }
 
-fn write_export_artifact(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> Result<()> {
+fn write_export_artifact(
+    args: &Args,
+    files: &IndexFiles,
+    meta: &IndexMeta,
+    build_distance_computations: u64,
+) -> Result<()> {
     let result = args.path("--result-json")?;
     if let Some(parent) = result.parent() {
         fs::create_dir_all(parent).map_err(err)?;
     }
+    let ours_4bit_payload_bytes = if meta.kind == CodecKind::Ours {
+        meta.ours_compact_record_bytes.saturating_mul(meta.ours_record_count)
+    } else {
+        0
+    };
+    let ours_8bit_payload_bytes = if meta.kind == CodecKind::Ours {
+        meta.ours_compact_record_bytes
+            .saturating_add(meta.ours_residual_record_bytes)
+            .saturating_mul(meta.ours_record_count)
+    } else {
+        0
+    };
+    let ours_adjacency_bytes = fs::metadata(&files.graph_pages)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    // Ours stores no fp32 payload: rerank uses residual codes, not base vectors.
+    let ours_fp32_base_bytes = 0_u64;
     let document = format!(
         concat!(
             "{{\n  \"schema_version\": 2,\n  \"status\": \"done\",\n",
             "  \"layer\": {},\n  \"dataset\": {},\n  \"method\": {},\n",
-            "  \"storage_mode\": \"hybrid_disk\",\n  \"phase\": \"export\",\n",
+            "  \"storage_mode\": {},\n  \"phase\": \"export\",\n",
             "  \"run_id\": {},\n  \"repeat_id\": {},\n  \"workers\": {},\n",
             "  \"cache_mode\": {},\n  \"search_dram_budget_gib\": {},\n",
             "  \"source_suite\": {},\n  \"source_kernel\": {},\n",
@@ -2124,17 +2457,21 @@ fn write_export_artifact(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> R
             "  \"index_path\": {},\n  \"index_size_mb\": {:.9},\n",
             "  \"base_count\": {},\n  \"dimension\": {},\n  \"resident_bytes\": {},\n",
             "  \"codebook_bytes\": {},\n  \"worker_scratch_bytes\": 0,\n",
+            "  \"ours_4bit_payload_bytes\": {},\n  \"ours_8bit_payload_bytes\": {},\n",
+            "  \"ours_adjacency_bytes\": {},\n  \"ours_fp32_base_bytes\": {},\n",
             "  \"cache_bytes\": 0,\n  \"cache_nodes\": 0,\n  \"peak_rss_bytes\": 0,\n",
             "  \"whole_graph_in_memory\": false,\n  \"whole_payload_in_memory\": false,\n",
             "  \"direct_io\": true,\n  \"native_aio\": true,\n",
             "  \"io_backend\": \"linux_native_aio_odirect\",\n  \"page_size\": {},\n",
             "  \"formal_ready\": true,\n  \"implementation_parity\": \"not_run_export\",\n",
+            "  \"build_distance_computations\": {},\n",
             "  \"ablations\": {},\n",
             "  \"summary_rows\": []\n}}\n"
         ),
         json_escape(args.text("--layer")?),
         json_escape(args.text("--dataset")?),
         json_escape(meta.kind.method()),
+        json_escape(args.text("--storage-mode")?),
         json_escape(args.text("--run-id")?),
         args.number::<usize>("--repeat-id")?,
         args.number::<usize>("--workers")?,
@@ -2164,7 +2501,12 @@ fn write_export_artifact(args: &Args, files: &IndexFiles, meta: &IndexMeta) -> R
         meta.dimension,
         meta.resident_bytes,
         meta.codebook_bytes,
+        ours_4bit_payload_bytes,
+        ours_8bit_payload_bytes,
+        ours_adjacency_bytes,
+        ours_fp32_base_bytes,
         PAGE_SIZE,
+        build_distance_computations,
         if meta.kind == CodecKind::Ours && args.text("--layer")? == "05b" {
             "[\"full4-resident/no-gate\",\"db1-resident/full4-on-ssd\",\"db1+coalescing\",\"db1+coalescing+reuse\"]"
         } else {
@@ -2185,11 +2527,11 @@ fn run() -> Result<()> {
     let files = IndexFiles::new(args.path("--disk-index-dir")?);
     match args.text("--phase")? {
         "export" => {
-            let meta = export_index(&args, &files)?;
-            write_export_artifact(&args, &files, &meta)
+            let (meta, build_distance_computations) = export_index(&args, &files)?;
+            write_export_artifact(&args, &files, &meta, build_distance_computations)
         }
         "validate" | "validation" | "test" => {
-            if !files.complete(kind) {
+            if !files.complete(kind, args.text("--storage-mode")?) {
                 return Err(format!(
                     "{} {} index is incomplete under {}; run --phase export first",
                     args.text("--layer")?.to_uppercase(),

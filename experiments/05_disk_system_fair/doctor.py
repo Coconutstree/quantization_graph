@@ -10,7 +10,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from diskfair.common import dataset_paths, run_preflight
+from diskfair.common import (
+    DEFAULT_DISK_ROOT,
+    dataset_paths,
+    lsblk_rotational,
+    resolve_executable,
+    resolve_repo_path,
+    run_preflight,
+)
 from diskfair.fio_preflight import resolve_fio
 from diskfair.native_contract import (
     METHOD_SPECS,
@@ -77,6 +84,14 @@ def _elf_runpaths(path: Path) -> tuple[str, ...]:
     return tuple(paths)
 
 
+def _ours_graph_candidates(repo_root: Path, dataset: str) -> tuple[Path, ...]:
+    filename = f"{dataset}_Ours_R64_Lbuild400.graph.bin"
+    return (
+        repo_root / "results" / dataset / "indexes" / "02_diskann_fair" / "Ours" / filename,
+        repo_root / "results" / "02_diskann_fair" / dataset / "indexes" / "Ours" / filename,
+    )
+
+
 def run_doctor(
     *,
     repo_root: Path,
@@ -89,6 +104,15 @@ def run_doctor(
 ) -> int:
     layers = tuple(layers)
     datasets = tuple(datasets)
+    ports_path = resolve_repo_path(ports_path, repo_root)
+    data_root = resolve_repo_path(data_root, repo_root)
+    if disk_root is None:
+        disk_root = DEFAULT_DISK_ROOT
+    else:
+        disk_root = resolve_repo_path(disk_root, repo_root)
+    if disk_profile == "auto":
+        disk_root.mkdir(parents=True, exist_ok=True)
+        disk_profile = "hdd_raid" if lsblk_rotational(disk_root) is True else "nvme"
     checks: list[Check] = []
 
     def add(ok: bool, name: str, good: str, bad: str) -> None:
@@ -220,20 +244,14 @@ def run_doctor(
                 str(graph),
                 f"missing formal R64 shared graph {graph}",
             )
-            ours_graph = (
-                repo_root
-                / "results"
-                / dataset
-                / "indexes"
-                / "02_diskann_fair"
-                / "Ours"
-                / f"{dataset}_Ours_R64_Lbuild400.graph.bin"
-            )
+            ours_candidates = _ours_graph_candidates(repo_root, dataset)
+            ours_graph = next((path for path in ours_candidates if path.exists()), ours_candidates[0])
             add(
                 ours_graph.is_file() and ours_graph.stat().st_size > 0,
                 f"ours-native-graph:{dataset}",
                 str(ours_graph),
-                f"missing formal M64 ExRaBitQ-symmetric Ours graph {ours_graph}",
+                "missing formal M64 ExRaBitQ-symmetric Ours graph; checked "
+                + ", ".join(str(path) for path in ours_candidates),
             )
 
     try:
@@ -248,13 +266,10 @@ def run_doctor(
                 continue
             port = ports[spec.key]
             command = port["command"]
-            executable = Path(command[0]) if os.path.sep in command[0] else None
-            resolved = executable if executable and executable.is_absolute() else None
-            if resolved is None:
-                found = shutil.which(command[0])
-                resolved = Path(found) if found else None
-            if resolved is None or not resolved.is_file() or not os.access(resolved, os.X_OK):
-                bad_binaries.append(f"{spec.key}: executable not found")
+            try:
+                resolved = Path(resolve_executable(command[0], repo_root))
+            except (FileNotFoundError, PermissionError) as exc:
+                bad_binaries.append(f"{spec.key}: {exc}")
                 continue
             if sha256_file(resolved) != port["binary_sha256"]:
                 bad_binaries.append(f"{spec.key}: binary SHA-256 differs from registry")
@@ -263,32 +278,27 @@ def run_doctor(
         else:
             checks.append(Check("PASS", "native-ports", "all required ports are hash-pinned"))
 
-    if disk_root is None:
-        checks.append(
-            Check("FAIL", "formal-disk", "--disk-root was not supplied; formal phases require it")
-        )
+    try:
+        report = run_preflight(disk_root.resolve())
+    except OSError as exc:
+        checks.append(Check("FAIL", "formal-disk", str(exc)))
     else:
-        try:
-            report = run_preflight(disk_root.resolve())
-        except OSError as exc:
-            checks.append(Check("FAIL", "formal-disk", str(exc)))
-        else:
-            rotational_ok = (
-                report.get("rotational") is False
-                if disk_profile == "nvme"
-                else report.get("rotational") is True
-            )
-            ready = bool(
-                report.get("odirect") is True
-                and rotational_ok
-                and report.get("sufficient_space_200gib") is True
-            )
-            detail = (
-                f"profile={disk_profile}, root={disk_root.resolve()}, "
-                f"rotational={report.get('rotational')}, "
-                f"odirect={report.get('odirect')}, free_gib={report.get('free_gib', 0):.1f}"
-            )
-            checks.append(Check("PASS" if ready else "FAIL", "formal-disk", detail))
+        rotational_ok = (
+            report.get("rotational") is False
+            if disk_profile == "nvme"
+            else report.get("rotational") is True
+        )
+        ready = bool(
+            report.get("odirect") is True
+            and rotational_ok
+            and report.get("sufficient_space_200gib") is True
+        )
+        detail = (
+            f"profile={disk_profile}, root={disk_root.resolve()}, "
+            f"rotational={report.get('rotational')}, "
+            f"odirect={report.get('odirect')}, free_gib={report.get('free_gib', 0):.1f}"
+        )
+        checks.append(Check("PASS" if ready else "FAIL", "formal-disk", detail))
 
     print("05 disk suite doctor")
     for check in checks:

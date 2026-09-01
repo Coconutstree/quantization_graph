@@ -4,7 +4,7 @@
 # All outputs go to ${OUT_ROOT}/<suite>/<dataset>/ (suite-first, logs/ not raw/).
 #
 # Usage (OUT_ROOT / PYTHON / DATASETS / M / L are optional env vars; defaults: M=64, L=400, all datasets):
-#   OUT_ROOT=results PYTHON=python3 bash scripts/run_master_round2.sh
+#   OUT_ROOT=results/memory_environment PYTHON=python3 bash scripts/run_master_round2.sh
 #   DATASETS=agnews bash scripts/run_master_round2.sh
 #   DATASETS="agnews gist" M=32 L=200 bash scripts/run_master_round2.sh
 set -uo pipefail
@@ -16,7 +16,7 @@ PY="${PYTHON:-python3}"
 BIN01="${BIN01:-${ROOT}/build/formal_local/01_quantizer_fair/faiss_quantizer_smoke}"
 BIN01_CAND="${BIN01_CAND:-${ROOT}/build/formal_local/01_quantizer_fair/faiss_hard_negative_candidates}"
 BIN02="${BIN02:-${ROOT}/experiments/02_diskann_fair/target/release/run_diskann_fair}"
-OUT="${OUT_ROOT:-results}"
+OUT="${OUT_ROOT:-results/memory_environment}"
 LOG_DIR="${ROOT}/logs"
 STATUS_LOG="${LOG_DIR}/round2.status"
 RERANK="10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,40,50,60,70,80,90,100,140,180,220,260,300,340,380,420,460,1000"
@@ -117,7 +117,7 @@ EOF
 run_02() {
   local ds="$1" valq="$2"
   log "== 02 ${ds}: per-method quantized graphs R=${M}/L=${L} (PQ,SQ,SAQ,Ours) =="
-  local split_root="results/03_system_fair/${ds}/csv/_query_splits"
+  local split_root="${OUT}/03_system_fair/${ds}/csv/_query_splits"
   mkdir -p "${split_root}"
   "${PY}" - "${ds}" "${valq}" "${ROOT}/data" <<'EOF'
 import sys
@@ -125,7 +125,7 @@ from pathlib import Path
 from Ours.experiments.run_ours import prepare_query_splits
 
 ds, valq, data_root = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-prepare_query_splits(ds, Path(data_root), Path("results"), valq)
+prepare_query_splits(ds, Path(data_root), Path("results/memory_environment"), valq)
 print(f"query splits ready: {ds} val={valq}")
 EOF
   "${BIN02}" \

@@ -1,7 +1,7 @@
 # 03 system-fair experiment (end-to-end systems)
 
 Python equivalent of the C++ framework listed in
-`BASELINE_EXPERIMENT_PLAN_MS_V2.md` §0.4. Five full ANN systems are compared
+`docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md` §0.4. Five full ANN systems are compared
 end-to-end on the same data, with all systems quantized to a unified 4-bit
 payload where their official implementation supports it:
 

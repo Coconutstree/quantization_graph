@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data"
 RESULTS_ROOT = REPO_ROOT / "results" / "disk_environment" / ".formal_runs"
 WORK_ROOT = REPO_ROOT / "work" / "05_disk_system_fair"
+DEFAULT_DISK_ROOT = WORK_ROOT / "disk_root"
 
 SEED = 20260813
 PAGE_SIZE = 4096
@@ -98,6 +99,38 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
+def resolve_repo_path(path: Path, repo_root: Path = REPO_ROOT) -> Path:
+    """Resolve CLI paths from cwd first, then from the repository root.
+
+    The local launch scripts pass repository-relative paths.  This keeps those
+    paths stable even when the entry point is invoked from the parent workspace.
+    """
+    path = path.expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    if path.exists():
+        return path.resolve()
+    return (repo_root / path).resolve()
+
+
+def resolve_executable(argv0: str, repo_root: Path = REPO_ROOT) -> str:
+    path = Path(argv0).expanduser()
+    if path.is_absolute():
+        resolved = path
+    elif os.path.sep in argv0:
+        cwd_candidate = path.resolve()
+        repo_candidate = (repo_root / path).resolve()
+        resolved = cwd_candidate if cwd_candidate.exists() else repo_candidate
+    else:
+        found = shutil.which(argv0)
+        resolved = Path(found).resolve() if found else path
+    if not resolved.exists():
+        raise FileNotFoundError(f"executable not found: {argv0}")
+    if not os.access(resolved, os.X_OK):
+        raise PermissionError(f"not executable: {resolved}")
+    return str(resolved)
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -168,12 +201,24 @@ def prepare_query_splits(
 ) -> dict[str, Path]:
     """Reuse the 03 system-fair query splits when present, else create them.
 
-    The 03 suite stores splits at ``results/03_system_fair/<dataset>/csv/_query_splits``
+    The 03 suite stores splits at
+    ``results/memory_environment/03_system_fair/<dataset>/csv/_query_splits``
     (validation = first ``val_queries``, test = the rest). The 05 suite reuses
     exactly those files so all experiments share the same query partition.
     """
-    legacy = REPO_ROOT / "results" / "03_system_fair" / dataset / "csv" / "_query_splits"
-    if (legacy / "test_gt.ivecs").exists():
+    split_candidates = [
+        REPO_ROOT
+        / "results"
+        / "memory_environment"
+        / "03_system_fair"
+        / dataset
+        / "csv"
+        / "_query_splits",
+        REPO_ROOT / "results" / "03_system_fair" / dataset / "csv" / "_query_splits",
+    ]
+    for legacy in split_candidates:
+        if not (legacy / "test_gt.ivecs").exists():
+            continue
         return {
             "validation_query": legacy / "validation_query.fvecs",
             "validation_gt": legacy / "validation_gt.ivecs",

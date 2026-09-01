@@ -6,10 +6,10 @@ Layers
 05B  shared Vamana graph + unified search loop, disk mechanism experiment
 05C  five end-to-end disk systems
 
-Formal runs require an exclusive physical disk root (``--disk-root``) with
-working O_DIRECT/native AIO. Use ``--disk-profile nvme`` for non-rotational
-NVMe/SSD experiments, or ``--disk-profile hdd_raid`` for HDD/RAID
-disk-resident experiments. The profile is recorded in run manifests.
+Formal runs require a physical disk root (``--disk-root``) with working
+O_DIRECT/native AIO. Use ``--disk-profile auto`` to infer non-rotational
+NVMe/SSD versus HDD/RAID from the backing device, or pass ``nvme`` /
+``hdd_raid`` explicitly. The profile is recorded in run manifests.
 """
 
 __version__ = "0.1.0"

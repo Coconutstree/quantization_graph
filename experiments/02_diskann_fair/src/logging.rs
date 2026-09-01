@@ -320,7 +320,7 @@ pub fn append_raw_csv(
     }
 
     let needs_header = !paths.raw_csv.exists();
-    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,query_coarse_codec,recall,qps,latency_mean_us,latency_p95_us,prepare_us,traverse_us,rerank_us,neighbor_fetch_us,visited_mark_us,paper_batch_us,flush_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,paper_checked,paper_would_prune,paper_msb_kernel_calls,paper_remaining_kernel_calls,ffi_calls_per_query,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
+    let expected_header = "suite,dataset,method,status,graph_build_distance,graph_build_mode,graph_build_distance_evaluations,shared_graph_build_time_ms,metric,k,nominal_bpd,actual_bytes_per_vector,codebook_bytes,index_size_mb,index_bytes,auxiliary_bytes,residual_bytes,fp32_base_bytes,peak_rss_mb,build_time_ms,graph_build_time_ms,train_time_ms,encode_time_ms,max_degree,build_beam,alpha,search_param_name,search_param_value,search_beam_width,query_coarse_codec,recall,qps,latency_mean_us,latency_p95_us,prepare_us,traverse_us,rerank_us,neighbor_fetch_us,visited_mark_us,paper_batch_us,flush_us,visited_nodes,distance_calls,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate_top10,paper_checked,paper_would_prune,paper_msb_kernel_calls,paper_remaining_kernel_calls,ffi_calls_per_query,payload_bytes_read,avg_bits_read,refine_calls,threads,repeat_id,seed,log_path,note";
     let header_matches = if needs_header {
         true
     } else {
@@ -349,6 +349,7 @@ pub fn append_raw_csv(
             payload.status.to_string(),
             payload.graph_build_distance.clone(),
             payload.graph_build_mode.clone(),
+            opt_u64(payload.graph_build_distance_evaluations),
             opt_f64(payload.shared_graph_build_time_ms),
             "L2".to_string(),
             "10".to_string(),

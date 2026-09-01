@@ -1,0 +1,15 @@
+{
+  "method": "OG-LVQ",
+  "selected_config": {
+    "config_id": "LVQ4_R64_W400",
+    "R": 64,
+    "W": 400,
+    "alpha": 1.2,
+    "primary": 4,
+    "residual": 0,
+    "selection_note": "fixed R=64/W=400"
+  },
+  "status": "ok",
+  "recall_target": 0.95,
+  "fixed": true
+}

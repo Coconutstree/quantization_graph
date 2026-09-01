@@ -179,7 +179,7 @@ def main() -> int:
         default=list(DEFAULT_DATASETS),
         help="Dataset names to write manifests for. Default: dbpedia gist.",
     )
-    parser.add_argument("--out-root", default="results")
+    parser.add_argument("--out-root", default="results/memory_environment")
     args = parser.parse_args()
 
     out_root = Path(args.out_root)

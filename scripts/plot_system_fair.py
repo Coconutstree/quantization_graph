@@ -97,7 +97,7 @@ def save_outputs(fig, fig_dir: Path, png_name: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results")
+    ap.add_argument("--out-root", default="results/memory_environment")
     ap.add_argument("--suite", default="03_system_fair")
     ap.add_argument(
         "--out-dir",

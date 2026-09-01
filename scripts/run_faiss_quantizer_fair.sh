@@ -11,7 +11,7 @@ if [[ -f "${CONFIG}" ]]; then
 fi
 
 DATA_ROOT="${DATA_ROOT:-${ROOT}/data}"
-OUT_ROOT="${OUT_ROOT:-results}"
+OUT_ROOT="${OUT_ROOT:-results/memory_environment}"
 WORK_ROOT="${WORK_ROOT:-work}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
 CXX_BIN="${CXX_BIN:-/usr/bin/g++-11}"

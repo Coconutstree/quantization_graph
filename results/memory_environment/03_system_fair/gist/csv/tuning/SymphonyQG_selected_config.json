@@ -1,0 +1,13 @@
+{
+  "method": "SymphonyQG",
+  "selected_config": {
+    "config_id": "R64_EF400_t3",
+    "R": 64,
+    "EF": 400,
+    "iters": 3,
+    "selection_note": "fixed R=64/EF=400"
+  },
+  "status": "ok",
+  "recall_target": 0.95,
+  "fixed": true
+}

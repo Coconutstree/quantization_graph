@@ -1,7 +1,7 @@
 # 05 disk-system fair suite
 
 This directory implements the formal orchestration and audit boundary in
-`DISK_SYSTEM_EXPERIMENT_PLAN.md`. The central rule is:
+`docs/plans/DISK_SYSTEM_EXPERIMENT_PLAN.md`. The central rule is:
 
 > Experiments 05A/05B/05C preserve the 01/02/03 graph, codec, distance kernel,
 > search loop and parameter semantics. Only the storage backend changes.
@@ -83,32 +83,33 @@ traversal, and the reported per-query bytes must come from those reads.
 Use one stable run ID across all phases:
 
 ```bash
-RUN_ID=formal_nvme_20260822
+RUN_ID=formal_diskenv_20260822
 PORTS=experiments/05_disk_system_fair/ports.local.json
-NVME=/home/msy2025/qgraph_nvme
+DISK_ROOT=work/05_disk_system_fair/disk_root
+DISK_PROFILE=auto
 OUT_ROOT=results/disk_environment/.formal_runs
 
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase doctor --layer all --ports "$PORTS" --disk-root "$NVME"
+  --phase doctor --layer all --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase export --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
+  --phase export --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase validate --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
+  --phase validate --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase tune --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT"
+  --phase tune --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase run --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$NVME" --out-root "$OUT_ROOT" \
-  --workers 1,32 --repeats 5
+  --phase run --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT" \
+  --workers 1,2,4,8,16,32 --repeats 5
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase plot --run-id "$RUN_ID" --out-root "$OUT_ROOT"
 ```
 
-Datasets run serially, so they cannot contend for the same NVMe. Method order
-is rotated across repeats while 05A storage modes stay paired. The default
-formal workers are `1,32`: worker 1 is for latency/P95 and worker 32 matches the
-current 32-core in-memory GIST runs for QPS. GIST automatically adds workers 4,
-8 and 16, DRAM budgets 1/4 GiB, and the B=2 GiB `C=0` diagnostic for 05B/05C.
-The run phase refuses to start without the validation tuning lock.
+Datasets run serially, so they cannot contend for the same disk. Method order
+is rotated across repeats while 05A storage modes stay paired. The worker sweep
+used by local debug launchers is `1,2,4,8,16,32`, and the launchers run
+worker-major: one worker completes the full 05A/05B/05C pass before the next
+worker starts. GIST still keeps the B=1/4 GiB and B=2 GiB `C=0` diagnostics for
+05B/05C. The run phase refuses to start without the validation tuning lock.
 
 ## Result isolation
 
@@ -132,13 +133,17 @@ used to publish a partial curve without claiming it as a complete formal run.
 
 ## Figures
 
-The figure types mirror the source experiments:
+The plot stage writes one paper-style primary figure per disk experiment and
+copies that figure into each selected dataset's published `figures/` directory:
 
-- 05A: fixed-candidate Recall–QPS and quantization error;
-- 05B: shared-graph Recall–QPS and Recall–P95 latency;
-- 05C: system Recall–QPS, Recall–P95 latency, high-recall log variants, and
-  QPS–resident-memory at measured/interpolated Recall@10=0.95.
+- 05A: `disk05a_quantizer_fair_summary`, a compact summary of payload-on-disk
+  matched-recall QPS and storage-invariant quantization error;
+- 05B: `disk05b_shared_graph_recall_qps`, shared-graph Recall@10-QPS curves;
+- 05C: `disk05c_system_recall_qps`, end-to-end disk-system Recall@10-QPS curves.
 
-Only measured Pareto points are drawn. Recall=0.95 is interpolated only when
-two measured points bracket it; otherwise that method is omitted/N/A. Outputs
-are SVG, PDF, PNG (300 dpi) and TIFF (600 dpi).
+The layout follows the manuscript figures under `paper/figures`: quantitative
+multi-dataset grids with a single visual claim per experiment. Auxiliary
+latency, I/O, memory and sensitivity plots are not published by default. Only
+measured Pareto points are drawn; Recall=0.95 markers or bars are interpolated
+only from the plotted measurements. Outputs are SVG, PDF, PNG (300 dpi) and TIFF
+(600 dpi).

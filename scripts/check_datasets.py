@@ -207,7 +207,11 @@ def main() -> int:
         default=str(Path(__file__).resolve().parents[1] / "data"),
         help="Dataset root directory (default: <repo>/data).",
     )
-    parser.add_argument("--out-root", default="results", help="Result root directory.")
+    parser.add_argument(
+        "--out-root",
+        default="results/memory_environment/dataset_artifacts",
+        help="Result root directory.",
+    )
     args = parser.parse_args()
 
     data_root = Path(args.data_root)

@@ -263,6 +263,7 @@ pub fn run_ours_exrabitq4(
     let graph_start = Instant::now();
     let graph_build_mode: String;
     let total_edges: u64;
+    let graph_build_distance_evaluations: Option<u64>;
     if let Some(graph_file) = &ctx.graph_file {
         if !graph_file.exists() {
             return Err(format!(
@@ -279,9 +280,10 @@ pub fn run_ours_exrabitq4(
         export_ours_paper_sidecar(index.provider(), data.nrows()).map_err(err)?;
         graph_build_mode = "reused_graph".to_string();
         total_edges = count_diskann_graph_edges(graph_file)? as u64;
+        graph_build_distance_evaluations = None;
     } else {
         let heartbeat = Heartbeat::start(progress_log.to_path_buf(), "graph_build");
-        total_edges = build_ours_vamana_graph(
+        let (edges, distance_evaluations) = build_ours_vamana_graph(
             index.provider(),
             ctx.config.max_degree,
             ctx.config.build_beam,
@@ -293,6 +295,8 @@ pub fn run_ours_exrabitq4(
             ctx.config.build_early_stop_hops,
         )
         .map_err(err)?;
+        total_edges = edges;
+        graph_build_distance_evaluations = Some(distance_evaluations);
         heartbeat.stop()?;
         graph_build_mode = "built_in_run".to_string();
         {
@@ -531,6 +535,7 @@ pub fn run_ours_exrabitq4(
         residual_bytes: Some(residual_bytes),
         fp32_base_bytes: Some(fp32_base_bytes),
         graph_build_distance: "ExRaBitQ4_symmetric".to_string(),
+        graph_build_distance_evaluations,
         peak_rss_mb: peak_rss_mb(),
         search_results,
         note: format!(
@@ -635,6 +640,7 @@ where
     let graph_build_time_ms: f64;
     let shared_graph_build_time_ms: Option<f64>;
     let graph_build_mode: String;
+    let graph_build_distance_evaluations: Option<u64>;
     let mut payload_encode_time_ms = 0.0;
 
     if shared.is_valid(&expected_meta) {
@@ -646,6 +652,7 @@ where
         let shared_build_ms = parse_meta_f64(&meta, "graph_build_time_ms").unwrap_or(0.0);
         shared_graph_build_time_ms = Some(shared_build_ms);
         graph_build_mode = "reused_shared".to_string();
+        graph_build_distance_evaluations = None;
         graph_bytes = parse_meta_u64(&meta, "graph_bytes");
 
         let encode_start = Instant::now();
@@ -722,6 +729,7 @@ where
         )?;
         let graph_start = Instant::now();
         let heartbeat = Heartbeat::start(progress_log.to_path_buf(), "graph_build");
+        diskann::graph::reset_graph_build_distance_evaluations();
         for batch_start in (0..data.nrows()).step_by(ctx.config.build_batch_size) {
             let batch_end = (batch_start + ctx.config.build_batch_size).min(data.nrows());
             let batch = data
@@ -748,10 +756,18 @@ where
         }
         heartbeat.stop()?;
         let elapsed_ms = graph_start.elapsed().as_secs_f64() * 1000.0;
+        let distance_evaluations_count =
+            diskann::graph::graph_build_distance_evaluations();
         graph_build_time_ms = elapsed_ms;
         shared_graph_build_time_ms = Some(elapsed_ms);
         graph_build_mode = "built_in_run".to_string();
-        progress("graph_build", &format!("done ms={elapsed_ms:.3}"))?;
+        graph_build_distance_evaluations = Some(distance_evaluations_count);
+        progress(
+            "graph_build",
+            &format!(
+                "done ms={elapsed_ms:.3} distance_evaluations={distance_evaluations_count}"
+            ),
+        )?;
 
         progress(
             "shared_graph",
@@ -770,10 +786,11 @@ where
         fs::write(
             &shared.meta_path,
             format!(
-                "{}graph_build_time_ms={:.6}\nshared_graph_build_time_ms={:.6}\ngraph_bytes={}\ngraph_path={}\n",
+                "{}graph_build_time_ms={:.6}\nshared_graph_build_time_ms={:.6}\ngraph_build_distance_evaluations={}\ngraph_bytes={}\ngraph_path={}\n",
                 expected_meta,
                 elapsed_ms,
                 elapsed_ms,
+                distance_evaluations_count,
                 bytes,
                 shared.graph_path.display()
             ),
@@ -920,6 +937,7 @@ where
         residual_bytes: Some(residual_bytes),
         fp32_base_bytes: Some(fp32_base_bytes),
         graph_build_distance: "fp32_l2".to_string(),
+        graph_build_distance_evaluations,
         peak_rss_mb: peak_rss_mb(),
         search_results,
         note: note.to_string(),
@@ -1030,6 +1048,7 @@ where
     )?;
     let graph_start = Instant::now();
     let heartbeat = Heartbeat::start(progress_log.to_path_buf(), "graph_build");
+    diskann::graph::reset_graph_build_distance_evaluations();
     for batch_start in (0..data.nrows()).step_by(ctx.config.build_batch_size) {
         let batch_end = (batch_start + ctx.config.build_batch_size).min(data.nrows());
         let batch = data
@@ -1056,7 +1075,14 @@ where
     }
     heartbeat.stop()?;
     let graph_build_time_ms = graph_start.elapsed().as_secs_f64() * 1000.0;
-    progress("graph_build", &format!("done ms={graph_build_time_ms:.3}"))?;
+    let graph_build_distance_evaluations =
+        diskann::graph::graph_build_distance_evaluations();
+    progress(
+        "graph_build",
+        &format!(
+            "done ms={graph_build_time_ms:.3} distance_evaluations={graph_build_distance_evaluations}"
+        ),
+    )?;
 
     let build_time_ms = total_build_start.elapsed().as_secs_f64() * 1000.0;
 
@@ -1192,6 +1218,7 @@ where
         residual_bytes: Some(0),
         fp32_base_bytes: Some(0),
         graph_build_distance: graph_build_distance.to_string(),
+        graph_build_distance_evaluations: Some(graph_build_distance_evaluations),
         peak_rss_mb: peak_rss_mb(),
         search_results,
         note: note.to_string(),
@@ -1569,6 +1596,7 @@ pub fn run_fp32_graph(
         residual_bytes: Some(0),
         fp32_base_bytes: Some(base_bytes),
         graph_build_distance: "fp32_l2_external".to_string(),
+        graph_build_distance_evaluations: None,
         peak_rss_mb: peak_rss_mb(),
         search_results,
         note: NOTE.to_string(),

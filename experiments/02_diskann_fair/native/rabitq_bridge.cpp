@@ -240,7 +240,8 @@ bool rabitq_build_vamana_graph(
     std::uint8_t *paper_msb_out,
     void *paper_factors_out,
     std::size_t *paper_msb_stride_out,
-    std::size_t *paper_factor_bytes_out) {
+    std::size_t *paper_factor_bytes_out,
+    std::uint64_t *distance_evaluations_out) {
     try {
         if (space == nullptr || (compact_records_in == nullptr && record_count != 0) ||
             degrees_out == nullptr || edges_out == nullptr || edge_stride < r ||
@@ -277,6 +278,9 @@ bool rabitq_build_vamana_graph(
         index.exportPaperPruneSidecar(paper_msb_out, paper_factors_out);
         *paper_msb_stride_out = index.paperPruneSidecarStride();
         *paper_factor_bytes_out = sizeof(hnswlib::PaperPruneFactors<float>);
+        if (distance_evaluations_out != nullptr) {
+            *distance_evaluations_out = index.distance_evaluations();
+        }
 
         const auto &graph = index.graph();
         if (graph.size() != record_count) {

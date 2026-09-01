@@ -2,19 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "${ROOT}"
-
-export QG05_FAST=1
-export QG05_OURS_ABLATIONS="${QG05_OURS_ABLATIONS:-full4-resident/no-gate}"
-export PATH=/home/msy2025/.local/bin:$PATH
-export LD_LIBRARY_PATH="${ROOT}/baselines/deps/local/usr/lib/x86_64-linux-gnu:${ROOT}/baselines/deps/local/usr/lib/x86_64-linux-gnu/openblas-pthread:${LD_LIBRARY_PATH:-}"
-export LIBRARY_PATH="${ROOT}/baselines/deps/local/usr/lib/x86_64-linux-gnu:${ROOT}/baselines/deps/local/usr/lib/x86_64-linux-gnu/openblas-pthread:${LIBRARY_PATH:-}"
-export CPLUS_INCLUDE_PATH="${ROOT}/baselines/deps/local/usr/include:${CPLUS_INCLUDE_PATH:-}"
+source "${ROOT}/scripts/local_runs/diskenv_common.sh"
+qg05_setup_diskenv
 
 RUN_ID_BASE="${RUN_ID_BASE:-formal_diskenv_20260827_c_dbpedia}"
-DISK_ROOT="${DISK_ROOT:-/home/msy2025/qgraph_nvme}"
-OUT_ROOT="${OUT_ROOT:-results/disk_environment/.formal_runs}"
-PORTS="${PORTS:-experiments/05_disk_system_fair/ports.local.json}"
 
 W_BASE="$(python3 -c 'vals=list(range(10,31)); vals.extend(range(40,101,10)); vals.extend(range(140,581,40)); print(",".join(str(v) for v in vals))')"
 W_05A="${W_BASE},1000"
@@ -30,15 +21,15 @@ run_phase_set() {
   log "===== ${ds} ${layer} run-id=${rid} workers=${workers} ====="
   QG05_FAST_WIDTHS="${widths}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
     --phase export --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
-    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile nvme --out-root "${OUT_ROOT}" \
+    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
   QG05_FAST_WIDTHS="${widths}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
     --phase validate --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
-    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile nvme --out-root "${OUT_ROOT}" \
+    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
   QG05_FAST_WIDTHS="${widths}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
     --phase run --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
-    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile nvme --out-root "${OUT_ROOT}" \
+    --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
   QG05_FAST_WIDTHS="${widths}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
     --phase plot --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \

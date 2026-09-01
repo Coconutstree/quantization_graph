@@ -139,6 +139,12 @@ where
         self.quantizer.dim()
     }
 
+    /// Return the scalar quantizer parameters (the disk-payload variant keeps
+    /// only these resident instead of the whole code array).
+    pub fn quantizer(&self) -> &ScalarQuantizer {
+        &self.quantizer
+    }
+
     pub fn get_vector(&self, i: usize) -> Result<CVRef<'_, NBITS>, SQError> {
         self.num_get_calls.increment();
         Ok(CVRef::from_canonical_front(

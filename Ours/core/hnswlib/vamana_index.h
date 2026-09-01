@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -52,11 +53,13 @@ class VamanaIndex {
         }
 
         float distance(vamana::NodeId id) {
+            index_.distance_evaluations_.fetch_add(1, std::memory_order_relaxed);
             return space_.symmetric_build_distance_prepared(
                 prepared_, index_.getDataByInternalId(id));
         }
 
         void distance_batch(const vamana::NodeId *ids, size_t count, float *distances) {
+            index_.distance_evaluations_.fetch_add(count, std::memory_order_relaxed);
             points_.resize(count);
             for (size_t i = 0; i < count; ++i) {
                 points_[i] = index_.getDataByInternalId(ids[i]);
@@ -166,6 +169,9 @@ class VamanaIndex {
     size_t l_build() const { return l_build_; }
     float alpha() const { return alpha_; }
     size_t beam_width() const { return beam_width_; }
+    uint64_t distance_evaluations() const {
+        return distance_evaluations_.load(std::memory_order_relaxed);
+    }
     vamana::NodeId start_node() const { return start_node_; }
     bool paper_prune_active() const { return paper_prune_active_; }
     float paper_epsilon0() const { return paper_epsilon0_; }
@@ -837,6 +843,7 @@ class VamanaIndex {
 
         float distance_between(vamana::NodeId lhs, vamana::NodeId rhs) {
             ensure_prepared(lhs);
+            index_.distance_evaluations_.fetch_add(1, std::memory_order_relaxed);
             return space_.symmetric_build_distance_prepared(
                 prepared_, index_.getDataByInternalId(rhs));
         }
@@ -847,6 +854,7 @@ class VamanaIndex {
             size_t count,
             float *distances) {
             ensure_prepared(lhs);
+            index_.distance_evaluations_.fetch_add(count, std::memory_order_relaxed);
             points_.resize(count);
             for (size_t i = 0; i < count; ++i) {
                 points_[i] = index_.getDataByInternalId(rhs_ids[i]);
@@ -1121,6 +1129,7 @@ class VamanaIndex {
     bool paper_prune_active_{true};
     float paper_epsilon0_{1.9f};
     size_t paper_prefetch_distance_{2};
+    mutable std::atomic<uint64_t> distance_evaluations_{0};
     vamana::NodeId start_node_{0};
     std::vector<char> payloads_;
     std::vector<labeltype> labels_;

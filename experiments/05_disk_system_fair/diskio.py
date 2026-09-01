@@ -2,10 +2,10 @@
 
 Layout
 ------
-``index.pages`` is a flat, 4 KiB-aligned file.
+``index.pages`` is a flat, 4 KiB-sector file following DiskANN's disk layout.
 
-* fixed-size node records < 4 KiB are packed consecutively; the byte offset of
-  node *i* is ``i * record_bytes`` and its page number is ``offset // 4096``;
+* fixed-size node records < 4 KiB are packed as many per sector as fit; records
+  never cross a sector and any tail bytes in the sector are left unused;
 * fixed-size node records >= 4 KiB start at a 4 KiB boundary and occupy
   ``ceil(record_bytes / 4096)`` consecutive pages.
 
@@ -49,22 +49,17 @@ class NodeLayout:
 
     def node_offset(self, node_id: int) -> int:
         if self.record_bytes < PAGE_SIZE:
-            return node_id * self.record_bytes
+            page = node_id // self.records_per_page
+            slot = node_id % self.records_per_page
+            return page * PAGE_SIZE + slot * self.record_bytes
         return node_id * self.pages_per_record * PAGE_SIZE
 
     def node_page(self, node_id: int) -> int:
         return self.node_offset(node_id) // PAGE_SIZE
 
     def node_span_pages(self, node_id: int) -> list[int]:
-        """Pages physically touched by a record (handles straddling records)."""
-        if self.record_bytes >= PAGE_SIZE:
-            return self.node_pages(node_id)
-        offset = self.node_offset(node_id)
-        page = offset // PAGE_SIZE
-        pages = [page]
-        if offset % PAGE_SIZE + self.record_bytes > PAGE_SIZE:
-            pages.append(page + 1)
-        return pages
+        """Pages physically touched by a record."""
+        return self.node_pages(node_id)
 
     def node_pages(self, node_id: int) -> list[int]:
         npp = self.pages_per_record
@@ -74,7 +69,7 @@ class NodeLayout:
     @property
     def total_pages(self) -> int:
         if self.record_bytes < PAGE_SIZE:
-            return (self.count * self.record_bytes + PAGE_SIZE - 1) // PAGE_SIZE
+            return (self.count + self.records_per_page - 1) // self.records_per_page
         return self.count * self.pages_per_record
 
     def page_of_byte(self, offset: int) -> int:
@@ -91,29 +86,32 @@ class NodeLayout:
 
 
 class PageWriter:
-    """Writes fixed-size node records into ``index.pages`` (4 KiB aligned)."""
+    """Writes fixed-size records into 4 KiB sectors without record straddling."""
 
     def __init__(self, path: Path, layout: NodeLayout, aligned_padding: bool = True):
         self.path = path
         self.layout = layout
         self.aligned_padding = aligned_padding
-        self._pages: list[bytes] = []
+        self._records: list[bytes] = []
 
     def append(self, record: bytes) -> int:
         rec = self.layout.record_bytes
         if len(record) > rec:
             raise ValueError(f"record too large: {len(record)} > {rec}")
         record = record.ljust(rec, b"\x00")
-        self._pages.append(record)
-        return len(self._pages) - 1
+        self._records.append(record)
+        return len(self._records) - 1
 
     def flush(self) -> int:
-        data = b"".join(self._pages)
-        total = align_up(len(data), PAGE_SIZE)
-        data = data.ljust(total, b"\x00")
+        pages = [bytearray(PAGE_SIZE) for _ in range(self.layout.total_pages)]
+        for node_id, record in enumerate(self._records):
+            offset = self.layout.node_offset(node_id)
+            page = offset // PAGE_SIZE
+            in_page = offset % PAGE_SIZE
+            pages[page][in_page : in_page + self.layout.record_bytes] = record
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_bytes(data)
-        return total
+        self.path.write_bytes(b"".join(bytes(page) for page in pages))
+        return self.layout.total_pages * PAGE_SIZE
 
 
 class PageWriterAligned:
@@ -468,19 +466,10 @@ def extract_node(
         offset = layout.node_offset(node_id)
         page = layout.node_page(node_id)
         in_page = offset % PAGE_SIZE
-        if in_page + layout.record_bytes <= PAGE_SIZE:
-            rec = data.get(page)
-            if rec is None:
-                raise KeyError(f"missing page {page} for node {node_id}")
-            return rec[in_page : in_page + layout.record_bytes]
-        # record straddles two pages
-        first = data.get(page)
-        second = data.get(page + 1)
-        if first is None or second is None:
-            raise KeyError(f"missing pages {page}/{page + 1} for node {node_id}")
-        head = first[in_page:]
-        tail = second[: layout.record_bytes - len(head)]
-        return head + tail
+        rec = data.get(page)
+        if rec is None:
+            raise KeyError(f"missing page {page} for node {node_id}")
+        return rec[in_page : in_page + layout.record_bytes]
     pages = layout.node_pages(node_id)
     parts = []
     for p in pages:
@@ -496,8 +485,8 @@ def nodes_for_pages(layout: NodeLayout, pages: Iterable[int]) -> list[int]:
     result: list[int] = []
     for p in pages:
         if layout.record_bytes < PAGE_SIZE:
-            first = (p * PAGE_SIZE) // layout.record_bytes
             per = layout.records_per_page
+            first = p * per
             result.extend(range(first, min(first + per, layout.count)))
         else:
             first = p // layout.pages_per_record
@@ -506,11 +495,12 @@ def nodes_for_pages(layout: NodeLayout, pages: Iterable[int]) -> list[int]:
 
 
 def load_packed_codes(path: Path, record_bytes: int, count: int) -> np.ndarray:
-    """Load fixed-size records from a packed page file by byte offset."""
+    """Load fixed-size records from a DiskANN-style packed page file."""
     data = Path(path).read_bytes()
+    layout = NodeLayout(record_bytes=record_bytes, count=count)
     codes = np.empty((count, record_bytes), dtype=np.uint8)
     for i in range(count):
-        offset = i * record_bytes
+        offset = layout.node_offset(i)
         codes[i] = np.frombuffer(data[offset : offset + record_bytes], dtype=np.uint8)
     return codes
 
@@ -520,7 +510,7 @@ def extract_record_from_pages(
     layout: NodeLayout,
     node_id: int,
 ) -> bytes:
-    """Extract a packed or aligned record from a page dict, handling straddle."""
+    """Extract a packed or aligned record from a page dict."""
     return extract_node(pages, layout, node_id)
 
 

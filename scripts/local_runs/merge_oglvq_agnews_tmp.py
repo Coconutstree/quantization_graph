@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-REPO = Path("/home/msy2025/quantization_graph")
+REPO = Path(__file__).resolve().parents[2]
 RUN_ROOT = (
     REPO
     / "results/disk_environment/.formal_runs/runs/formal_diskenv_20260826_114755_bc_agnews"

@@ -14,6 +14,26 @@ pub use adjacencylist::AdjacencyList;
 pub mod config;
 pub use config::Config;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Total distance evaluations (search + prune) performed by graph construction
+/// since the last [`reset_graph_build_distance_evaluations`].
+static GRAPH_BUILD_DISTANCE_EVALUATIONS: AtomicU64 = AtomicU64::new(0);
+
+/// Reset the graph-construction distance counter before a build pass.
+pub fn reset_graph_build_distance_evaluations() {
+    GRAPH_BUILD_DISTANCE_EVALUATIONS.store(0, Ordering::Relaxed);
+}
+
+/// Return the number of distance evaluations recorded during graph construction.
+pub fn graph_build_distance_evaluations() -> u64 {
+    GRAPH_BUILD_DISTANCE_EVALUATIONS.load(Ordering::Relaxed)
+}
+
+pub(crate) fn add_graph_build_distance_evaluations(count: u64) {
+    GRAPH_BUILD_DISTANCE_EVALUATIONS.fetch_add(count, Ordering::Relaxed);
+}
+
 pub mod index;
 pub use index::DiskANNIndex;
 

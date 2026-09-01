@@ -33,6 +33,7 @@ from diskfair.diskio import (
     nodes_for_pages,
     plan_reads,
 )
+from diskfair.common import resolve_executable, resolve_repo_path
 from diskfair.format import IndexBuilder, verify_index
 from diskfair.quantizers import (
     OursRaBitQ,
@@ -75,9 +76,10 @@ def test_page_layout_packed():
     layout = NodeLayout(record_bytes=480, count=1000)
     assert layout.records_per_page == 8
     assert layout.node_offset(0) == 0
-    assert layout.node_page(8) == 0
-    assert layout.node_page(9) == 1
-    assert layout.total_pages == 1000 * 480 // 4096 + 1
+    assert layout.node_offset(8) == 4096
+    assert layout.node_page(7) == 0
+    assert layout.node_page(8) == 1
+    assert layout.total_pages == 125
 
 
 def test_page_layout_aligned():
@@ -135,17 +137,20 @@ def test_buffered_reader_not_reported_as_direct(tmp_path):
         assert reader.fallback_reason == "direct I/O explicitly disabled"
 
 
-def test_straddling_record_extract(tmp_path):
-    # 480-byte records straddle 4 KiB pages (e.g. offset 4000)
+def test_packed_records_do_not_straddle_pages(tmp_path):
     layout = NodeLayout(record_bytes=480, count=64)
-    w = PageWriter(tmp_path / "straddle.pages", layout)
+    w = PageWriter(tmp_path / "packed.pages", layout)
     records = [bytes([i % 256]) * 480 for i in range(64)]
     for i, r in enumerate(records):
         w.append(r)
     w.flush()
-    assert layout.node_offset(8) % 4096 + 480 > 4096  # straddles pages 0/1
-    assert layout.node_span_pages(8) == [0, 1]
-    with DirectPageReader(tmp_path / "straddle.pages", direct=False) as reader:
+    assert layout.node_offset(7) == 7 * 480
+    assert layout.node_offset(8) == 4096
+    assert layout.node_span_pages(7) == [0]
+    assert layout.node_span_pages(8) == [1]
+    raw = (tmp_path / "packed.pages").read_bytes()
+    assert raw[8 * 480 : 4096] == b"\x00" * (4096 - 8 * 480)
+    with DirectPageReader(tmp_path / "packed.pages", direct=False) as reader:
         pages = reader.read_pages(
             {p for i in range(64) for p in layout.node_span_pages(i)}
         )
@@ -248,6 +253,23 @@ def test_odirect_reader_if_supported(tmp_path):
         print("skip: O_DIRECT unsupported on this filesystem")
 
 
+def test_repo_relative_resolution_from_other_cwd(tmp_path):
+    repo = tmp_path / "repo"
+    tool = repo / "bin" / "tool"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("#!/usr/bin/env sh\nexit 0\n")
+    tool.chmod(0o755)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(cwd)
+        assert resolve_repo_path(Path("bin/tool"), repo) == tool.resolve()
+        assert resolve_executable("bin/tool", repo) == str(tool.resolve())
+    finally:
+        os.chdir(old_cwd)
+
+
 def main() -> int:
     failed = 0
     tmp = Path(tempfile.mkdtemp(prefix="diskfair_test_"))
@@ -260,7 +282,7 @@ def main() -> int:
         (test_pages_and_extract, (tmp,)),
         (test_cache_is_namespaced_by_file, (tmp,)),
         (test_buffered_reader_not_reported_as_direct, (tmp,)),
-        (test_straddling_record_extract, (tmp,)),
+        (test_packed_records_do_not_straddle_pages, (tmp,)),
         (test_pages_aligned_writer, (tmp,)),
         (test_plan_reads_coalescing, ()),
         (test_index_builder_verify, (tmp,)),
@@ -269,6 +291,7 @@ def main() -> int:
         (test_quantizer_sizes_and_parity, (SAQQuantizer4,)),
         (test_ours_quantizer_sizes_and_parity, ()),
         (test_odirect_reader_if_supported, (tmp,)),
+        (test_repo_relative_resolution_from_other_cwd, (tmp,)),
     ]
     for fn, args in cases:
         try:

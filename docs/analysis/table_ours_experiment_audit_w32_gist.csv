@@ -1,0 +1,8 @@
+check,status,evidence,interpretation
+Disk-mode configuration,通过,"whole_payload_in_memory=False, direct_io=True, native_aio=True, page_size=4096",这说明 Ours 没有误跑成全 payload 内存模式。
+Implementation parity,通过,"implementation_parity=passed, max_recall_delta=0.0",native 实现与 reference artifact 在 recall 上对齐。
+Recall-width monotonicity,通过,negative recall steps=0,recall 随 search width 单调增加，sweep 本身没有反常跳点。
+05B/05C independence,注意,05B/05C Ours-Disk 的 source_kernel、source_graph_sha256 一致，recall/I-O 计数逐 width 完全相同,05B Ours 只能当同实现 sanity record，不能当独立 Ours 变体。
+Repeat coverage,注意,repeat_ids=[0],当前只有单次 repeat，不能给最终论文误差条。
+Cache budget use,注意,"budget=2.00 GiB, resident=1.23 GiB, test_cache=32.6 MiB, export_cache=0",名义 2 GiB 搜索预算没有明显转成大 payload/page cache，需要优先查。
+Dominant bottleneck,优化,"mean_io_wait_share=99.91%, mean_io_requests=1046.2/query",优化优先级应放在减少随机读和 I/O wait，而不是距离计算。

@@ -1,0 +1,5 @@
+layer,method,method_display,wall_seconds,peak_rss_gib,read_mb
+05b,PQ-DiskANN-Disk,PQ-DiskANN-Disk,892.288916,8.150787353515625,0.0
+05b,SAQ-DiskANN-Disk,SAQ-DiskANN-Disk,326.661159,3.748516082763672,0.02734375
+05b,SQ-DiskANN-Disk,SQ-DiskANN-Disk,21.459623,3.7487640380859375,0.0
+05c,SymphonyQG-DiskPort,SymphonyQG,1672.690931,26.62914276123047,0.0

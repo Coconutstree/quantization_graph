@@ -13,7 +13,7 @@
 # Usage:
 #   DATASETS="smoke03 agnews" CODECS="full b1 int4 int8" \
 #     SEARCH_SIZES="10,20,40,80,160,320,460" \
-#     OUT_ROOT=results/query_coarse_bench_full_fp32_batch \
+#     OUT_ROOT=results/memory_environment/diagnostics/query_coarse_bench_full_fp32_batch \
 #     bash Ours/experiments/run_query_coarse_codec_bench.sh
 set -euo pipefail
 
@@ -25,8 +25,8 @@ BIN="${BIN:-experiments/02_diskann_fair/target/release/run_diskann_fair}"
 DATASETS="${DATASETS:-smoke03 agnews}"
 CODECS="${CODECS:-full b1 int4 int8}"
 SEARCH_SIZES="${SEARCH_SIZES:-10,20,40,80,160,320,460}"
-OUT_ROOT="${OUT_ROOT:-results/query_coarse_bench_full_fp32_batch}"
-SPLIT_ROOT="${SPLIT_ROOT:-results}"
+OUT_ROOT="${OUT_ROOT:-results/memory_environment/diagnostics/query_coarse_bench_full_fp32_batch}"
+SPLIT_ROOT="${SPLIT_ROOT:-results/memory_environment}"
 THREADS="${THREADS:-64}"
 B1_EPS="${B1_EPSILON:-1.9}"
 
@@ -78,19 +78,19 @@ from Ours.experiments.run_ours import prepare_query_splits
 
 ds, valq = sys.argv[1], int(sys.argv[2])
 _, _, test_q, test_gt = prepare_query_splits(
-    ds, Path("data"), Path("results"), valq)
+    ds, Path("data"), Path("results/memory_environment"), valq)
 print(f"{ds}: splits ready test_q={test_q} test_gt={test_gt}")
 EOF
-  TEST_Q="results/03_system_fair/${DS}/csv/_query_splits/test_query.fvecs"
-  TEST_GT="results/03_system_fair/${DS}/csv/_query_splits/test_gt.ivecs"
+  TEST_Q="${SPLIT_ROOT}/03_system_fair/${DS}/csv/_query_splits/test_query.fvecs"
+  TEST_GT="${SPLIT_ROOT}/03_system_fair/${DS}/csv/_query_splits/test_gt.ivecs"
   CODE_LIST="$(echo "${CODECS}" | tr ' ' ',')"
   GRAPH_ARGS=()
   if [[ -n "${GRAPH_FILE:-}" && -f "${GRAPH_FILE}" ]]; then
     GRAPH_ARGS=(--graph-file "${GRAPH_FILE}")
   else
     for candidate in \
-      "results/query_coarse_bench"/"${DS}"/indexes/02_diskann_fair/Ours/"${DS}"_Ours_R64_Lbuild400.graph.bin \
-      "results/query_coarse_bench_v2"/"${DS}"/indexes/02_diskann_fair/Ours/"${DS}"_Ours_R64_Lbuild400.graph.bin; do
+      "results/memory_environment/diagnostics/query_coarse_bench"/"${DS}"/indexes/02_diskann_fair/Ours/"${DS}"_Ours_R64_Lbuild400.graph.bin \
+      "results/memory_environment/diagnostics/query_coarse_bench_v2"/"${DS}"/indexes/02_diskann_fair/Ours/"${DS}"_Ours_R64_Lbuild400.graph.bin; do
       if [[ -f "${candidate}" ]]; then
         GRAPH_ARGS=(--graph-file "${candidate}")
         break
