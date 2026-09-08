@@ -855,6 +855,9 @@ void write_artifact(
         << "  \"simd\": \"AVX2/AVX-512 native\",\n"
         << "  \"base_count\": " << index.base_count << ",\n"
         << "  \"dimension\": " << index.dim << ",\n"
+        << "  \"code_bytes_per_vector\": " << index.code_size << ",\n"
+        << "  \"effective_bits_per_dim\": "
+        << (8.0 * static_cast<double>(index.code_size) / index.dim) << ",\n"
         << "  \"search_dram_budget_gib\": " << args.real("search-dram-budget-gib") << ",\n"
         << "  \"resident_bytes\": " << resident_bytes << ",\n"
         << "  \"codebook_bytes\": " << codebook_bytes << ",\n"
@@ -896,6 +899,13 @@ void write_artifact(
             << "\"mean_relative_error\":" << sweep.metrics.mean_rel_error << ","
             << "\"p95_relative_error\":" << sweep.metrics.p95_rel_error << ","
             << "\"pairwise_flip_rate\":" << sweep.metrics.pairwise_flip_rate_top100 << ","
+            << "\"code_bytes_per_vector\":" << index.code_size << ","
+            << "\"effective_bits_per_dim\":"
+            << (8.0 * static_cast<double>(index.code_size) / index.dim) << ","
+            << "\"read_amplification\":"
+            << (disk_mode && sweep.width && index.code_size
+                    ? bytes / (static_cast<double>(sweep.width) * index.code_size)
+                    : 0.0) << ","
             << "\"query_count\":" << sweep.stats.size() << ","
             << "\"index_size_mb\":" << static_cast<double>(fs::file_size(index.pages) + codebook_bytes) / (1 << 20) << ","
             << "\"resident_bytes\":" << resident_bytes << ","
@@ -971,7 +981,7 @@ int run(int argc, char** argv) {
             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
             40, 50, 60, 70, 80, 90, 100, 140, 180, 220,
-            260, 300, 340, 380, 420, 460};
+            260, 300, 340, 380, 420, 460, 500, 540, 580};
     }
     std::vector<std::byte> resident;
     if (!disk_mode) resident = load_resident(index.pages);

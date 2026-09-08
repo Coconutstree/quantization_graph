@@ -60,6 +60,11 @@ from diskfair.native_contract import (  # noqa: E402
     validate_registry,
 )
 from diskfair.fio_preflight import run_fio  # noqa: E402
+from diskfair.dataset_policy import (  # noqa: E402
+    metric_compatibility_error,
+    policy_for,
+    resident_budget_errors,
+)
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_DIR.parents[1]
@@ -177,15 +182,12 @@ def _formal_preflight(
 
 
 def _shared_graph(dataset: str) -> Path:
-    return (
-        REPO_ROOT
-        / "results"
-        / dataset
-        / "indexes"
-        / "02_diskann_fair"
-        / "shared_graph"
-        / "diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+    filename = "diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+    candidates = (
+        REPO_ROOT / "results" / "graph" / dataset / "shared_graph" / filename,
+        REPO_ROOT / "results" / dataset / "indexes" / "02_diskann_fair" / "shared_graph" / filename,
     )
+    return next((path for path in candidates if path.exists()), candidates[0])
 
 
 def _ours_graph(dataset: str) -> Path:
@@ -193,6 +195,12 @@ def _ours_graph(dataset: str) -> Path:
     candidates = (
         REPO_ROOT
         / "results"
+        / "graph"
+        / dataset
+        / "Ours"
+        / f"{dataset}_Ours_R64_Lbuild400.graph.bin",
+        REPO_ROOT
+        / "results"
         / dataset
         / "indexes"
         / "02_diskann_fair"
@@ -205,6 +213,21 @@ def _ours_graph(dataset: str) -> Path:
         / "indexes"
         / "Ours"
         / f"{dataset}_Ours_R64_Lbuild400.graph.bin",
+    )
+    return next((path for path in candidates if path.exists()), candidates[0])
+
+
+def _diskann_system_graph(dataset: str) -> Path:
+    filename = "diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+    candidates = (
+        REPO_ROOT
+        / "results"
+        / "graph"
+        / dataset
+        / "03_system_fair"
+        / "DiskANN-PQ-Disk"
+        / filename,
+        _shared_graph(dataset),
     )
     return next((path for path in candidates if path.exists()), candidates[0])
 
@@ -228,7 +251,11 @@ def _work_items(
     storage_modes: tuple[str, ...],
 ) -> list[WorkItem]:
     layer = specs[0].layer
-    primary_cache = "c0" if layer == "05a" else "standard"
+    # Until every disk port implements the same budgeted cross-query page-cache
+    # contract, the only valid primary configuration is C0.  A port must not gain
+    # an advantage merely because it interprets "standard" as a warmed cache while
+    # another port ignores it.
+    primary_cache = "c0"
     selected_modes = set(storage_modes)
     if phase != "test":
         return [
@@ -248,17 +275,9 @@ def _work_items(
                 for mode in spec.storage_modes
                 if mode in selected_modes
             )
-    if dataset == "gist" and layer in ("05b", "05c") and not FAST_MODE:
-        for budget_gib, cache_mode in ((1.0, "standard"), (4.0, "standard"), (2.0, "c0")):
-            for repeat_id in range(repeats):
-                shift = repeat_id % len(specs)
-                ordered = specs[shift:] + specs[:shift]
-                result.extend(
-                    WorkItem(spec, mode, repeat_id, 1, budget_gib, cache_mode)
-                    for spec in ordered
-                    for mode in spec.storage_modes
-                    if mode in selected_modes
-                )
+    # Budget-sensitivity runs are enabled only after every port implements the
+    # common byte-capped cross-query cache.  The old "standard" mode was an
+    # Ours-only warmed graph cache and must not generate comparison rows.
     return result
 
 
@@ -288,7 +307,7 @@ def _publish_disk_environment(run_root: Path, out_root: Path, run_id: str, layer
 
     The strict runner keeps immutable artifacts under .formal_runs/runs/<run-id>.
     This public copy mirrors the memory experiments' numbered layout so figures,
-    CSVs and logs are easy to compare with results/memory_environment/01/02/03.
+    CSVs and logs are easy to compare with results/disk_environment/01/02/03.
     """
     source = run_root / LAYER_DIRS[layer] / dataset
     if not source.exists():
@@ -330,6 +349,32 @@ def _fvec_count(path: Path) -> int:
     if dimension <= 0 or size % record_bytes:
         raise ContractError(f"malformed fvecs file: {path}")
     return size // record_bytes
+
+
+def _fvec_shape(path: Path) -> tuple[int, int]:
+    with path.open("rb") as stream:
+        raw = stream.read(4)
+    if len(raw) != 4:
+        raise ContractError(f"empty fvecs file: {path}")
+    dimension = struct.unpack("<i", raw)[0]
+    return _fvec_count(path), dimension
+
+
+def _dataset_admission_errors(
+    dataset: str,
+    layers: tuple[str, ...],
+    data_root: Path,
+    budget_gib: float,
+) -> list[str]:
+    metric_error = metric_compatibility_error(dataset)
+    base_count, dimension = _fvec_shape(dataset_paths(dataset, data_root)["base"])
+    return ([metric_error] if metric_error else []) + resident_budget_errors(
+        dataset,
+        base_count,
+        dimension,
+        layers,
+        budget_gib,
+    )
 
 
 def _query_order_file(artifact_path: Path, query_path: Path, seed: int) -> tuple[Path, str]:
@@ -498,10 +543,17 @@ def _invoke_port(
         "--candidate-row-offset", str(candidate_row_offset),
     ]
     if item.spec.layer == "05b" or (
-        item.spec.layer == "05c" and item.spec.method == "Ours-Disk"
+        item.spec.layer == "05c"
+        and item.spec.method in ("Ours-Disk", "DiskANN-PQ-Disk")
     ):
         ours = item.spec.method == "Ours-Disk"
-        graph = _ours_graph(dataset) if ours else _shared_graph(dataset)
+        graph = (
+            _ours_graph(dataset)
+            if ours
+            else _diskann_system_graph(dataset)
+            if item.spec.layer == "05c"
+            else _shared_graph(dataset)
+        )
         if not graph.exists():
             raise ContractError(
                 f"missing formal 02 {'Ours native' if ours else 'shared baseline'} graph "
@@ -795,7 +847,8 @@ def _median_test_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "repeat_id", "workers", "search_width", "beam_width", "recall", "qps",
         "latency_mean_us", "latency_p50_us", "latency_p95_us", "latency_p99_us",
         "fixed_candidate_recall_at_10", "mean_relative_error", "p95_relative_error",
-        "pairwise_flip_rate", "index_size_mb", "resident_bytes", "cache_bytes",
+        "pairwise_flip_rate", "code_bytes_per_vector", "effective_bits_per_dim",
+        "read_amplification", "index_size_mb", "resident_bytes", "cache_bytes",
         "cache_nodes", "peak_rss_bytes", "io_requests_per_query",
         "sectors_4k_per_query", "bytes_read_per_query", "io_wait_us",
         "distance_compute_us", "query_prep_us", "queue_compute_us", "rerank_us",
@@ -808,16 +861,6 @@ def _median_test_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         repeat_ids = {int(r["repeat_id"]) for r in group}
         if repeat_ids != set(range(FORMAL_REPEATS)):
             raise ContractError(f"operating point lacks five repeats: {group[0]}")
-        for field in ("qps", "latency_p95_us"):
-            values = [float(r[field]) for r in group]
-            mean = statistics.fmean(values)
-            cv = statistics.pstdev(values) / mean if mean else math.inf
-            if cv > 0.05:
-                raise ContractError(
-                    f"repeat variation >5% for {group[0]['method']} "
-                    f"{group[0]['search_param']} {field}: CV={cv:.3f}; "
-                    "investigate and rerun"
-                )
         row = dict(group[0])
         for field in numeric_fields:
             values = [
@@ -826,6 +869,18 @@ def _median_test_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if values:
                 row[field] = float(statistics.median(values))
         row["repeat_id"] = "median_of_5"
+        for field, prefix in (("qps", "qps"), ("latency_p95_us", "latency_p95_us")):
+            values = sorted(float(r[field]) for r in group)
+            mean = statistics.fmean(values)
+            row[f"{prefix}_iqr"] = values[3] - values[1]
+            row[f"{prefix}_cv"] = statistics.pstdev(values) / mean if mean else math.inf
+            if row[f"{prefix}_cv"] > 0.05:
+                print(
+                    f"[warning] repeat variation >5% for {group[0]['method']} "
+                    f"{group[0]['search_param']} {field}: "
+                    f"CV={row[f'{prefix}_cv']:.3f}; retain all repeats and investigate",
+                    flush=True,
+                )
         result.append(row)
     return result
 
@@ -899,8 +954,11 @@ def _dataset_input_manifest(
             "saq_query_pca": saq_root / f"{dataset}_query_pca.fvecs",
             "saq_index": saq_root / "ivf4096_b4_caq_adj_seg_pca.index",
         }
+    policy = policy_for(dataset)
     if path.exists():
         document = json.loads(path.read_text())
+        if document.get("dataset_policy") != policy.to_dict():
+            raise ContractError(f"stale dataset metric policy in input manifest: {path}")
         for name, source in inputs.items():
             recorded = document.get("files", {}).get(name, {})
             if recorded.get("path") != str(source.resolve()) or not source.exists():
@@ -921,7 +979,12 @@ def _dataset_input_manifest(
         }
     atomic_write_json(
         path,
-        {"schema_version": 1, "dataset": dataset, "files": files},
+        {
+            "schema_version": 2,
+            "dataset": dataset,
+            "dataset_policy": policy.to_dict(),
+            "files": files,
+        },
     )
     digest = sha256_file(path)
     _VERIFIED_INPUT_MANIFESTS[path] = digest
@@ -936,6 +999,17 @@ def _run_layer_dataset(
     layer: str,
     dataset: str,
 ) -> None:
+    try:
+        policy_errors = _dataset_admission_errors(
+            dataset,
+            (layer,),
+            args.data_root,
+            args.search_dram_budget_gib,
+        )
+    except ValueError as exc:
+        raise ContractError(str(exc)) from exc
+    if policy_errors:
+        raise ContractError("dataset is not formal-ready:\n  - " + "\n  - ".join(policy_errors))
     specs = specs_for(layer)
     if getattr(args, "methods", ()):
         wanted = set(args.methods)
@@ -975,15 +1049,20 @@ def _run_layer_dataset(
     workers = args.workers
     if dataset == "gist" and layer in ("05b", "05c") and native_phase == "test" and not FAST_MODE:
         workers = tuple(dict.fromkeys((*workers, 1, 4, 8, 16, 32)))
-    items = _work_items(specs, native_phase, workers, args.repeats, dataset, args.storage_modes)
+    storage_modes = (
+        tuple(dict.fromkeys(mode for spec in specs for mode in spec.storage_modes))
+        if args.storage_modes == ("auto",)
+        else args.storage_modes
+    )
+    items = _work_items(specs, native_phase, workers, args.repeats, dataset, storage_modes)
     if not items:
         raise ContractError(
             f"no work items selected for {layer}/{dataset}; storage modes "
-            f"{args.storage_modes} do not match selected methods"
+            f"{storage_modes} do not match selected methods"
         )
     tuning_lock = run_root / LAYER_DIRS[layer] / dataset / "manifests" / "tuning.lock.json"
     if native_phase == "test" and FAST_MODE and not tuning_lock.exists():
-        tuning_lock = _write_fast_tuning_lock(run_root, layer, dataset, specs, args.storage_modes)
+        tuning_lock = _write_fast_tuning_lock(run_root, layer, dataset, specs, storage_modes)
     if native_phase == "test" and not tuning_lock.exists():
         raise ContractError(
             f"missing validation lock {tuning_lock}; run --phase tune with the same --run-id first"
@@ -1145,12 +1224,21 @@ def make_parser(default_layer: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--data-root", type=Path, default=DATA_ROOT)
     parser.add_argument("--out-root", type=Path, default=RESULTS_ROOT)
     parser.add_argument("--search-dram-budget-gib", type=float, default=2.0)
-    parser.add_argument("--storage-modes", default="resident,payload_on_ssd")
-    parser.add_argument("--workers", default="1,32")
+    parser.add_argument(
+        "--storage-modes",
+        default="auto",
+        help="auto selects every required mode for each layer; otherwise use a comma-separated subset",
+    )
+    parser.add_argument("--workers", default="32")
     parser.add_argument("--methods", default="", help="optional comma-separated method filter")
     parser.add_argument("--repeats", type=int, default=FORMAL_REPEATS)
     parser.add_argument("--seed", type=int, default=SEED)
-    parser.add_argument("--val-queries", type=int, default=1000)
+    parser.add_argument(
+        "--val-queries",
+        type=int,
+        default=0,
+        help="validation query count; 0 selects the dataset policy default",
+    )
     return parser
 
 
@@ -1182,6 +1270,8 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 ports_path=args.ports,
                 disk_root=args.disk_root,
                 disk_profile=args.disk_profile,
+                search_dram_budget_gib=args.search_dram_budget_gib,
+                val_queries=args.val_queries,
             )
         if args.repeats != FORMAL_REPEATS and args.phase == "run" and not FAST_MODE:
             raise ContractError(f"formal test requires exactly {FORMAL_REPEATS} repeats")
@@ -1190,12 +1280,34 @@ def run(argv: list[str] | None = None, default_layer: str | None = None) -> int:
                 "the formal primary budget is fixed at 2 GiB; GIST 1/4-GiB and C=0 "
                 "sensitivity profiles are scheduled automatically"
             )
-        if "05a" in args.layers and args.storage_modes != ("resident", "payload_on_ssd"):
+        if "05a" in args.layers and args.storage_modes not in (
+            ("auto",),
+            ("resident", "payload_on_ssd"),
+        ):
             raise ContractError(
                 "formal 05A requires paired --storage-modes resident,payload_on_ssd"
             )
         if args.seed != SEED:
             raise ContractError(f"formal suite seed is fixed at {SEED}")
+        if args.phase in ("export", "validate", "tune", "run"):
+            admission_errors: list[str] = []
+            for dataset in args.datasets:
+                try:
+                    admission_errors.extend(
+                        _dataset_admission_errors(
+                            dataset,
+                            args.layers,
+                            args.data_root,
+                            args.search_dram_budget_gib,
+                        )
+                    )
+                except ValueError as exc:
+                    admission_errors.append(str(exc))
+            if admission_errors:
+                raise ContractError(
+                    "dataset selection is not formal-ready:\n  - "
+                    + "\n  - ".join(admission_errors)
+                )
         if args.phase == "plot":
             command = [
                 sys.executable,

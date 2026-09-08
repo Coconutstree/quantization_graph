@@ -19,7 +19,7 @@ from systemfair.pareto_builder import merge_raw  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results/memory_environment")
+    ap.add_argument("--out-root", default="results/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
     base = Path(args.out_root) / args.suite / args.dataset / "csv"

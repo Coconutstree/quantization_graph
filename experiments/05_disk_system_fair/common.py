@@ -16,6 +16,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from .dataset_policy import validation_query_count
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data"
 RESULTS_ROOT = REPO_ROOT / "results" / "disk_environment" / ".formal_runs"
@@ -193,49 +195,91 @@ def write_ivecs(path: Path, arr: np.ndarray) -> None:
             f.write(arr[i].tobytes())
 
 
-def prepare_query_splits(
-    dataset: str,
-    data_root: Path,
-    out_root: Path,
-    val_queries: int = 200,
-) -> dict[str, Path]:
-    """Reuse the 03 system-fair query splits when present, else create them.
-
-    The 03 suite stores splits at
-    ``results/memory_environment/03_system_fair/<dataset>/csv/_query_splits``
-    (validation = first ``val_queries``, test = the rest). The 05 suite reuses
-    exactly those files so all experiments share the same query partition.
-    """
-    split_candidates = [
+def query_split_candidates(dataset: str) -> tuple[Path, ...]:
+    return (
         REPO_ROOT
         / "results"
-        / "memory_environment"
+        / "disk_environment"
         / "03_system_fair"
         / dataset
         / "csv"
         / "_query_splits",
-        REPO_ROOT / "results" / "03_system_fair" / dataset / "csv" / "_query_splits",
-    ]
-    for legacy in split_candidates:
-        if not (legacy / "test_gt.ivecs").exists():
+    )
+
+
+def vecs_shape(path: Path) -> tuple[int, int]:
+    with path.open("rb") as stream:
+        raw = stream.read(4)
+    if len(raw) != 4:
+        raise ValueError(f"empty vecs file: {path}")
+    dimension = struct.unpack("<i", raw)[0]
+    row_bytes = 4 * (dimension + 1)
+    size = path.stat().st_size
+    if dimension <= 0 or size % row_bytes:
+        raise ValueError(f"malformed vecs file: {path}")
+    return size // row_bytes, dimension
+
+
+def vecs_count(path: Path) -> int:
+    return vecs_shape(path)[0]
+
+
+def prepare_query_splits(
+    dataset: str,
+    data_root: Path,
+    out_root: Path,
+    val_queries: int | None = None,
+) -> dict[str, Path]:
+    """Reuse the 03 system-fair query splits when present, else create them.
+
+    The 03 suite stores splits at
+    ``results/disk_environment/03_system_fair/<dataset>/csv/_query_splits``
+    (validation = first ``val_queries``, test = the rest). The 05 suite reuses
+    exactly those files so all experiments share the same query partition.
+    """
+    query_path = data_root / dataset / f"{dataset}_query.fvecs"
+    total_queries = vecs_count(query_path)
+    val_queries = validation_query_count(dataset, total_queries, val_queries)
+    required_split_files = (
+        "validation_query.fvecs",
+        "validation_gt.ivecs",
+        "test_query.fvecs",
+        "test_gt.ivecs",
+    )
+    for legacy in query_split_candidates(dataset):
+        if not all((legacy / name).exists() for name in required_split_files):
             continue
+        validation_count = vecs_count(legacy / "validation_query.fvecs")
+        test_count = vecs_count(legacy / "test_query.fvecs")
+        if validation_count != val_queries or validation_count + test_count != total_queries:
+            raise ValueError(
+                f"stale query split {legacy}: validation={validation_count}, "
+                f"test={test_count}, expected validation={val_queries}, total={total_queries}"
+            )
         return {
             "validation_query": legacy / "validation_query.fvecs",
             "validation_gt": legacy / "validation_gt.ivecs",
             "test_query": legacy / "test_query.fvecs",
             "test_gt": legacy / "test_gt.ivecs",
         }
-    split_dir = out_root / dataset / "query_splits"
+    split_dir = out_root / "03_system_fair" / dataset / "csv" / "_query_splits"
     ensure_dir(split_dir)
     test_gt = split_dir / "test_gt.ivecs"
     if test_gt.exists():
+        validation_count = vecs_count(split_dir / "validation_query.fvecs")
+        test_count = vecs_count(split_dir / "test_query.fvecs")
+        if validation_count != val_queries or validation_count + test_count != total_queries:
+            raise ValueError(
+                f"stale query split {split_dir}: validation={validation_count}, "
+                f"test={test_count}, expected validation={val_queries}, total={total_queries}"
+            )
         return {
             "validation_query": split_dir / "validation_query.fvecs",
             "validation_gt": split_dir / "validation_gt.ivecs",
             "test_query": split_dir / "test_query.fvecs",
             "test_gt": test_gt,
         }
-    q = fvecs(data_root / dataset / f"{dataset}_query.fvecs")
+    q = fvecs(query_path)
     gt = ivecs(data_root / dataset / f"{dataset}_groundtruth.ivecs")
     val_q, test_q = q[:val_queries], q[val_queries:]
     val_gt, test_gt_arr = gt[:val_queries], gt[val_queries:]

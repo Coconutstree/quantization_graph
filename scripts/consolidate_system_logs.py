@@ -2,7 +2,7 @@
 """Consolidate per-search-parameter raw logs into ONE unified log per method.
 
 The unified log lives at
-``results/memory_environment/03_system_fair/<dataset>/logs/<method>/<method>.log`` and contains a
+``results/disk_environment/03_system_fair/<dataset>/logs/<method>/<method>.log`` and contains a
 header with build time / memory / config plus one block per search parameter.
 The original per-parameter files are preserved under ``<method>/_per_param/``.
 """
@@ -50,7 +50,7 @@ def native_lines(per_param_file: Path, method_log: Path) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results/memory_environment")
+    ap.add_argument("--out-root", default="results/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
 

@@ -165,7 +165,7 @@ def interpolate_point(group: list[dict[str, Any]], target: float) -> dict[str, A
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results/memory_environment")
+    ap.add_argument("--out-root", default="results/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     ap.add_argument("--targets", default="0.90,0.95,0.97")
     args = ap.parse_args()

@@ -81,8 +81,8 @@ PORTS = {
         "command": ["build/formal_local/05_disk_system_fair/qgraph05_symphonyqg_disk_port"],
         "source_suite": "03_system_fair",
         "source_kernel": "official SymphonyQG FastScan LUT+SIMD",
-        "port_kind": "fair_neighbor_fetch_disk_port",
-        "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-neighborfetch-v2",
+        "port_kind": "algorithm_preserving_disk_port",
+        "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-edgepayload-v3",
     },
     "05c:OG-LVQ-DiskPort": {
         "command": ["build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port"],
@@ -151,7 +151,11 @@ def main() -> int:
     output = args.output if args.output.is_absolute() else REPO_ROOT / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(document, indent=2) + "\n")
-    print(f"wrote {output.relative_to(REPO_ROOT)}")
+    try:
+        display_path = output.relative_to(REPO_ROOT)
+    except ValueError:
+        display_path = output
+    print(f"wrote {display_path}")
     return 0
 
 

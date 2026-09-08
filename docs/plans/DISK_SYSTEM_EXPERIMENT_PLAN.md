@@ -482,12 +482,13 @@ index.meta.json
 
 05A 不调图参数，直接复用原实验 01 的 fixed-candidate/search-width 网格；`resident` 与 `payload_on_ssd` 必须运行完全相同的候选点。05B 和 05C 固定图配置，只调搜索阶段参数。
 
-统一搜索宽度网格：
+搜索宽度网格：
 
 ```text
-10..30 step 1
+05A candidate width: 10..30 step 1
+05B/05C search width: 1..30 step 1
 40..100 step 10
-140..600 step 40
+140..580 step 40
 ```
 
 05B 对应关系：
@@ -520,9 +521,9 @@ index.meta.json
 
 ## 8. 正式运行负载
 
-05A、05B、05C 都在三个数据集上执行单请求实验和 16-worker 吞吐实验。05A 的 `resident` 与 `payload_on_ssd` 必须成对、交错运行；05B 和 05C 使用标准 `B=2 GiB` 混合驻留。
+05A、05B、05C 的正式主结果统一使用 32-worker 吞吐负载。05A 的 `resident` 与 `payload_on_ssd` 必须成对、交错运行；05B 和 05C 使用标准 `B=2 GiB` 混合驻留。GIST 的低并发结果仅作 sensitivity，不与 32-worker 主图混合。
 
-### 8.1 单请求延迟
+### 8.1 GIST 单请求延迟诊断
 
 - 1 个 query worker。
 - 每次只提交一个查询。
@@ -540,14 +541,14 @@ index.meta.json
 - p95 latency
 - p99 latency
 
-论文主延迟指标使用 p95，p99 放入表格或补充材料。
+该负载用于分析单请求延迟，不替代 32-worker 主结果。p95 作为主延迟指标，p99 放入补充材料并标注 query 数量。
 
 ### 8.2 并发吞吐
 
 三层、三数据集的主吞吐实验统一：
 
 ```text
-workers = 16
+workers = 32
 ```
 
 每个 worker：
@@ -706,7 +707,7 @@ python quantization_graph/experiments/05_disk_system_fair/run_disk_suite.py \
   --disk-root work/05_disk_system_fair/disk_root \
   --disk-profile auto \
   --search-dram-budget-gib 2 \
-  --workers 1,2,4,8,16,32 \
+  --workers 32 \
   --repeats 5 \
   --seed 20260813
 ```
@@ -851,7 +852,7 @@ quantization_graph/results/05_disk_system_fair/
 5. 所有正式索引位于独占、非旋转 NVMe。
 6. 所有正式读取使用 4 KiB 对齐的 `O_DIRECT`。
 7. 索引侧驻留内存不超过指定 `B`，实际使用量完整报告。
-8. 三层实验均完成单请求延迟和 16-worker 吞吐负载。
+8. 三层实验均完成 32-worker 吞吐负载；GIST 完成 1/4/8/16/32-worker sensitivity。
 9. GIST 完成 DRAM budget、零缓存和并发度敏感性实验。
 10. 逐查询原始数据、manifest、硬件信息和索引哈希齐全。
 11. 关键重复实验变异不超过 5%，或已给出可验证解释并重跑。

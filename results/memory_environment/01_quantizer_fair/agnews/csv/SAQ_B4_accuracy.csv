@@ -1,2 +1,0 @@
-suite,dataset,method,metric,nominal_bpd,actual_bytes_per_vector,index_size_mb,train_time_ms,encode_time_ms,mean_relative_error,p95_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate,fixed_candidate_recall,query_count,candidate_size,threads,repeat_id,git_commit
-01_quantizer_fair,agnews,SAQ_B4,L2,4,512,461.293,0,0,0.000982076,0.00231096,0.229515,0.9903,0.0083804,0.9903,1000,1000,1,0,9832544d6b0bd1800f95c9073bc0d4c256d5b107

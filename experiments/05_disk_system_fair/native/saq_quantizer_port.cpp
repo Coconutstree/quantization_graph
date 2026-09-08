@@ -564,7 +564,7 @@ int run_saq(int argc, char** argv) {
             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
             40, 50, 60, 70, 80, 90, 100, 140, 180, 220,
-            260, 300, 340, 380, 420, 460};
+            260, 300, 340, 380, 420, 460, 500, 540, 580};
     }
     const size_t max_width = *std::max_element(widths.begin(), widths.end());
     const std::vector<float> exact_full = exact_distances(

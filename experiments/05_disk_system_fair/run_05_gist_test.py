@@ -74,7 +74,7 @@ FULL_CURVE_WIDTHS_ENV = ",".join(str(value) for value in FULL_CURVE_WIDTHS)
 THIRD_PARTY_BUILDS = {
     "SymphonyQG-DiskPort": ("SymphonyQG", "SymphonyQG_R64_EF400_t3_build.json"),
     "OG-LVQ-DiskPort": ("OG-LVQ", "OG-LVQ_LVQ4_R64_W400_build.json"),
-    "Glass-NSG-DiskPort": ("Glass-NSG", "Glass-NSG_R64_L100_build.json"),
+    "Glass-NSG-DiskPort": ("Glass-NSG", "Glass-NSG_R64_L400_build.json"),
     "Ours-Disk": ("Ours", "Ours_OursDiskANN_M64_build.json"),
 }
 

@@ -63,7 +63,7 @@ def style_of(method: str, i: int) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", default="dbpedia")
-    ap.add_argument("--results-root", default="results/memory_environment")
+    ap.add_argument("--results-root", default="results/disk_environment")
     ap.add_argument("--ours-k", type=int, default=1,
                     help="Ours codebook size K to plot (default 1)")
     args = ap.parse_args()

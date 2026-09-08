@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "${ROOT}"
 
 BIN="${BIN:-experiments/02_diskann_fair/target/release/run_diskann_fair}"
-OUT_ROOT="${OUT_ROOT:-results/memory_environment}"
+OUT_ROOT="${OUT_ROOT:-results/disk_environment}"
 DATASETS="${DATASETS:-agnews gist dbpedia}"
 SEARCH_CPU="${SEARCH_CPU:-20}"
 ENCODE_CPUS="${ENCODE_CPUS:-0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76}"

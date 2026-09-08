@@ -53,7 +53,7 @@
 - workers 字段规范化：`'32.0'` → `'32'`（旧行来自 8/26 运行，浮点格式）
 - 02 figures 从 `figures_w32` 复制回标准目录
 - 目录整理后 `results/{agnews,gist,dbpedia,02_diskann_fair,03_system_fair}` 被移入
-  `results/memory_environment/` → 创建 5 个 symlink 保持旧路径可解析（orchestrator 依赖旧路径）
+  `results/disk_environment/` → 创建 5 个 symlink 保持旧路径可解析（orchestrator 依赖旧路径）
 
 ## 5. 运行状态
 

@@ -105,6 +105,9 @@ def _ours_local_rows() -> pd.DataFrame:
         "implementation_parity": d.get("implementation_parity"),
         "run_id": d.get("run_id"),
         "git_commit": d.get("git_commit"),
+        "base_count": d.get("base_count"),
+        "dimension": d.get("dimension"),
+        "index_path": d.get("index_path"),
         "cache_bytes": d.get("cache_bytes"),
         "cache_nodes": d.get("cache_nodes"),
         "ours_4bit_payload_bytes": d.get("ours_4bit_payload_bytes"),
@@ -131,6 +134,8 @@ def read_rows() -> pd.DataFrame:
     df = pd.concat([new, sym, ours], ignore_index=True)
     numeric = [
         "workers",
+        "base_count",
+        "dimension",
         "search_width",
         "recall",
         "qps",
@@ -192,7 +197,7 @@ def read_build_stats() -> pd.DataFrame:
 
 def read_shared_graph_meta() -> dict[str, str]:
     path = Path(
-        "results/memory_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/"
+        "results/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/"
         "shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.json"
     )
     meta: dict[str, str] = {}
@@ -355,6 +360,25 @@ def write_report(out: Path, rows: pd.DataFrame, build: pd.DataFrame, graph_meta:
             if graph_meta.get("graph_bytes")
             else math.nan
         )
+        ours_n = int(num("Ours-Disk", "base_count", "max"))
+        ours_dim = int(num("Ours-Disk", "dimension", "max"))
+        ours_raw_1bit = ours_n * ours_dim // 8
+        ours_raw_4bit = ours_n * ours_dim * 4 // 8
+        ours_index_path = Path(first("Ours-Disk", "index_path"))
+        ours_disk_payload_file = (ours_index_path / "ours_full4_residual.pages").stat().st_size
+        ours_sidecar_file = (ours_index_path / "ours_db1_sidecar.bin").stat().st_size
+        ours_quantizer_file = (ours_index_path / "ours_quantizer.bin").stat().st_size
+        ours_meta_files = sum(
+            (ours_index_path / name).stat().st_size
+            for name in ("index.meta", "resident_codes.marker")
+        )
+        ours_actual_index = (
+            ours_disk_payload_file
+            + ours_sidecar_file
+            + ours_quantizer_file
+            + ours_meta_files
+            + int(num("Ours-Disk", "ours_adjacency_bytes", "max"))
+        )
         return f"""# AGNews 磁盘环境 32 线程实验分析
 
 {local_note}
@@ -386,14 +410,20 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 
 ### Ours 索引大小（4bit / 8bit）
 
-| 组成 | 大小 |
-|---|---:|
-| 4-bit payload | {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1e6, 0)} MB |
-| 8-bit payload（4-bit + residual） | {fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1e6, 0)} MB |
-| adjacency | {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1e6, 0)} MB |
-| fp32 base（单独存放） | 0 |
-| 4-bit 索引（4-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_4bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB |
-| 8-bit 索引（8-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_8bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB |
+口径说明：下表的 4-bit/8-bit payload 是算法逻辑字节数，不是 `*.pages` 文件的真实磁盘占用；真实文件还包含 4 KiB page 对齐和空槽。AGNews 裸 1-bit code 的理论大小是 {fmt(ours_raw_1bit / 1048576, 1)} MiB，裸 4-bit code 是 {fmt(ours_raw_4bit / 1048576, 1)} MiB，二者确实是 4 倍关系。查询 JSON 里的 `resident_bytes={int(num("Ours-Disk", "resident_bytes", "max"))}` 不是裸 1-bit code，而是 Ours 查询常驻 footprint 口径：DB1 sidecar / factors / centroids 加上 full4-resident ablation 的最大常驻 payload 预算，因此不能拿它和 4-bit payload 做 4 倍比较。
+
+| 组成 | 大小 | 口径 |
+|---|---:|---|
+| 裸 1-bit code | {fmt(ours_raw_1bit / 1048576, 1)} MiB | 理论 bit-pack baseline |
+| 裸 4-bit code | {fmt(ours_raw_4bit / 1048576, 1)} MiB | 理论 bit-pack baseline，正好是裸 1-bit 的 4 倍 |
+| 4-bit payload | {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1048576, 1)} MiB | 逻辑 compact payload 字节数，含 per-vector compact/factor 结构开销 |
+| 8-bit payload（4-bit + residual） | {fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1048576, 1)} MiB | 逻辑 compact + residual payload 字节数 |
+| adjacency | {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1048576, 1)} MiB | `shared_graph.pages` 文件大小 |
+| fp32 base（单独存放） | 0 | measured index 中不含 fp32 base |
+| 逻辑 4-bit 索引（4-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_4bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB | 报告对比口径 |
+| 逻辑 8-bit 索引（8-bit payload + adjacency） | {fmt((num("Ours-Disk", "ours_8bit_payload_bytes", "max") + num("Ours-Disk", "ours_adjacency_bytes", "max")) / 1048576, 1)} MiB | 报告对比口径 |
+| 实际 8-bit page 文件 | {fmt(ours_disk_payload_file / 1048576, 1)} MiB | `ours_full4_residual.pages`，含 4 KiB page 对齐 |
+| 实际 Ours 目录合计 | {fmt(ours_actual_index / 1048576, 1)} MiB | payload page + sidecar + quantizer/meta + adjacency |
 
 ## 查询
 
@@ -402,7 +432,7 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 | 项 | 值 |
 |---|---|
 | 数据集 | agnews（769k × 1024） |
-| 存储 | 4-bit payload {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1e6, 0)} MB + 8-bit payload（4bit+residual）{fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1e6, 0)} MB + adjacency {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1e6, 0)} MB；fp32 base 单独存放 |
+| 存储 | 逻辑 4-bit payload {fmt(num("Ours-Disk", "ours_4bit_payload_bytes", "max") / 1048576, 1)} MiB；逻辑 8-bit payload（4bit+residual）{fmt(num("Ours-Disk", "ours_8bit_payload_bytes", "max") / 1048576, 1)} MiB；adjacency {fmt(num("Ours-Disk", "ours_adjacency_bytes", "max") / 1048576, 1)} MiB；实际 payload page 文件 {fmt(ours_disk_payload_file / 1048576, 1)} MiB；fp32 base 不计入 measured index |
 | 查询 | 32 workers、2 GiB budget、hybrid_disk、direct I/O + native AIO、page 4096 |
 | sweep | width 10–580（40 点）、beam=1、ablation=db1+coalescing+reuse |
 | parity | {first("Ours-Disk", "implementation_parity")} |
@@ -449,14 +479,14 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 - **Latency / QPS**：Ours-Disk 平均 latency 约 {cell("Ours-Disk", "latency_mean_us", 2, 1000)} ms/query、最高 QPS 约 {cell("Ours-Disk", "qps", 2, 1.0, "max")}，在四个方法里吞吐最高且延迟最低；SymphonyQG 平均 latency 约 {cell("SymphonyQG-DiskPort", "latency_mean_us", 2, 1000)} ms/query。
 - **I/O 成本**：同 recall 下 Ours-Disk 的 I/O requests/query 和 bytes read/query 明显低于其他三个方法。平均来看 Ours-Disk 约 {cell("Ours-Disk", "io_requests_per_query", 1)} 次/query、{cell("Ours-Disk", "bytes_read_per_query", 2, 1024**2)} MiB；Glass-NSG 约 {cell("Glass-NSG-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("Glass-NSG-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB；OG-LVQ 约 {cell("OG-LVQ-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("OG-LVQ-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB；SymphonyQG 约 {cell("SymphonyQG-DiskPort", "io_requests_per_query", 1)} 次/query、{cell("SymphonyQG-DiskPort", "bytes_read_per_query", 2, 1024**2)} MiB。
 - **瓶颈**：四个方法都以 I/O wait 为主（Ours-Disk {fmt(share("Ours-Disk", "io_wait_us", "latency_mean_us"))}%、OG-LVQ {fmt(share("OG-LVQ-DiskPort", "io_wait_us", "latency_mean_us"))}%、Glass-NSG {fmt(share("Glass-NSG-DiskPort", "io_wait_us", "latency_mean_us"))}%、SymphonyQG {fmt(share("SymphonyQG-DiskPort", "io_wait_us", "latency_mean_us"))}%）。Ours-Disk 的 distance compute 只有 {fmt(share("Ours-Disk", "distance_compute_us", "latency_mean_us"))}%，说明 Ours 不是距离核慢，而是读盘等待慢。
-- **Ours 为什么快**：Ours-Disk 的 DB1 1bit 初筛把 full4 候选压到约 {cell("Ours-Disk", "full4_candidates", 1)} 个/query，只读 4bit 页面（{cell("Ours-Disk", "bytes_read_per_query", 2, 1024**2)} MiB/query），且页面访问已顺序化（约 200–350 MB/s），所以吞吐远高于以随机读为主的 OG-LVQ / Glass-NSG / SymphonyQG。同时 Ours 索引只有 1.36 GB（SymphonyQG 约 12.6 GB），磁盘 footprint 也更小。
+- **Ours 为什么快**：Ours-Disk 的 DB1 1bit 初筛把 full4 候选压到约 {cell("Ours-Disk", "full4_candidates", 1)} 个/query，只读 full4/residual payload 页面（{cell("Ours-Disk", "bytes_read_per_query", 2, 1024**2)} MiB/query），且页面访问已顺序化（约 200–350 MB/s），所以吞吐远高于以随机读为主的 OG-LVQ / Glass-NSG / SymphonyQG。同时 Ours 实际目录合计约 {fmt(ours_actual_index / 1048576, 1)} MiB（与查询 JSON 的 `index_size_mb` 字段一致），SymphonyQG 约 12.6 GB，磁盘 footprint 更小。
 
 ### Ours 进一步优化
 
 按收益排序（数据：AGNews 05C、w32、2 GiB DRAM 预算）：
 
 1. **把预算里空着的约 1 GiB 真正用去缓存 4-bit payload 页。**
-   现状：内存里只有 1-bit 常驻码（0.95 GiB）+ 26 MB 邻接表缓存，约 0.98 GiB，2 GiB 预算还剩约 1 GiB 空着；而且那个 26 MB 缓存被写死成“最多缓存 10% 节点”，缓存的是邻接表、不是真正吃 IO 的 4-bit 数据，所以每查询约 810 次 full4 页读仍全落盘。做法：去掉 10% 上限，把剩余预算用来缓存高频 4-bit payload 页（4-bit 全量仅 0.38 GiB，1-bit + 4-bit 合计 1.33 GiB，仍远低于 2 GiB）。这是收益最大的一项。
+   现状：常驻 footprint 口径里 `resident_bytes` 约 0.95 GiB，另有 26 MiB 邻接表缓存；这里的 0.95 GiB 不是裸 1-bit code，而是 sidecar/因子/质心加 full4-resident ablation 的最大常驻 payload 预算。2 GiB 预算仍有空间，而 26 MiB 缓存被写死成“最多缓存 10% 节点”，缓存的是邻接表、不是真正吃 IO 的 payload 页，所以每查询约 810 次 full4 页读仍全落盘。做法：去掉 10% 上限，把剩余预算用来缓存高频 full4/residual payload 页。这是收益最大的一项。
 
 2. **压低 full4 读量。**
    现在 DB1 1bit 初筛扫 3362 个候选、留下 810 个进 full4，随后几乎每个 full4 候选都要单独读一页（810 页/query）。可做：收紧 DB1 门控（让更少候选进 full4）、把同页候选合并成一次读、让 4bit 与 residual 落在同一页一次读回。

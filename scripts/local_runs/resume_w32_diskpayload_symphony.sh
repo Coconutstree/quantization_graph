@@ -171,7 +171,7 @@ PY
 log "RUN_ID=${RUN_ID}"
 mkdir -p "${OUT_ROOT}" "${DISK_ROOT}" "${PUBLISH_ROOT}"
 
-AG_GRAPH="results/memory_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed${SEED}.graph.bin"
+AG_GRAPH="results/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed${SEED}.graph.bin"
 AG_META="${AG_GRAPH%.graph.bin}.graph.json"
 
 rebuild_shared_graph() {
@@ -181,8 +181,8 @@ rebuild_shared_graph() {
     --dataset agnews --methods PQ --shared-graph --max-degree 64 --build-beam 400 \
     --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 \
     --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
-    --query-path results/memory_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
-    --gt-path results/memory_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
+    --query-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
+    --gt-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
 }
 
 # The native port contract requires the baseline shared graph to contain at

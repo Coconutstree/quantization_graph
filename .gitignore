@@ -65,18 +65,6 @@ results/disk_environment/**/*
 !results/disk_environment/**/figures_w32/
 !results/disk_environment/**/figures_w32/**
 results/disk_environment/.formal_runs/**
-!results/memory_environment/
-!results/memory_environment/**/
-results/memory_environment/**/*
-!results/memory_environment/**/
-!results/memory_environment/**/csv
-!results/memory_environment/**/csv/
-!results/memory_environment/**/csv/**
-!results/memory_environment/**/figures
-!results/memory_environment/**/figures/
-!results/memory_environment/**/figures/**
-!results/memory_environment/**/figures_w32/
-!results/memory_environment/**/figures_w32/**
 
 # Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
 baselines/builds/

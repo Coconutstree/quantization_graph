@@ -23,7 +23,7 @@ SCHEMA_VERSION = 2
 PAGE_SIZE = 4096
 FORMAL_WARMUP_QUERIES = 100
 FORMAL_REPEATS = 5
-FORMAL_WORKERS = (1, 16)
+FORMAL_WORKERS = (32,)
 SEED = 20260813
 
 
@@ -51,7 +51,7 @@ METHOD_SPECS: tuple[MethodSpec, ...] = (
     MethodSpec("05b", "SAQ-DiskANN-Disk", "02_diskann_fair", "DiskANN spherical::Impl<4>", ("hybrid_disk", "disk_payload"), "algorithm_preserving_disk_port"),
     MethodSpec("05b", "Ours-Disk", "02_diskann_fair", "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "Ours-Disk", "03_system_fair", "ExRaBitQ4 symmetric Vamana + DB1 x INT8 production search", ("hybrid_disk",), "algorithm_preserving_disk_port"),
-    MethodSpec("05c", "SymphonyQG-DiskPort", "03_system_fair", "official SymphonyQG FastScan LUT+SIMD", ("hybrid_disk",), "fair_neighbor_fetch_disk_port"),
+    MethodSpec("05c", "SymphonyQG-DiskPort", "03_system_fair", "official SymphonyQG FastScan LUT+SIMD", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "OG-LVQ-DiskPort", "03_system_fair", "official SVS LVQ4 distance kernel", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "Glass-NSG-DiskPort", "03_system_fair", "official Glass NSG SQ4U distance kernel", ("hybrid_disk",), "algorithm_preserving_disk_port"),
     MethodSpec("05c", "DiskANN-PQ-Disk", "03_system_fair", "official diskann-disk PQ search", ("hybrid_disk",), "official_native_disk"),
@@ -77,6 +77,7 @@ SUMMARY_FIELDS = (
     "beam_width", "recall", "qps", "latency_mean_us", "latency_p50_us",
     "latency_p95_us", "latency_p99_us", "fixed_candidate_recall_at_10",
     "mean_relative_error", "p95_relative_error", "pairwise_flip_rate",
+    "code_bytes_per_vector", "effective_bits_per_dim", "read_amplification",
     "index_size_mb", "resident_bytes", "cache_bytes", "cache_nodes",
     "peak_rss_bytes", "ours_4bit_payload_bytes", "ours_8bit_payload_bytes",
     "ours_adjacency_bytes", "ours_fp32_base_bytes",
@@ -91,6 +92,7 @@ SUMMARY_FIELDS = (
     "query_split_sha256", "query_order_sha256",
     "query_order_seed", "shared_graph_sha256", "source_graph_sha256", "graph_role",
     "direct_io", "native_aio", "page_size", "formal_ready", "artifact_path",
+    "qps_iqr", "qps_cv", "latency_p95_us_iqr", "latency_p95_us_cv",
 )
 
 
@@ -278,8 +280,11 @@ def validate_artifact(
         errors.append("cache_mode must be standard or c0")
     if spec.layer == "05a" and cache_mode != "c0":
         errors.append("05A must run with C=0")
-    if cache_mode == "c0" and int(artifact.get("cache_nodes", 0) or 0) != 0:
-        errors.append("cache_mode=c0 requires cache_nodes=0")
+    if cache_mode == "c0" and (
+        int(artifact.get("cache_nodes", 0) or 0) != 0
+        or int(artifact.get("cache_bytes", 0) or 0) != 0
+    ):
+        errors.append("cache_mode=c0 requires cache_nodes=cache_bytes=0")
     phase = str(artifact.get("phase", ""))
     if phase in ("validate", "validation", "test"):
         if artifact.get("implementation_parity") != "passed":
@@ -396,6 +401,13 @@ def validate_artifact(
         ) <= 0:
             errors.append(f"{prefix}: disk mode reports no physical bytes read")
         if spec.layer == "05a":
+            for key in (
+                "code_bytes_per_vector",
+                "effective_bits_per_dim",
+                "read_amplification",
+            ):
+                if key not in row:
+                    errors.append(f"{prefix}.{key} is required for 05A")
             fixed_recall = _finite_number(
                 row.get("fixed_candidate_recall_at_10", -1),
                 f"{prefix}.fixed_candidate_recall_at_10",
@@ -533,7 +545,7 @@ def validate_layer_completeness(
                         and int(r["workers"]) == worker
                         and int(r["repeat_id"]) == repeat_id
                         and float(r["search_dram_budget_gib"]) == 2.0
-                        and r.get("cache_mode") == ("c0" if layer == "05a" else "standard")
+                        and r.get("cache_mode") == "c0"
                     ]
                     if not found:
                         errors.append(

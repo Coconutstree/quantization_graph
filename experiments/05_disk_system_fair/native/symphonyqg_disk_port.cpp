@@ -40,7 +40,7 @@ constexpr const char* kMethod = "SymphonyQG-DiskPort";
 constexpr const char* kLayer = "05c";
 constexpr const char* kSourceSuite = "03_system_fair";
 constexpr const char* kSourceKernel = "official SymphonyQG FastScan LUT+SIMD";
-constexpr const char* kPortKind = "fair_neighbor_fetch_disk_port";
+constexpr const char* kPortKind = "algorithm_preserving_disk_port";
 
 struct Args {
     std::unordered_map<std::string, std::string> values;
@@ -434,10 +434,9 @@ std::vector<int32_t> search_one(
         for (std::size_t i = 0; i < meta.degree; ++i) {
             const auto v = neighbors[i];
             if (v == symqg::kPidMax || v >= meta.n || seen.count(v)) continue;
-            // The in-memory SymphonyQG row stores the neighbor's fast-scan payload next
-            // to the edge. For disk-system fairness, charge the candidate node row
-            // before admitting it, matching ports that fetch neighbor payloads from SSD.
-            rows.row(v);
+            // SymphonyQG keeps the fast-scan payload for v beside edge (u, v), so
+            // appro[i] is already available without reading v's row.  Defer that
+            // I/O until v is expanded or included in final exact re-ranking.
             insert_candidate(pool, seen, v, appro[i], ef, meta.n);
         }
     }
@@ -749,7 +748,9 @@ std::vector<int> requested_widths(const Args& args) {
     } else if (args.values.count("integration-widths")) {
         parse_csv(args.values.at("integration-widths"));
     } else {
-        widths.push_back(100);
+        for (int value = 1; value <= 30; ++value) widths.push_back(value);
+        for (int value = 40; value <= 100; value += 10) widths.push_back(value);
+        for (int value = 140; value <= 580; value += 40) widths.push_back(value);
     }
     if (widths.empty()) throw std::runtime_error("empty search width list");
     return widths;

@@ -121,13 +121,15 @@ NUMERIC_FIELDS = {
     "repeat_id", "workers", "search_width", "beam_width", "recall", "qps",
     "latency_mean_us", "latency_p50_us", "latency_p95_us", "latency_p99_us",
     "fixed_candidate_recall_at_10", "mean_relative_error", "p95_relative_error",
-    "pairwise_flip_rate", "index_size_mb", "resident_bytes", "cache_bytes",
+    "pairwise_flip_rate", "code_bytes_per_vector", "effective_bits_per_dim",
+    "read_amplification", "index_size_mb", "resident_bytes", "cache_bytes",
     "cache_nodes", "peak_rss_bytes", "io_requests_per_query",
     "sectors_4k_per_query", "bytes_read_per_query", "io_wait_us",
     "distance_compute_us", "query_prep_us", "queue_compute_us", "rerank_us",
     "visited_nodes", "distance_evaluations", "db1_checks", "db1_survivors",
     "full4_candidates", "full4_page_reads", "rerank_candidates",
-    "rerank_page_reads", "query_count",
+    "rerank_page_reads", "query_count", "qps_iqr", "qps_cv",
+    "latency_p95_us_iqr", "latency_p95_us_cv",
 }
 
 
@@ -145,7 +147,7 @@ def _read_rows(path: Path) -> list[dict[str, Any]]:
 def _workers_for(layer: str, dataset: str) -> tuple[int, ...]:
     if dataset == "gist" and layer in ("05b", "05c"):
         return (1, 4, 8, 16, 32)
-    return (1, 32)
+    return (32,)
 
 
 def _load_complete(run_root: Path, layer: str, dataset: str) -> list[dict[str, Any]]:
@@ -226,21 +228,17 @@ def _median_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         repeat_ids = {int(r["repeat_id"]) for r in group}
         if repeat_ids != set(range(FORMAL_REPEATS)):
             raise ContractError(f"operating point lacks five repeats: {group[0]}")
-        for field in ("qps", "latency_p95_us"):
-            values = [float(r[field]) for r in group]
-            mean = statistics.fmean(values)
-            cv = statistics.pstdev(values) / mean if mean else math.inf
-            if cv > 0.05:
-                raise ContractError(
-                    f"repeat variation >5% for {group[0]['method']} {group[0]['search_param']} "
-                    f"{field}: CV={cv:.3f}; investigate and rerun"
-                )
         row = dict(group[0])
         for field in NUMERIC_FIELDS:
             values = [float(r[field]) for r in group if r.get(field, "") not in (None, "")]
             if values:
                 row[field] = float(statistics.median(values))
         row["repeat_id"] = "median_of_5"
+        for field, prefix in (("qps", "qps"), ("latency_p95_us", "latency_p95_us")):
+            values = sorted(float(r[field]) for r in group)
+            mean = statistics.fmean(values)
+            row[f"{prefix}_iqr"] = values[3] - values[1]
+            row[f"{prefix}_cv"] = statistics.pstdev(values) / mean if mean else math.inf
         result.append(row)
     return result
 

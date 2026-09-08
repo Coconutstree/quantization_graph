@@ -1,2 +1,0 @@
-suite,dataset,method,metric,nominal_bpd,actual_bytes_per_vector,index_size_mb,train_time_ms,encode_time_ms,mean_relative_error,p95_relative_error,mean_ip_relative_error,p95_ip_relative_error,mean_absolute_error,top10_overlap,pairwise_flip_rate,fixed_candidate_recall,query_count,candidate_size,threads,repeat_id,git_commit
-01_quantizer_fair,gist,Ours_RaBitQ_K1,L2,4,1305,1244.56,0,154438,0.00934347,0.0234772,0.00149467,0.00374386,0.015148,0.8552,0.124886,0.8552,1000,1000,1,0,a424dcb809fd725c44dd976d9063febd4837d16a

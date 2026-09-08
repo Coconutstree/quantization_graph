@@ -141,15 +141,15 @@ def write_data_dictionary(path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--datasets", nargs="+", default=list(DEFAULT_DATASETS))
-    parser.add_argument("--out-root", default="results/memory_environment")
+    parser.add_argument("--out-root", default="results/disk_environment")
     parser.add_argument("--work-root", default="work")
     parser.add_argument(
         "--out",
-        default="results/memory_environment/paper_tables/01_quantizer_fair_summary.csv",
+        default="results/disk_environment/paper_tables/01_quantizer_fair_summary.csv",
     )
     parser.add_argument(
         "--data-dictionary",
-        default="results/memory_environment/paper_tables/01_quantizer_fair_columns.md",
+        default="results/disk_environment/paper_tables/01_quantizer_fair_columns.md",
     )
     args = parser.parse_args()
 

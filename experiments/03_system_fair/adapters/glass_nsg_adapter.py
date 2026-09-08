@@ -26,14 +26,15 @@ class GlassNSGAdapter(SystemAdapter):
     def candidate_configs(self, ctx: RunContext) -> list[dict[str, Any]]:
         return [
             {"config_id": f"R{r}_L{l}", "R": r, "L": l}
-            for r, l in ((32, 50), (32, 100), (64, 100))
+            for r, l in ((32, 50), (32, 100), (64, 100), (64, 400))
         ]
 
     @staticmethod
     def _ef_grid() -> list[int]:
-        values = list(range(10, 31))
+        values = list(range(1, 31))
         values += list(range(40, 101, 10))
-        values += list(range(140, 601, 40))
+        values += list(range(140, 461, 40))
+        values += [480]
         return values
 
     def build(self, ctx: RunContext, config: dict[str, Any]) -> dict[str, Any]:

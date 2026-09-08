@@ -11,7 +11,7 @@ if [[ -f "${CONFIG}" ]]; then
 fi
 
 DATA_ROOT="${DATA_ROOT:-${ROOT}/data}"
-OUT_ROOT="${OUT_ROOT:-results/memory_environment}"
+OUT_ROOT="${OUT_ROOT:-results/disk_environment}"
 WORK_ROOT="${WORK_ROOT:-work}"
 SAQ_ROOT="${SAQ_ROOT:-baselines/saq}"
 SAQ_DATA_ROOT="${SAQ_DATA_ROOT:-${SAQ_ROOT}/data}"

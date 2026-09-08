@@ -34,6 +34,11 @@ from diskfair.diskio import (
     plan_reads,
 )
 from diskfair.common import resolve_executable, resolve_repo_path
+from diskfair.dataset_policy import (
+    metric_compatibility_error,
+    resident_budget_errors,
+    validation_query_count,
+)
 from diskfair.format import IndexBuilder, verify_index
 from diskfair.quantizers import (
     OursRaBitQ,
@@ -270,6 +275,28 @@ def test_repo_relative_resolution_from_other_cwd(tmp_path):
         os.chdir(old_cwd)
 
 
+def test_dataset_policy_splits_and_metrics():
+    assert validation_query_count("agnews", 1000, 0) == 200
+    assert validation_query_count("gist", 1000, None) == 200
+    assert validation_query_count("dbpedia", 10000, 0) == 1000
+    try:
+        validation_query_count("agnews", 1000, 1000)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an empty test split must be rejected")
+    assert metric_compatibility_error("agnews") is None
+    assert "inner_product" in (metric_compatibility_error("cohere10m") or "")
+
+
+def test_dataset_policy_budget_lower_bounds():
+    assert not resident_budget_errors("gist", 1_000_000, 960, ("05b", "05c"), 2.0)
+    cohere = resident_budget_errors("cohere10m", 10_000_000, 768, ("05b",), 2.0)
+    assert cohere and "full4-resident" in cohere[0]
+    msmarco = resident_budget_errors("msmarco", 113_520_750, 1024, ("05c",), 2.0)
+    assert msmarco and "DB1" in msmarco[0]
+
+
 def main() -> int:
     failed = 0
     tmp = Path(tempfile.mkdtemp(prefix="diskfair_test_"))
@@ -292,6 +319,8 @@ def main() -> int:
         (test_ours_quantizer_sizes_and_parity, ()),
         (test_odirect_reader_if_supported, (tmp,)),
         (test_repo_relative_resolution_from_other_cwd, (tmp,)),
+        (test_dataset_policy_splits_and_metrics, ()),
+        (test_dataset_policy_budget_lower_bounds, ()),
     ]
     for fn, args in cases:
         try:

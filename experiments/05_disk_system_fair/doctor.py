@@ -14,9 +14,18 @@ from diskfair.common import (
     DEFAULT_DISK_ROOT,
     dataset_paths,
     lsblk_rotational,
+    query_split_candidates,
     resolve_executable,
     resolve_repo_path,
     run_preflight,
+    vecs_count,
+    vecs_shape,
+)
+from diskfair.dataset_policy import (
+    metric_compatibility_error,
+    policy_for,
+    resident_budget_errors,
+    validation_query_count,
 )
 from diskfair.fio_preflight import resolve_fio
 from diskfair.native_contract import (
@@ -87,6 +96,7 @@ def _elf_runpaths(path: Path) -> tuple[str, ...]:
 def _ours_graph_candidates(repo_root: Path, dataset: str) -> tuple[Path, ...]:
     filename = f"{dataset}_Ours_R64_Lbuild400.graph.bin"
     return (
+        repo_root / "results" / "graph" / dataset / "Ours" / filename,
         repo_root / "results" / dataset / "indexes" / "02_diskann_fair" / "Ours" / filename,
         repo_root / "results" / "02_diskann_fair" / dataset / "indexes" / "Ours" / filename,
     )
@@ -101,6 +111,8 @@ def run_doctor(
     ports_path: Path,
     disk_root: Path | None,
     disk_profile: str = "nvme",
+    search_dram_budget_gib: float = 2.0,
+    val_queries: int | None = None,
 ) -> int:
     layers = tuple(layers)
     datasets = tuple(datasets)
@@ -207,37 +219,105 @@ def run_doctor(
     )
 
     for dataset in datasets:
-        for kind, path in dataset_paths(dataset, data_root).items():
+        paths = dataset_paths(dataset, data_root)
+        for kind, path in paths.items():
             add(
                 path.is_file() and path.stat().st_size > 0,
                 f"data:{dataset}:{kind}",
                 f"{path} ({path.stat().st_size} bytes)" if path.exists() else str(path),
                 f"missing or empty {path}",
             )
-        split = repo_root / "results" / "03_system_fair" / dataset / "csv" / "_query_splits"
-        for filename in (
-            "validation_query.fvecs",
-            "validation_gt.ivecs",
-            "test_query.fvecs",
-            "test_gt.ivecs",
-        ):
-            path = split / filename
+        try:
+            policy = policy_for(dataset)
+            metric_error = metric_compatibility_error(dataset)
+        except ValueError as exc:
+            add(False, f"metric:{dataset}", "", str(exc))
+        else:
             add(
-                path.is_file() and path.stat().st_size > 0,
-                f"split:{dataset}:{filename}",
-                str(path),
-                f"missing 03 query split {path}",
+                metric_error is None,
+                f"metric:{dataset}",
+                f"source={policy.source_metric}, runner={policy.runner_metric}, "
+                f"unit_normalized={policy.vectors_unit_normalized}",
+                metric_error or "",
             )
+        if paths["base"].is_file() and paths["query"].is_file():
+            try:
+                base_count, dimension = vecs_shape(paths["base"])
+                total_queries = vecs_count(paths["query"])
+                validation_count = validation_query_count(dataset, total_queries, val_queries)
+            except ValueError as exc:
+                add(False, f"split-policy:{dataset}", "", str(exc))
+            else:
+                budget_errors = resident_budget_errors(
+                    dataset,
+                    base_count,
+                    dimension,
+                    layers,
+                    search_dram_budget_gib,
+                )
+                for error in budget_errors:
+                    add(False, f"dram-budget:{dataset}", "", error)
+                if not budget_errors:
+                    add(
+                        True,
+                        f"dram-budget:{dataset}",
+                        f"resident-code lower bounds fit B={search_dram_budget_gib:g} GiB",
+                        "",
+                    )
+                required = (
+                    "validation_query.fvecs",
+                    "validation_gt.ivecs",
+                    "test_query.fvecs",
+                    "test_gt.ivecs",
+                )
+                candidates = query_split_candidates(dataset)
+                split = next(
+                    (candidate for candidate in candidates if all((candidate / name).is_file() for name in required)),
+                    None,
+                )
+                partial = [
+                    candidate
+                    for candidate in candidates
+                    if any((candidate / name).exists() for name in required)
+                    and not all((candidate / name).is_file() for name in required)
+                ]
+                if partial:
+                    add(False, f"split:{dataset}", "", f"incomplete query split: {partial[0]}")
+                elif split is None:
+                    add(
+                        True,
+                        f"split:{dataset}",
+                        f"will create validation={validation_count}, "
+                        f"test={total_queries - validation_count} in immutable run output",
+                        "",
+                    )
+                else:
+                    actual_validation = vecs_count(split / "validation_query.fvecs")
+                    actual_test = vecs_count(split / "test_query.fvecs")
+                    split_ok = (
+                        actual_validation == validation_count
+                        and actual_validation + actual_test == total_queries
+                    )
+                    add(
+                        split_ok,
+                        f"split:{dataset}",
+                        f"{split}: validation={actual_validation}, test={actual_test}",
+                        f"stale split {split}: validation={actual_validation}, test={actual_test}; "
+                        f"expected validation={validation_count}, total={total_queries}",
+                    )
         if "05b" in layers:
-            graph = (
+            shared_filename = "diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+            shared_candidates = (
+                repo_root / "results" / "graph" / dataset / "shared_graph" / shared_filename,
                 repo_root
                 / "results"
                 / dataset
                 / "indexes"
                 / "02_diskann_fair"
                 / "shared_graph"
-                / "diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+                / shared_filename,
             )
+            graph = next((path for path in shared_candidates if path.exists()), shared_candidates[0])
             add(
                 graph.is_file() and graph.stat().st_size > 0,
                 f"shared-graph:{dataset}",

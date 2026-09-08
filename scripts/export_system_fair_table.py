@@ -225,7 +225,7 @@ def main() -> int:
         default="",
         help="comma-separated datasets (default: dbpedia,gist,agnews)",
     )
-    ap.add_argument("--out-root", default="results/memory_environment")
+    ap.add_argument("--out-root", default="results/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     ap.add_argument("--paper-dir", default="paper")
     args = ap.parse_args()

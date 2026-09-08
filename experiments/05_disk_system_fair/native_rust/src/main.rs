@@ -1232,9 +1232,9 @@ fn formal_widths(args: &Args) -> Result<Vec<usize>> {
         }
         return parse_positive_list(value, "--integration-widths");
     }
-    let mut values = (10..=30).collect::<Vec<_>>();
+    let mut values = (1..=30).collect::<Vec<_>>();
     values.extend((40..=100).step_by(10));
-    values.extend((140..=600).step_by(40));
+    values.extend((140..=580).step_by(40));
     Ok(values)
 }
 

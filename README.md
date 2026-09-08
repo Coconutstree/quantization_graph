@@ -55,7 +55,7 @@ Ours-DiskANN 由四部分组成：
 DBpedia 端到端 Recall@10 仅约 0.46。将两处 `cvtepi16_epi32` 改为
 `cvtepu16_epi32`（零扩展）后，同一索引端到端召回 0.46→0.88（ef=580），
 逼近其图 fp32 上限 0.89。本仓库 03 表格/图中 SymphonyQG 的 DBpedia 行即采用
-修复后实测值（`results/memory_environment/03_system_fair/dbpedia/csv/`），修复前的归因实验
+修复后实测值（`results/disk_environment/03_system_fair/dbpedia/csv/`），修复前的归因实验
 （PCA-960 恢复 0.997）仍可复现，但机制是实现缺陷而非量化算法或数据问题。
 
 **实验五正式磁盘约束（重要）**：05 的正式结果不能来自 Python/NumPy smoke runner，
@@ -84,23 +84,16 @@ native port 状态为 `ready`、二进制 SHA-256 固定、4 KiB `O_DIRECT` 和 
 ├── NOTICE.md / LICENSE    # 第三方组件与 Apache-2.0
 ```
 
-结果布局见 `docs/RESULTS_LAYOUT.md`；顶层只按环境分组：
+结果布局见 `docs/RESULTS_LAYOUT.md`；正式结果只保留 disk 根目录：
 
 ```text
 results/
-├── memory_environment/
-│   ├── 01_quantizer_fair/
-│   ├── 02_diskann_fair/
-│   ├── 03_system_fair/
-│   ├── dataset_artifacts/
-│   ├── diagnostics/
-│   └── paper_tables/
-├── disk_environment/
-│   ├── 01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}  # disk 05A
-│   ├── 02_diskann_fair/<dataset>/{csv,logs,figures,manifests}    # disk 05B
-│   ├── 03_system_fair/<dataset>/{csv,logs,figures,manifests}     # disk 05C
-│   ├── .formal_runs/runs/<run-id>/                              # immutable 05 run workspace
-│   └── archive/05_disk_system_fair_legacy/
+└── disk_environment/
+    ├── 01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}  # disk 05A
+    ├── 02_diskann_fair/<dataset>/{csv,logs,figures,manifests}    # disk 05B
+    ├── 03_system_fair/<dataset>/{csv,logs,figures,manifests}     # disk 05C
+    ├── .formal_runs/runs/<run-id>/                              # immutable 05 run workspace
+    └── archive/05_disk_system_fair_legacy/
 ```
 
 ## 4. 依赖与安装（Requirements）
@@ -141,7 +134,7 @@ python data/convert_hdf5_to_ann.py \
   --input data/gist/gist-960-euclidean.hdf5 \
   --output-dir data/gist --prefix gist
 python scripts/check_datasets.py --datasets gist --data-root data \
-  --out-root results/memory_environment/dataset_artifacts
+  --out-root results/disk_environment/dataset_artifacts
 ```
 
 ## 5. 编译（Build）
@@ -192,7 +185,7 @@ python scripts/write_05_ports_local.py
 
 ### 6.1 内存环境：01/02/03
 
-一键跑批顺序为 01 → 02 → 03。默认输出根目录是 `results/memory_environment`。
+一键跑批顺序为 01 → 02 → 03。默认输出根目录是 `results/disk_environment`。
 
 ```bash
 # 默认：全部数据集，M=64，L=400
@@ -202,30 +195,30 @@ PYTHON=python3 bash scripts/run_master_round2.sh
 DATASETS=agnews bash scripts/run_master_round2.sh
 
 # 指定数据集 + 自定义 M/L（03 固定配置自动跟随）
-DATASETS="agnews gist" M=32 L=200 OUT_ROOT=results/memory_environment bash scripts/run_master_round2.sh
+DATASETS="agnews gist" M=32 L=200 OUT_ROOT=results/disk_environment bash scripts/run_master_round2.sh
 ```
 
 参数：`DATASETS`（空格分隔，默认 agnews gist dbpedia）；`M`（图度，默认 64）；
-`L`（构图 beam，默认 400）；`OUT_ROOT`（结果根目录，默认 results/memory_environment）；`PYTHON`（默认 python3）。
+`L`（构图 beam，默认 400）；`OUT_ROOT`（结果根目录，默认 results/disk_environment）；`PYTHON`（默认 python3）。
 
 单独运行某一步：
 
 ```bash
 # 01（固定候选 + PQ/SQ/Ours + SAQ + 表格导出）
-DATASETS=agnews OUT_ROOT=results/memory_environment bash scripts/run_faiss_quantizer_fair.sh
-DATASETS=agnews OUT_ROOT=results/memory_environment bash scripts/run_saq_fixed_candidates_fair.sh
+DATASETS=agnews OUT_ROOT=results/disk_environment bash scripts/run_faiss_quantizer_fair.sh
+DATASETS=agnews OUT_ROOT=results/disk_environment bash scripts/run_saq_fixed_candidates_fair.sh
 
 # 02（各方法 4-bit 量化图 + ef 扫描，R=M / L=L）
 experiments/02_diskann_fair/target/release/run_diskann_fair \
   --dataset agnews --methods PQ,SQ,SAQ,Ours --max-degree 64 --build-beam 400 \
-  --out-root results/memory_environment --repeats 1 --threads 64 --refine-passes 1 \
+  --out-root results/disk_environment --repeats 1 --threads 64 --refine-passes 1 \
   --build-prune-cap 256 --build-early-stop-hops 2 \
-  --query-path results/memory_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
-  --gt-path results/memory_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
+  --query-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
+  --gt-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
 
 # 03（固定配置端到端；先由 master 写入固定 selected config，再执行扫描）
 python experiments/03_system_fair/run_system_fair.py --dataset agnews \
-  --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG --run --repeats 1 --threads 64 --out-root results/memory_environment
+  --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG --run --repeats 1 --threads 64 --out-root results/disk_environment
 ```
 
 复现论文表格与图：
@@ -233,13 +226,13 @@ python experiments/03_system_fair/run_system_fair.py --dataset agnews \
 ```bash
 python scripts/export_paper_quantizer_table.py \
   --datasets dbpedia gist agnews \
-  --out-root results/memory_environment \
-  --summary-csv results/memory_environment/paper_tables/01_quantizer_fair_summary.csv \
-  --columns-md results/memory_environment/paper_tables/01_quantizer_fair_columns.md \
+  --out-root results/disk_environment \
+  --summary-csv results/disk_environment/paper_tables/01_quantizer_fair_summary.csv \
+  --columns-md results/disk_environment/paper_tables/01_quantizer_fair_columns.md \
   --work-root work
 python scripts/export_system_fair_table.py \
   --datasets dbpedia,gist,agnews \
-  --out-root results/memory_environment
+  --out-root results/disk_environment
 python scripts/plot_vldb2027_figures.py   # 输出 paper/figures/
 ```
 
@@ -269,14 +262,14 @@ python data/convert_hdf5_to_ann.py \
   --input data/gist/gist-960-euclidean.hdf5 \
   --output-dir data/gist --prefix gist
 python scripts/check_datasets.py --datasets gist --data-root data \
-  --out-root results/memory_environment/dataset_artifacts
+  --out-root results/disk_environment/dataset_artifacts
 
 # 2) 编译 01/02/03/05 所需二进制，并生成本机 ports.local.json
 bash scripts/build_formal_local.sh
 python scripts/write_05_ports_local.py
 
 # 3) 先跑 GIST 的 01/02/03，生成 05 需要复用的 query split 和 02 图
-DATASETS=gist OUT_ROOT=results/memory_environment PYTHON=python3 bash scripts/run_master_round2.sh
+DATASETS=gist OUT_ROOT=results/disk_environment PYTHON=python3 bash scripts/run_master_round2.sh
 
 # 4) 跑 GIST 的正式 05。默认使用本仓库 work 目录，并自动识别 nvme/hdd_raid。
 RUN_ID=formal_diskenv_gist
@@ -352,16 +345,15 @@ python experiments/05_disk_system_fair/run_disk_suite.py \
 
 ## 7. 结果与产物（Outputs）
 
-- 内存 01/02/03：`results/memory_environment/{01_quantizer_fair,02_diskann_fair,03_system_fair}/<dataset>/`
-- 磁盘发布结果：`results/disk_environment/{01_quantizer_fair,02_diskann_fair,03_system_fair}/<dataset>/`
+- 正式 disk 结果：`results/disk_environment/{01_quantizer_fair,02_diskann_fair,03_system_fair}/<dataset>/`
 - 05 正式运行中间产物：`results/disk_environment/.formal_runs/runs/<run-id>/`
 - 旧 05 原始运行归档：`results/disk_environment/archive/05_disk_system_fair_legacy/`
-- 诊断和消融结果：`results/memory_environment/diagnostics/`
-- 论文汇总表：`results/memory_environment/paper_tables/`
-- 运行日志归档：`logs/memory_environment/` 与 `logs/disk_environment/`
+- 诊断和消融结果：`results/disk_environment/diagnostics/`
+- 论文汇总表：`results/disk_environment/paper_tables/`
+- 运行日志归档：`logs/disk_environment/`
 
 注意：如果顶层 `results/` 下仍出现 `nobody:nogroup` 拥有的旧 query-codec 诊断目录，
-先修正所有权后再移入 `results/memory_environment/diagnostics/`。
+先修正所有权后再移入 `results/disk_environment/diagnostics/`。
 
 ## 8. 引用与许可（Citation & License）
 

@@ -371,6 +371,9 @@ fn write_index_manifest(files: &IndexFiles) -> Result<()> {
 }
 
 fn shared_graph_path(args: &Args) -> Result<PathBuf> {
+    if let Some(path) = args.optional("--shared-graph") {
+        return Ok(PathBuf::from(path));
+    }
     let dataset = args.text("--dataset")?;
     Ok(args
         .path("--source-results-root")?
@@ -878,9 +881,9 @@ fn formal_widths(args: &Args) -> Result<Vec<usize>> {
         }
         return parse_positive_list(value, "--integration-widths");
     }
-    let mut widths = (10..=30).collect::<Vec<_>>();
+    let mut widths = (1..=30).collect::<Vec<_>>();
     widths.extend((40..=100).step_by(10));
-    widths.extend((140..=600).step_by(40));
+    widths.extend((140..=580).step_by(40));
     Ok(widths)
 }
 

@@ -99,16 +99,15 @@ python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase tune --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase run --run-id "$RUN_ID" --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT" \
-  --workers 1,2,4,8,16,32 --repeats 5
+  --workers 32 --repeats 5
 python experiments/05_disk_system_fair/run_disk_suite.py \
   --phase plot --run-id "$RUN_ID" --out-root "$OUT_ROOT"
 ```
 
 Datasets run serially, so they cannot contend for the same disk. Method order
-is rotated across repeats while 05A storage modes stay paired. The worker sweep
-used by local debug launchers is `1,2,4,8,16,32`, and the launchers run
-worker-major: one worker completes the full 05A/05B/05C pass before the next
-worker starts. GIST still keeps the B=1/4 GiB and B=2 GiB `C=0` diagnostics for
+is rotated across repeats while 05A storage modes stay paired. The formal
+primary workload uses 32 workers. GIST additionally keeps the 1/4/8/16-worker,
+B=1/4 GiB and B=2 GiB `C=0` diagnostics for
 05B/05C. The run phase refuses to start without the validation tuning lock.
 
 ## Result isolation

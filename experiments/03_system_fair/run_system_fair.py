@@ -180,7 +180,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--data-root", default="data")
-    ap.add_argument("--out-root", default="results/memory_environment")
+    ap.add_argument("--out-root", default="results/disk_environment")
     ap.add_argument(
         "--systems",
         default=",".join(ADAPTERS),

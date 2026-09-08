@@ -104,7 +104,7 @@ def save_fig(fig, fig_dir: Path, stem: str, dpi: int) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", default="dbpedia")
-    ap.add_argument("--results-root", default="results/memory_environment")
+    ap.add_argument("--results-root", default="results/disk_environment")
     ap.add_argument("--dpi", type=int, default=220)
     ap.add_argument(
         "--include-system-fair",

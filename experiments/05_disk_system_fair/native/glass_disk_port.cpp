@@ -770,7 +770,9 @@ std::vector<int> requested_widths(const Args& args) {
     } else if (args.values.count("integration-widths")) {
         parse_csv(args.values.at("integration-widths"));
     } else {
-        widths.push_back(100);
+        for (int value = 1; value <= 30; ++value) widths.push_back(value);
+        for (int value = 40; value <= 100; value += 10) widths.push_back(value);
+        for (int value = 140; value <= 580; value += 40) widths.push_back(value);
     }
     if (widths.empty()) throw std::runtime_error("empty search width list");
     return widths;
