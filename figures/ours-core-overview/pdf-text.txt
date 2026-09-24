@@ -1,0 +1,74 @@
+A One code, two views
+B Selective SSD access
+C Precision by role
+Primary 4-bit
+1 0 1 0 0 0 1 1 1 1 1 0 0 1 0 1
+DRAM routing + factors
+Extract MSB
+1 bit / dim
+1
+0
+1
+0
+Full primary stays on SSD
+1 0 1 0 0 0 1 1 1 1 1 0 0 1 0 1
+Complete 4-bit representation
+Shared representation, two views
+DRAM / CPU
+SSD
+Real-valued
+query q
+Derived 1-bit
+codes + factors
+New graph neighbors
+v1
+v2
+v3
+v4
+Asymmetric
+screening
+Search
+frontier
+4-bit
+scoring
+update
+q
+v1
+v2
+v3
+v4
+pruned
+fetch
+fetch
+Primary 4-bit + metadata
+v1
+1 0 1 0
+...
+v4
+0 1 0 1
+...
+primary
+payload
+Graph
+adjacency
+Promising
+candidates get
+fine payloads
+1-bit / screening
+1
+0
+1
+0
+...
+Coarse candidate assessment
+Primary 4-bit / navigation
+1 0 1 0 0 0 1 1 1 1 1 0 0 1 0 1
+Refine the search frontier
+Final shortlist reranking
+Primary 4-bit
+Residual 4-bit
+1 0 1 0
+0 1 1 0
++
+Refined ranking
+q

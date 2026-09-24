@@ -16,7 +16,7 @@ MAIN_RUN_ID="${MAIN_RUN_ID:-fix_w32_diskpayload_symphony_20260831_140957}"
 SWEEP_WORKERS="${SWEEP_WORKERS:-16 8 4 2 1}"
 GDB_DATASETS="${GDB_DATASETS:-gist,dbpedia}"
 SEED="${SEED:-20260813}"
-PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/disk_environment}"
+PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/archive/legacy_layout_20260918/disk_environment}"
 
 export QG05_FAST=1
 export QG05_CAPTURE_BUILD_STATS="${QG05_CAPTURE_BUILD_STATS:-1}"
@@ -133,7 +133,7 @@ save_figures() {
 
 plot_agnews() {
   local W="$1"
-  python3 experiments/05_disk_system_fair/plot_05_disk_suite.py \
+  python3 src/disk_bench/plot_05_disk_suite.py \
     --public-root "${PUBLISH_ROOT}" --layers 05b,05c --datasets agnews --workers "${W}"
 }
 
@@ -143,7 +143,7 @@ if [[ -f "${SYM_EXPORT}" ]] && python3 -c "import json,sys; d=json.load(open('${
   log "05C SymphonyQG export already carries build_distance_computations; skipping re-export"
 else
   log "=== re-running agnews 05C SymphonyQG export (fixed build-distance field) ==="
-  python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  python3 src/disk_bench/run_disk_suite.py \
     --phase export --run-id "${MAIN_RUN_ID}" --layers 05c --datasets agnews \
     --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
     --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -154,7 +154,7 @@ for W in ${SWEEP_WORKERS}; do
   if [[ "${W}" == "16" ]]; then
     # w16 05B already finished; only run 05C + merge/plot/save.
     log "=== agnews workers=16: 05C SymphonyQG test run (reusing exports) ==="
-    python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    python3 src/disk_bench/run_disk_suite.py \
       --phase run --run-id "${MAIN_RUN_ID}" --layers 05c --datasets agnews \
       --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
       --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -168,7 +168,7 @@ for W in ${SWEEP_WORKERS}; do
     save_figures 16
   else
     log "=== agnews workers=${W}: 05B test run (reusing exports) ==="
-    python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    python3 src/disk_bench/run_disk_suite.py \
       --phase run --run-id "${MAIN_RUN_ID}" --layers 05b --datasets agnews \
       --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk \
       --storage-modes disk_payload --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -177,7 +177,7 @@ for W in ${SWEEP_WORKERS}; do
     scripts/local_runs/verify_run_rows.sh "${MAIN_RUN_ID}" 05b agnews 120 "${W}" \
       "PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk"
     log "=== agnews workers=${W}: 05C SymphonyQG test run (reusing exports) ==="
-    python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    python3 src/disk_bench/run_disk_suite.py \
       --phase run --run-id "${MAIN_RUN_ID}" --layers 05c --datasets agnews \
       --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
       --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -198,13 +198,13 @@ GDB_RUN_BASE="fix_gist_dbpedia_ours_w32_$(date +%Y%m%d_%H%M%S)"
 log "gist/dbpedia ABC run base: ${GDB_RUN_BASE}"
 
 log "=== gist/dbpedia 05A export+run (workers=32) ==="
-QG05_FAST_WIDTHS="${W_05A}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_05A}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05a" --layers 05a --datasets "${GDB_DATASETS}" \
   --methods PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1 \
   --storage-modes resident,payload_on_ssd --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
   --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
   --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_05A}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_05A}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05a" --layers 05a --datasets "${GDB_DATASETS}" \
   --methods PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1 \
   --storage-modes resident,payload_on_ssd --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -214,13 +214,13 @@ scripts/local_runs/verify_run_rows.sh "${GDB_RUN_BASE}_05a" 05a "${GDB_DATASETS}
   "PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1"
 
 log "=== gist/dbpedia 05B export+run (workers=32, incl Ours-Disk) ==="
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05b" --layers 05b --datasets "${GDB_DATASETS}" \
   --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk \
   --storage-modes disk_payload,hybrid_disk --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
   --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
   --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05b" --layers 05b --datasets "${GDB_DATASETS}" \
   --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk \
   --storage-modes disk_payload,hybrid_disk --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -230,12 +230,12 @@ scripts/local_runs/verify_run_rows.sh "${GDB_RUN_BASE}_05b" 05b "${GDB_DATASETS}
   "PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk"
 
 log "=== gist/dbpedia 05C export+run (workers=32, incl Ours-Disk) ==="
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05c" --layers 05c --datasets "${GDB_DATASETS}" \
   --methods SymphonyQG-DiskPort,Ours-Disk --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
   --out-root "${OUT_ROOT}" --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05c" --layers 05c --datasets "${GDB_DATASETS}" \
   --methods SymphonyQG-DiskPort,Ours-Disk --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -247,7 +247,7 @@ log "=== gist/dbpedia merge + plot (workers=32) ==="
 merge_run_rows "${GDB_RUN_BASE}_05a"
 merge_run_rows "${GDB_RUN_BASE}_05b"
 merge_run_rows "${GDB_RUN_BASE}_05c"
-python3 experiments/05_disk_system_fair/plot_05_disk_suite.py \
+python3 src/disk_bench/plot_05_disk_suite.py \
   --public-root "${PUBLISH_ROOT}" --layers 05a,05b,05c --datasets "${GDB_DATASETS}" --workers 32
 
 log "ALL DONE"

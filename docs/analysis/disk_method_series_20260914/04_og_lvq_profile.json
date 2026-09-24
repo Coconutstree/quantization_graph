@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "assessment": {
+      "status": "passed"
+    },
+    "profile": {
+      "word_count": 1381,
+      "char_count": 2120,
+      "block_count": 47,
+      "blocks": [
+        {
+          "type": "p",
+          "count": 29,
+          "ratio": 0.617021
+        },
+        {
+          "type": "h1",
+          "count": 7,
+          "ratio": 0.148936
+        },
+        {
+          "type": "tr",
+          "count": 5,
+          "ratio": 0.106383
+        },
+        {
+          "type": "img",
+          "count": 2,
+          "ratio": 0.042553
+        },
+        {
+          "type": "table",
+          "count": 1,
+          "ratio": 0.021277
+        },
+        {
+          "type": "tbody",
+          "count": 1,
+          "ratio": 0.021277
+        },
+        {
+          "type": "thead",
+          "count": 1,
+          "ratio": 0.021277
+        },
+        {
+          "type": "title",
+          "count": 1,
+          "ratio": 0.021277
+        }
+      ]
+    }
+  },
+  "_notice": {
+    "update": {
+      "command": "lark-cli update",
+      "current": "1.0.87",
+      "latest": "1.0.95",
+      "message": "lark-cli 1.0.95 available, current 1.0.87, run: lark-cli update"
+    }
+  }
+}

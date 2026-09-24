@@ -1,0 +1,46 @@
+{
+  "protocol": "fixed_query_warmup_v1",
+  "warmup_queries": 100,
+  "workers": 32,
+  "cache_mode": "c0",
+  "input_snapshot": {
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/gist/csv/_query_splits/test_query.fvecs": {
+      "size": 3075200,
+      "mtime_ns": 1788829073155497575,
+      "inode": 40803126661
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/gist/csv/_query_splits/test_gt.ivecs": {
+      "size": 323200,
+      "mtime_ns": 1788829073155497575,
+      "inode": 40803127175
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/optimized_order.u32": {
+      "size": 3200,
+      "mtime_ns": 1789185472385700277,
+      "inode": 36522848264
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/disk_03_graph_build_reuse_20260910_gist/manifests/inputs/05c_gist.json": {
+      "size": 891,
+      "mtime_ns": 1788970853238441267,
+      "inode": 54725137094
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/Glass-NSG-DiskPort/hybrid_disk/graph.pages": {
+      "size": 256000000,
+      "mtime_ns": 1788973291299556698,
+      "inode": 60129886086
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/Glass-NSG-DiskPort/hybrid_disk/sq4u_codes.pages": {
+      "size": 512000000,
+      "mtime_ns": 1788973291423553905,
+      "inode": 60129886087
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/Glass-NSG-DiskPort/hybrid_disk/index.meta": {
+      "size": 366,
+      "mtime_ns": 1788973291671548319,
+      "inode": 60129896878
+    }
+  },
+  "no_other_native_search_at_start": true,
+  "device_cache_controlled": false,
+  "cold_storage_claim": false
+}

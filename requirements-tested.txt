@@ -1,0 +1,12 @@
+# Observed on Python 3.13.12; see docs/REPRODUCING.md.
+# Direct dependency pins, not a transitive/hash lock or a clean-install guarantee.
+numpy==2.4.4
+h5py==3.14.0
+matplotlib==3.10.8
+pybind11==3.0.4
+scipy==1.17.1
+tqdm==4.67.3
+glass==2.1.0
+scalable-vs==0.4.0
+pypdf==6.16.1
+cmake==4.4.2

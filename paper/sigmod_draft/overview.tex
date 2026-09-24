@@ -1,0 +1,27 @@
+% Original structural diagram; contains no experimental measurements.
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw,rounded corners,align=center,minimum height=10mm,text width=34mm,font=\small},
+  arrow/.style={-{Latex},thick},node distance=7mm and 10mm]
+\node[box,fill=blue!6] (data) {Database vectors\\Center and transform};
+\node[box,fill=blue!6,right=of data] (codes) {Four-bit primary code\\Residual correction};
+\node[box,fill=blue!6,right=of codes] (graph) {Symmetric comparisons\\Vamana construction};
+\node[box,fill=blue!6,right=of graph] (disk) {Disk pages\\Adjacency + payload};
+\draw[arrow] (data) -- (codes);
+\draw[arrow] (codes) -- (graph);
+\draw[arrow] (graph) -- (disk);
+\node[box,fill=green!6,below=19mm of data] (query) {Query preparation\\FP and INT8 forms};
+\node[box,fill=green!6,right=of query] (gate) {Resident DB1 + factors\\Screen new neighbors};
+\node[box,fill=orange!9,right=of gate] (read) {Survivors: read pages\\Coalesce + bounded reuse};
+\node[box,fill=green!6,right=of read] (score) {Primary traversal score\\FP residual reranking};
+\draw[arrow] (query) -- (gate);
+\draw[arrow] (gate) -- (read);
+\draw[arrow] (read) -- (score);
+\draw[arrow,dashed] (codes) -- node[right,font=\scriptsize]{MSB + factors} (gate);
+\draw[arrow,dashed] (disk.south) -- (read.north);
+\draw[arrow] (score.south) -- ++(0,-0.7) -| node[pos=0.3,below,font=\scriptsize]{Pool update and further graph expansion} (gate.south);
+\end{tikzpicture}
+\caption{ExRaBitQ-Disk overview. Offline encoding supports symmetric graph construction and a resident screening sidecar. Online screening precedes candidate payload reads. In the ordinary layout, residual bytes accompany the primary record, although their correction is evaluated at final reranking. The dashed paths show index components used during querying; all resident metadata and caches are charged to the memory budget.}
+\label{fig:overview}
+\end{figure*}

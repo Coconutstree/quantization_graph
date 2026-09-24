@@ -1,0 +1,50 @@
+{
+  "baseline_native_budgets": {},
+  "cache_mode": "standard",
+  "dataset": "gist",
+  "experiment": "03_disk_system",
+  "experiment_group": "primary",
+  "formal_ready": true,
+  "frontier_csv": "/home/kai3/coco/quantization_graph/results/03_disk_system/gist/gist_w9_beam4_4g_20260921/tables/formal_test_frontier.csv",
+  "frontier_csv_sha256": "01ee410ea34df5d10f2f28f2d8de1e010e1eee16304632229b109c464dff411e",
+  "layer": "05c",
+  "memory_comparison": "shared_ram_budget_rss",
+  "methods": [
+    "Ours-Disk",
+    "SymphonyQG-DiskPort",
+    "Glass-NSG-DiskPort",
+    "DiskANN-PQ-Disk"
+  ],
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "raw_csv_sha256": "94e19257d35084c8e8f53080cb0d4c532c0fe21ec6251344d8089a7ed637591e",
+  "repeats": 1,
+  "rows": 36,
+  "run_id": "gist_w9_beam4_4g_20260921",
+  "schema_version": 2,
+  "search_dram_budget_gib": 4.0,
+  "source_artifacts": [
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/gist/gist_w9_beam4_4g_20260921/raw/Ours-Disk/test/Ours-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "00010898ddcdde09355f7e2771eab32bda2b4a4145511a09220a83473988c7fa"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/gist/gist_w9_beam4_4g_20260921/raw/SymphonyQG-DiskPort/test/SymphonyQG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "67cbf4ce041b12bdc732d2340e638f65694faab2ca8d7a33414abb89e10bd70d"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/gist/gist_w9_beam4_4g_20260921/raw/Glass-NSG-DiskPort/test/Glass-NSG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "d54cfe270bad107226aaeab84cb078887c01310ae06c47ac5206290da8516c1d"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/gist/gist_w9_beam4_4g_20260921/raw/DiskANN-PQ-Disk/test/DiskANN-PQ-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "2339147093e60ebec36f64bfe11fa012281225f87c68e16e9552b70da8cad5f6"
+    }
+  ],
+  "statistic": "single_run",
+  "storage_modes": [
+    "hybrid_disk"
+  ],
+  "workers": [
+    32
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "command": "block_replace",
+    "block_id": "doxcnj8dTY4lzVTTIdfRHtyVwOd",
+    "file": "agnews_patch_00.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnoJYEp2Os0FDQ9UMs9QQWng",
+    "file": "agnews_patch_01.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnxIAJ10UogqtIqno2elcYMg",
+    "file": "agnews_patch_02.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn3OpJj6P0BuO290WXBuOidd",
+    "file": "agnews_patch_03.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnazX4dSg5yNuRYaigATa9Yf",
+    "file": "agnews_patch_04.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnY5GoVwX0sfnVdLvERjkOBh",
+    "file": "agnews_patch_05.xml"
+  }
+]

@@ -1,0 +1,89 @@
+{
+  "protocol": "fixed_query_warmup_v1",
+  "warmup_queries": 100,
+  "workers": 32,
+  "cache_mode": "c0",
+  "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6",
+  "cross_query_application_cache": false,
+  "device_cache_controlled": false,
+  "cold_storage_claim": false,
+  "index_snapshot": {
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs": {
+      "size": 3280000,
+      "mtime_ns": 1788829073143497845,
+      "inode": 38656408471
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs": {
+      "size": 323200,
+      "mtime_ns": 1788829073143497845,
+      "inode": 38656445300
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/05_disk_system_fair/single_test_w32_20260911/agnews/order.u32": {
+      "size": 3200,
+      "mtime_ns": 1789118220338628307,
+      "inode": 15033313206
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/manifests/inputs/05c_agnews.json": {
+      "size": 705,
+      "mtime_ns": 1788247426107444439,
+      "inode": 4089723
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/shared_graph.pages": {
+      "size": 262619136,
+      "mtime_ns": 1788930115841965024,
+      "inode": 4297838569
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/ours_quantizer.bin": {
+      "size": 4164,
+      "mtime_ns": 1788247825970928968,
+      "inode": 4297838568
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/ours_db1_sidecar.bin": {
+      "size": 113868560,
+      "mtime_ns": 1788247826018927944,
+      "inode": 4297838571
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/ours_full4_residual.pages": {
+      "size": 1050464256,
+      "mtime_ns": 1788247826598915564,
+      "inode": 4297838572
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/resident_codes.marker": {
+      "size": 82,
+      "mtime_ns": 1788247826654914369,
+      "inode": 4297838573
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/Ours-Disk/hybrid_disk/index.meta": {
+      "size": 477,
+      "mtime_ns": 1788247826654914369,
+      "inode": 4297838574
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/agnews_bfs_split_v1/slot_to_id.u32": {
+      "size": 3077528,
+      "mtime_ns": 1789140982651472361,
+      "inode": 15036936840
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/agnews_bfs_split_v1/id_to_slot.u32": {
+      "size": 3077528,
+      "mtime_ns": 1789140982655472273,
+      "inode": 15036936841
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/agnews_bfs_split_v1/graph_compact.pages": {
+      "size": 787849216,
+      "mtime_ns": 1789140985075418823,
+      "inode": 15036936846
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/agnews_bfs_split_v1/residual.pages": {
+      "size": 525234176,
+      "mtime_ns": 1789140986687383219,
+      "inode": 15036936847
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/agnews_bfs_split_v1/manifest.json": {
+      "size": 2214,
+      "mtime_ns": 1789140996135174538,
+      "inode": 15036936848
+    }
+  },
+  "index_unchanged": true,
+  "other_native_searches_at_end": []
+}

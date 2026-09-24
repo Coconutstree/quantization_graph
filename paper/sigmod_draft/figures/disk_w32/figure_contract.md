@@ -1,0 +1,17 @@
+# Figure contract
+
+- Backend: saved Python preference; matplotlib for drawing and all previews.
+- Target: SIGMOD working manuscript, Nature-style restrained quantitative grids, 183 mm wide; 7 pt text, 8 pt panel labels; PDF/SVG editable text, 600 dpi TIFF, 220 dpi PNG.
+- Core statement: the supplied measurements expose a throughput–transfer trade-off, not uniform I/O superiority. The locality-layout ExRaBitQ-Disk implementation can provide higher observed throughput while transferring more bytes than DiskANN at the same minimum-recall requirement.
+- Evidence: (1) recall versus QPS and bytes, high-recall and full-sweep views; (2) p95 latency and I/O request count, which need not track bytes identically; (3) within-method screening counts and actual page transfers, not a gate-only ablation.
+- Inputs: immutable snapshot of the top-level completed system results. No history, preflight, references, running commands, old exports, or duplicated compatibility links are used as additional experiments.
+- Coverage: all 543 summary rows from 12 completed method/dataset artifacts. AGNews/GIST: five systems; DBpedia: two; SIFT10M: no completed artifact. The missing system results are explicitly reported, never synthesized.
+- Comparability: 32 workers, test split, one run per setting, C0, 4 KiB pages. Plot the recorded observations while retaining `formal_ready=false`, incomplete memory attribution and timing/cache acceptance caveats. Measured RLIMIT_AS is a whole-process address-space limit, not demonstrated complete search-index DRAM accounting.
+- Version: all three Ours artifacts specify the locality layout and the same binary hash. Do not attribute these curves to the ordinary combined-payload layout described as the reference in the first manuscript draft.
+- Summaries: no smoothing, no interpolation, no Pareto-only deletion; line segments connect consecutive search-width observations. High-recall axes crop the view, not source data. Every viewport omission is counted in QA outputs.
+- Uncertainty: no across-run uncertainty available; no error bars invented. p95 is a query-latency quantile. AGNews/GIST n=800 test queries per point; DBpedia n=9000.
+- Target-recall table: choose the maximum-QPS measured point satisfying recall >= target, retaining that same row's actual recall and all costs; unattained and unmeasured are different states.
+- Mechanism limits: retain raw checks/survivors and measured sectors; compute other sectors as total minus primary-request sectors minus rerank-request sectors only after non-negativity validation. This is I/O accounting, not a causal estimate of gate/coalescing/reuse effects. Do not stack overlapping CPU/I/O timer fields.
+
+## Revision 2: manuscript composition
+Build anew using the existing validated loader. Quantitative triptychs, 178 mm wide (ACM text width), 62 mm high; 8 pt text. Main evidence is throughput, followed by a separate read-volume triptych and tail-latency triptych. Screening is subordinate descriptive evidence. Full sweeps and request curves remain available separately. Compact single-row legends, no in-chart workflow footers, panel titles beneath shared legend. Every curve vertex is retained; marker glyphs are spaced every fifth observation to avoid occlusion, with all observations retained in source CSV. High-recall view remains 0.90–1.00. Fixed per-metric limits across datasets prevent visual scale confusion. Missing-method scope and single-run limitations go in captions. No smoothing or Pareto filtering.

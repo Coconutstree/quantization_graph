@@ -2,13 +2,14 @@
 # Build the canonical R64/Lbuild400 graphs required by suite 05 doctor.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="${QGRAPH_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$ROOT"
 
-BIN="${BIN:-$ROOT/experiments/02_diskann_fair/target/release/run_diskann_fair}"
+BIN="${BIN:-$ROOT/src/graph_core/target/release/run_diskann_fair}"
 DATASETS="${DATASETS:-agnews gist dbpedia}"
 GRAPH_ROLES="${GRAPH_ROLES:-shared ours}"
 THREADS="${THREADS:-32}"
+BUILD_ONLY="${BUILD_ONLY:-0}"
 BUILD_ROOT="${BUILD_ROOT:-$ROOT/work/05_disk_system_fair/core_graph_build}"
 LOG_ROOT="${LOG_ROOT:-$ROOT/logs/05_core_graphs}"
 
@@ -17,12 +18,16 @@ mkdir -p "$BUILD_ROOT" "$LOG_ROOT"
 
 build_one() {
   local dataset="$1" method="$2" role="$3"
-  local split_root="$ROOT/results/disk_environment/03_system_fair/$dataset/csv/_query_splits"
+  local split_root="$ROOT/artifacts/query_splits/$dataset/shared"
   local query="$split_root/test_query.fvecs"
   local gt="$split_root/test_gt.ivecs"
+  if [[ "$BUILD_ONLY" == "1" ]]; then
+    query="$ROOT/data/$dataset/${dataset}_query.fvecs"
+    gt="$ROOT/data/$dataset/${dataset}_groundtruth.ivecs"
+  fi
   local stage_root="$BUILD_ROOT/$dataset/$role"
-  local canonical_root="$ROOT/results/graph/$dataset"
-  local legacy_root="$ROOT/results/$dataset/indexes/02_diskann_fair"
+  local canonical_root="$ROOT/artifacts/graphs/$dataset"
+  local legacy_root="$ROOT/artifacts/indexes/legacy_aliases/$dataset/indexes/02_diskann_fair"
   local source destination source_meta destination_meta
 
   if [[ "$role" == "shared" ]]; then
@@ -48,7 +53,7 @@ build_one() {
   mkdir -p "$canonical_root/shared_graph" "$canonical_root/Ours" "$legacy_root"
   for graph_role in shared_graph Ours; do
     if [[ ! -e "$legacy_root/$graph_role" && ! -L "$legacy_root/$graph_role" ]]; then
-      ln -s "../../../graph/$dataset/$graph_role" "$legacy_root/$graph_role"
+      ln -s "$(realpath --relative-to="$legacy_root" "$canonical_root/$graph_role")" "$legacy_root/$graph_role"
     fi
   done
 
@@ -74,6 +79,9 @@ build_one() {
   mkdir -p "$stage_root" "$(dirname "$destination")"
   echo "[$dataset][$role] build start: $(date --iso-8601=seconds)"
   local extra=()
+  if [[ "$BUILD_ONLY" == "1" ]]; then
+    extra+=(--build-only)
+  fi
   if [[ "$role" == "shared" || "$role" == "diskann" ]]; then
     extra+=(--shared-graph)
   fi

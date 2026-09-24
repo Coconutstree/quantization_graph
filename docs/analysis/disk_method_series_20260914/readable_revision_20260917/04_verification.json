@@ -1,0 +1,23 @@
+{
+  "document_id": "BfYtdjApkoSXxgxbzKVcSHDAnvg",
+  "url": "https://my.feishu.cn/docx/BfYtdjApkoSXxgxbzKVcSHDAnvg",
+  "revision_before": 8,
+  "revision_after": 12,
+  "body_text_matches_local": true,
+  "image_block_ids_and_tokens_preserved": [
+    [
+      "doxcncgVexioIBwu4HfCRrao3ec",
+      "Pd6KbwxA1oCrXoxAesgcjyR5n7d"
+    ],
+    [
+      "doxcnLWooJHmtJkoekgWFa57bbf",
+      "YJUibnAXCo4BH4xYiavc31dondb"
+    ]
+  ],
+  "top_level_parts": [
+    "第一部分：论文中的 OG-LVQ 怎么做",
+    "第二部分：我们的磁盘实验改了什么"
+  ],
+  "tables": 2,
+  "old_text_blocks_deleted": 34
+}

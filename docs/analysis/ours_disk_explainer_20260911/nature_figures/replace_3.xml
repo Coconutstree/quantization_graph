@@ -1,0 +1,1 @@
+<img path="@./docs/analysis/ours_disk_explainer_20260911/nature_figures/fig03_page_reuse.png" width="1600" caption="图 3：页合并与 query 内复用。每页三条记录为教学设定；缓存未命中或驱逐时仍需读盘。"/>

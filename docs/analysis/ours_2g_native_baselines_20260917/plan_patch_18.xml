@@ -1,0 +1,1 @@
+<p>12.4 Ours 保存 cgroup memory.peak/current/stat/events 与 swap 记录；所有方法同时保存系统测得的进程峰值 RSS。baseline 未使用 cgroup 时相关字段为 null，不伪造零值。RSS 与资源组峰值不是相同范围，不能相加；原生进程扫描多个宽度时明确共享生命周期峰值，不假称逐点查询峰值。</p>

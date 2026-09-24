@@ -30,29 +30,29 @@ run_phases() {
     storage_modes="hybrid_disk,disk_payload"
   fi
   log "===== ${ds} ${layer} run-id=${rid} workers=${workers} ====="
-  QG05_FAST_WIDTHS="${widths_env}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  QG05_FAST_WIDTHS="${widths_env}" python3 src/disk_bench/run_disk_suite.py \
     --phase export --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
     --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0 \
     --storage-modes "${storage_modes}"
-  QG05_FAST_WIDTHS="${widths_env}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  QG05_FAST_WIDTHS="${widths_env}" python3 src/disk_bench/run_disk_suite.py \
     --phase validate --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
     --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0 \
     --storage-modes "${storage_modes}"
-  QG05_FAST_WIDTHS="${widths_env}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  QG05_FAST_WIDTHS="${widths_env}" python3 src/disk_bench/run_disk_suite.py \
     --phase run --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
     --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
     --workers "${workers}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0 \
     --storage-modes "${storage_modes}"
-  QG05_FAST_WIDTHS="${widths_env}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  QG05_FAST_WIDTHS="${widths_env}" python3 src/disk_bench/run_disk_suite.py \
     --phase plot --run-id "${rid}" --layers "${layer}" --datasets "${ds}" \
     --out-root "${OUT_ROOT}" --methods "${methods}"
   log "===== ${ds} ${layer} DONE ====="
 }
 
 log "DEBUG WORKER-MAJOR START disk_root=${DISK_ROOT} disk_profile=${DISK_PROFILE} datasets=${DATASETS} workers=${WORKERS}"
-python3 experiments/05_disk_system_fair/run_disk_suite.py \
+python3 src/disk_bench/run_disk_suite.py \
   --phase doctor --layers 05a,05b,05c --datasets "${DATASETS// /,}" \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
   || log "WARN: doctor reported failures; continuing"

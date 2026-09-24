@@ -1,0 +1,21 @@
+[
+  {
+    "command": "block_replace",
+    "block_id": "doxcnjrFVQzfhCNYXFKYm1bzqSg",
+    "file": "agnews_patch_00.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnqITWI5w8WXMP51ZMJaS5zd",
+    "file": "agnews_patch_01.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnPQvNZJgLD64WqkAOcZKi7g",
+    "file": "agnews_patch_02.xml"
+  },
+  {
+    "command": "append",
+    "file": "agnews_patch_03.xml"
+  }
+]

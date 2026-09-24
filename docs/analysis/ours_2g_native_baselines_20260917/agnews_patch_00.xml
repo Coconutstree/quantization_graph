@@ -1,0 +1,1 @@
+<callout background-color="light-yellow" border-color="yellow" emoji="💡"><p>2026-09-17 最新规则（用户已确认）：Ours 主实验为 2 GiB，其他方法用各自配置，不要求预算或实际内存与 Ours 一样；32 workers，每个配置只跑一次。Ours 使用 cgroup memory.max=2147483648、swap=0；baseline 保留原生 PQ、导航图和缓存参数，默认不新增共同硬限额，报告真实峰值 RSS。在同 Recall 下比较性能并披露各自内存。旧曲线仍因旧 Symphony 候选预读、实测内存缺失和计时/硬件证据问题维持历史诊断用途；内存不同、缓存容量不同和单次运行本身不是失效原因。</p></callout>

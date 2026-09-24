@@ -1,0 +1,20 @@
+{
+  "uid": 8017,
+  "ours_limit_bytes": 2147483648,
+  "baseline_uniform_limit_required": false,
+  "numactl": null,
+  "cgroup": {
+    "status": "blocked_environment",
+    "reason": "[Errno 13] Permission denied: '/sys/fs/cgroup/qgraph05-455f02dd3f01471bbc56d1b860abdbdc'"
+  },
+  "numactl_package": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "dpkg-query: no packages found matching numactl\n"
+  },
+  "sudo_noninteractive": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "sudo: a password is required\n"
+  }
+}

@@ -60,11 +60,11 @@ import sys
 
 sys.path.insert(0, str(Path.cwd()))
 prepare_query_splits = import_module(
-    "experiments.05_disk_system_fair.common"
+    "src.disk_bench.common"
 ).prepare_query_splits
 
 paths = prepare_query_splits(
-    "sift10m", Path("data"), Path("results/disk_environment"), 200
+    "sift10m", Path("data"), Path("results/archive/legacy_layout_20260918/disk_environment"), 200
 )
 print(paths)
 PY

@@ -1,0 +1,15 @@
+Test project /home/kai3/coco/quantization_graph/build/disk/native
+    Start 1: qgraph05_direct_io_test
+1/5 Test #1: qgraph05_direct_io_test ...............   Passed    0.08 sec
+    Start 2: qgraph05_quantizer_port_integration
+2/5 Test #2: qgraph05_quantizer_port_integration ...   Passed   59.72 sec
+    Start 3: qgraph05_og_lvq_buffer_test
+3/5 Test #3: qgraph05_og_lvq_buffer_test ...........   Passed    0.00 sec
+    Start 4: qgraph05_glass_official_search_test
+4/5 Test #4: qgraph05_glass_official_search_test ...   Passed    4.23 sec
+    Start 5: qgraph05_symphonyqg_search_test
+5/5 Test #5: qgraph05_symphonyqg_search_test .......   Passed   10.12 sec
+
+100% tests passed out of 5
+
+Total Test time (real) =  74.16 sec

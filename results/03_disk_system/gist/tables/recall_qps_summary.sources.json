@@ -1,0 +1,13 @@
+{
+  "source_pair_run": "results/03_disk_system/gist/gist_aligned_20260922_03_pair",
+  "replaced_methods": [
+    "DiskANN-PQ-Disk",
+    "Ours-Disk"
+  ],
+  "preserved_methods": [
+    "Glass-NSG-DiskPort",
+    "SymphonyQG-DiskPort"
+  ],
+  "formal_ready": false,
+  "external_parity": "stopped by user request"
+}

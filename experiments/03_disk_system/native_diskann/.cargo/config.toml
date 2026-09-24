@@ -1,0 +1,4 @@
+# Match baselines/diskann/.cargo/config.toml so the port is compiled with the same
+# x86-64-v3 code generation as the vendored DiskANN workspace it was measured in.
+[target.'cfg(target_arch="x86_64")']
+rustflags = ["-C", "target-cpu=x86-64-v3"]

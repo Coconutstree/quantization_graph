@@ -12,9 +12,9 @@ RUN_ID="${RUN_ID:-fix_w32_diskpayload_symphony_$(date +%Y%m%d_%H%M%S)}"
 DATASETS="${DATASETS:-agnews,gist}"
 WORKERS="${WORKERS:-32}"
 DISK_ROOT="${DISK_ROOT:-${ROOT}/work/05_disk_system_fair/disk_root}"
-OUT_ROOT="${OUT_ROOT:-${ROOT}/results/disk_environment/.formal_runs}"
-PORTS="${PORTS:-${ROOT}/experiments/05_disk_system_fair/ports.local.json}"
-PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/disk_environment}"
+OUT_ROOT="${OUT_ROOT:-${ROOT}/results/archive/legacy_layout_20260918/disk_environment/.formal_runs}"
+PORTS="${PORTS:-${ROOT}/src/disk_bench/ports.local.json}"
+PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/archive/legacy_layout_20260918/disk_environment}"
 DISK_PROFILE="${DISK_PROFILE:-auto}"
 SEED="${SEED:-20260813}"
 SKIP_05B_EXPORT="${SKIP_05B_EXPORT:-0}"
@@ -171,18 +171,18 @@ PY
 log "RUN_ID=${RUN_ID}"
 mkdir -p "${OUT_ROOT}" "${DISK_ROOT}" "${PUBLISH_ROOT}"
 
-AG_GRAPH="results/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed${SEED}.graph.bin"
+AG_GRAPH="results/archive/legacy_layout_20260918/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed${SEED}.graph.bin"
 AG_META="${AG_GRAPH%.graph.bin}.graph.json"
 
 rebuild_shared_graph() {
   log "rebuilding 02 agnews shared graph (removing old graph files first)"
   rm -f "${AG_GRAPH}" "${AG_META}"
-  experiments/02_diskann_fair/target/release/run_diskann_fair \
+  src/graph_core/target/release/run_diskann_fair \
     --dataset agnews --methods PQ --shared-graph --max-degree 64 --build-beam 400 \
     --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 \
     --refine-passes 1 --build-prune-cap 256 --build-early-stop-hops 2 \
-    --query-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
-    --gt-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
+    --query-path results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
+    --gt-path results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
 }
 
 # The native port contract requires the baseline shared graph to contain at
@@ -234,7 +234,7 @@ fi
 
 log "running 05B disk_payload baselines at workers=${WORKERS}"
 if [[ "${SKIP_05B_EXPORT}" != "1" ]]; then
-  python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  python3 src/disk_bench/run_disk_suite.py \
     --phase export --run-id "${RUN_ID}" --layers 05b --datasets "${DATASETS}" \
     --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk \
     --storage-modes disk_payload --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -244,7 +244,7 @@ else
   log "SKIP_05B_EXPORT=1: reusing existing 05B exports for ${DATASETS}"
 fi
 if [[ "${SKIP_05B_VALIDATE}" != "1" ]]; then
-  python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  python3 src/disk_bench/run_disk_suite.py \
     --phase validate --run-id "${RUN_ID}" --layers 05b --datasets "${DATASETS}" \
     --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk \
     --storage-modes disk_payload --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -253,7 +253,7 @@ if [[ "${SKIP_05B_VALIDATE}" != "1" ]]; then
 else
   log "SKIP_05B_VALIDATE=1: skipping single-threaded 05B validation sweep"
 fi
-python3 experiments/05_disk_system_fair/run_disk_suite.py \
+python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${RUN_ID}" --layers 05b --datasets "${DATASETS}" \
   --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk \
   --storage-modes disk_payload --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -261,14 +261,14 @@ python3 experiments/05_disk_system_fair/run_disk_suite.py \
   --workers "${WORKERS}" --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
 
 log "running 05C SymphonyQG at workers=${WORKERS}"
-python3 experiments/05_disk_system_fair/run_disk_suite.py \
+python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${RUN_ID}" --layers 05c --datasets "${DATASETS}" \
   --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
   --out-root "${OUT_ROOT}" --workers "${WORKERS}" --repeats 1 \
   --seed "${SEED}" --search-dram-budget-gib 2.0
 if [[ "${SKIP_05C_VALIDATE}" != "1" ]]; then
-  python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  python3 src/disk_bench/run_disk_suite.py \
     --phase validate --run-id "${RUN_ID}" --layers 05c --datasets "${DATASETS}" \
     --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
     --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -277,7 +277,7 @@ if [[ "${SKIP_05C_VALIDATE}" != "1" ]]; then
 else
   log "SKIP_05C_VALIDATE=1: skipping single-threaded 05C validation sweep"
 fi
-python3 experiments/05_disk_system_fair/run_disk_suite.py \
+python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${RUN_ID}" --layers 05c --datasets "${DATASETS}" \
   --methods SymphonyQG-DiskPort --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -288,7 +288,7 @@ log "merging repaired rows into published CSVs"
 merge_rows
 
 log "redrawing published figures"
-python3 experiments/05_disk_system_fair/plot_05_disk_suite.py \
+python3 src/disk_bench/plot_05_disk_suite.py \
   --public-root "${PUBLISH_ROOT}" --layers 05b,05c --datasets "${DATASETS}" \
   --workers "${WORKERS}"
 

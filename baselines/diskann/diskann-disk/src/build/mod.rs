@@ -1,7 +1,17 @@
-pub mod builder;
-pub mod disk_index_build_parameter;
-pub mod filter_parameter;
+/*
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT license.
+ */
 
-pub use disk_index_build_parameter::{
-    DiskIndexBuildParameters, MemoryBudget, NumPQChunks, QuantizationType,
+//! Build-related modules for disk index construction and configuration.
+//!
+//! This module contains all the components needed for building disk indexes,
+//! including builders and configuration parameters.
+
+pub mod builder;
+pub mod configuration;
+
+// Re-export key types for convenience
+pub use configuration::{
+    disk_index_build_parameter, filter_parameter, DiskIndexBuildParameters, QuantizationType,
 };

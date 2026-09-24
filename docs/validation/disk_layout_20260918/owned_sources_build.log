@@ -1,0 +1,303 @@
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++-11 - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found OpenMP_CXX: -fopenmp (found version "4.5")
+-- Found OpenMP: TRUE (found version "4.5")
+-- Looking for sgemm_
+-- Looking for sgemm_ - not found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found BLAS: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl
+-- Configuring done (0.8s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/kai3/coco/quantization_graph/build/disk/01_disk_quantizer
+[1/2] Building CXX object CMakeFiles/faiss_hard_negative_candidates.dir/faiss_hard_negative_candidates.cpp.o
+[2/2] Linking CXX executable faiss_hard_negative_candidates
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++-11 - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")
+-- Found OpenMP_CXX: -fopenmp (found version "4.5")
+-- Found OpenMP: TRUE (found version "4.5")
+-- Looking for sgemm_
+-- Looking for sgemm_ - not found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found BLAS: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl
+-- Found Python3: /home/kai3/miniconda3/bin/python3.13 (found version "3.13.12") found components: Interpreter
+-- Found Unwind: /usr/include/x86_64-linux-gnu (found suitable version "1.3.2", minimum required is "1.3.2")
+-- Configuring done (1.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/kai3/coco/quantization_graph/build/disk/native
+[1/20] Building CXX object CMakeFiles/qgraph05_direct_io_test.dir/direct_io_test.cpp.o
+[2/20] Building CXX object CMakeFiles/qgraph05_direct_io.dir/direct_io.cpp.o
+[3/20] Linking CXX static library libqgraph05_direct_io.a
+[4/20] Linking CXX executable qgraph05_direct_io_test
+[5/20] Building CXX object layer01/CMakeFiles/qgraph05_quantizer_port.dir/quantizer_port.cpp.o
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:27,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h: In member function ‘virtual bool hnswlib::BaseFilterFunctor::operator()(hnswlib::labeltype)’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h:134:48: warning: unused parameter ‘id’ [-Wunused-parameter]
+  134 |     virtual bool operator()(hnswlib::labeltype id) { return true; }
+      |                             ~~~~~~~~~~~~~~~~~~~^~
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h:671,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:27,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_ip.h: In function ‘float hnswlib::InnerProductSIMD16ExtAVX512(const void*, const void*, const void*)’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_ip.h:148:28: warning: unused variable ‘TmpRes’ [-Wunused-variable]
+  148 |     float PORTABLE_ALIGN64 TmpRes[16];
+      |                            ^~~~~~
+In file included from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h: In member function ‘hnswlib::PaperPruneEstimate<float> hnswlib::RaBitQSpace::compute_paper_prune_estimate_int_codec(const void*, const void*, const hnswlib::PaperPruneFactors<float>&, float) const’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:5207:41: warning: unused parameter ‘factors’ [-Wunused-parameter]
+ 5207 |         const PaperPruneFactors<float> &factors,
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~
+[6/20] Linking CXX executable qgraph05_quantizer_port
+[7/20] Building CXX object layer03/CMakeFiles/qgraph05_symphonyqg_disk_port.dir/symphonyqg_disk_port.cpp.o
+[8/20] Linking CXX executable qgraph05_symphonyqg_disk_port
+[9/20] Building CXX object layer03/CMakeFiles/qgraph05_glass_disk_port.dir/glass_disk_port.cpp.o
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/hnsw/HNSWInitializer.hpp:8,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/graph.hpp:9,
+                 from /home/kai3/coco/quantization_graph/experiments/03_disk_system/native/glass_disk_port.cpp:4:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/neighbor.hpp: In instantiation of ‘void glass::LinearPool<dist_t, BitsetType>::reset(int32_t, int, int32_t) [with dist_t = int; BitsetType = glass::Bitset<>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/experiments/03_disk_system/native/glass_disk_port.cpp:453:15:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/neighbor.hpp:355:26: warning: comparison of integer expressions of different signedness: ‘std::vector<glass::Neighbor<int>, std::allocator<glass::Neighbor<int> > >::size_type’ {aka ‘long unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
+  355 |         if (data_.size() < cap + 1) {
+      |             ~~~~~~~~~~~~~^~~~~~~~~
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/quant.hpp:8,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:14,
+                 from /home/kai3/coco/quantization_graph/experiments/03_disk_system/native/glass_disk_port.cpp:5:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/fp16_quant.hpp: In instantiation of ‘void glass::FP16Quantizer<metric, Template>::train(const float*, int32_t) [with glass::Metric metric = glass::Metric::L2; Template = glass::Quantizer<glass::Metric::L2, 16, 16>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:62:20:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::FP16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/fp16_quant.hpp:24:29: warning: unused parameter ‘data’ [-Wunused-parameter]
+   24 |     void train(const float *data, int32_t n) {}
+      |                ~~~~~~~~~~~~~^~~~
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/fp16_quant.hpp:24:43: warning: unused parameter ‘n’ [-Wunused-parameter]
+   24 |     void train(const float *data, int32_t n) {}
+      |                                   ~~~~~~~~^
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/quant.hpp:6,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:14,
+                 from /home/kai3/coco/quantization_graph/experiments/03_disk_system/native/glass_disk_port.cpp:5:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/bf16_quant.hpp: In instantiation of ‘void glass::BF16Quantizer<metric, Template>::train(const float*, int32_t) [with glass::Metric metric = glass::Metric::L2; Template = glass::Quantizer<glass::Metric::L2, 16, 16>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:62:20:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::BF16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/bf16_quant.hpp:24:29: warning: unused parameter ‘data’ [-Wunused-parameter]
+   24 |     void train(const float *data, int32_t n) {}
+      |                ~~~~~~~~~~~~~^~~~
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/quant/bf16_quant.hpp:24:43: warning: unused parameter ‘n’ [-Wunused-parameter]
+   24 |     void train(const float *data, int32_t n) {}
+      |                                   ~~~~~~~~^
+In file included from /home/kai3/coco/quantization_graph/experiments/03_disk_system/native/glass_disk_port.cpp:5:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2a_u2_u2, int, unsigned char>; auto:40 = glass::Bitset<>; QuantType = glass::SQ2QuantizerUniform<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2a_u2_u2, int, unsigned char>; QuantType = glass::SQ2QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::SQ2QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  387 |         for (int i = 0; i < fullset.size(); i++) {
+      |                         ~~^~~~~~~~~~~~~~~~
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2a_u4_u4, int, unsigned char>; auto:40 = glass::Bitset<>; QuantType = glass::SQ4QuantizerUniform<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2a_u4_u4, int, unsigned char>; QuantType = glass::SQ4QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::SQ4QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2_s7_s7, int, signed char>; auto:40 = glass::Bitset<>; QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2_s7_s7, int, signed char>; QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2_fp16_fp16, float, helpa::fp16>; auto:40 = glass::Bitset<>; QuantType = glass::FP16Quantizer<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2_fp16_fp16, float, helpa::fp16>; QuantType = glass::FP16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::FP16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2_bf16_bf16, float, helpa::bf16>; auto:40 = glass::Bitset<>; QuantType = glass::BF16Quantizer<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2_bf16_bf16, float, helpa::bf16>; QuantType = glass::BF16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::BF16Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp: In instantiation of ‘int glass::NSG<QuantType>::attach_unlinked(glass::Graph<int>&, const auto:39&, auto:40&, std::vector<int>&) [with auto:39 = glass::SymComputerImpl<glass::Tensor, helpa::l2_fp32_fp32, float, float>; auto:40 = glass::Bitset<>; QuantType = glass::FP32Quantizer<glass::Metric::L2>]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:337:35:   required from ‘int32_t glass::NSG<QuantType>::tree_grow(glass::Graph<int>&, const auto:37&) [with auto:37 = glass::SymComputerImpl<glass::Tensor, helpa::l2_fp32_fp32, float, float>; QuantType = glass::FP32Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:96:42:   required from ‘glass::Graph<int> glass::NSG<QuantType>::Build(const float*, int32_t, int32_t) [with QuantType = glass::FP32Quantizer<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:56:20:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/nsg/nsg.hpp:387:27: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<glass::Neighbor<float> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+[10/20] Linking CXX executable qgraph05_glass_disk_port
+[11/20] Building CXX object layer01/CMakeFiles/qgraph05_saq_quantizer_port.dir/saq_quantizer_port.cpp.o
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:27,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/saq_quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h: In member function ‘virtual bool hnswlib::BaseFilterFunctor::operator()(hnswlib::labeltype)’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h:134:48: warning: unused parameter ‘id’ [-Wunused-parameter]
+  134 |     virtual bool operator()(hnswlib::labeltype id) { return true; }
+      |                             ~~~~~~~~~~~~~~~~~~~^~
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/hnswlib.h:671,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:27,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/saq_quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_ip.h: In function ‘float hnswlib::InnerProductSIMD16ExtAVX512(const void*, const void*, const void*)’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_ip.h:148:28: warning: unused variable ‘TmpRes’ [-Wunused-variable]
+  148 |     float PORTABLE_ALIGN64 TmpRes[16];
+      |                            ^~~~~~
+In file included from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/../tools/quantizer_kernels.cpp:5,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:2,
+                 from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/saq_quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h: In member function ‘hnswlib::PaperPruneEstimate<float> hnswlib::RaBitQSpace::compute_paper_prune_estimate_int_codec(const void*, const void*, const hnswlib::PaperPruneFactors<float>&, float) const’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../Ours/core/hnswlib/space_rabitq.h:5207:41: warning: unused parameter ‘factors’ [-Wunused-parameter]
+ 5207 |         const PaperPruneFactors<float> &factors,
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~
+In file included from /home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/saq_quantizer_port.cpp:2:
+/home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp: At global scope:
+/home/kai3/coco/quantization_graph/experiments/01_disk_quantizer/native/quantizer_port.cpp:939:5: warning: ‘int {anonymous}::run(int, char**)’ defined but not used [-Wunused-function]
+  939 | int run(int argc, char** argv) {
+      |     ^~~
+[12/20] Linking CXX executable qgraph05_saq_quantizer_port
+[13/20] Building CXX object layer03/CMakeFiles/qgraph05_og_lvq_disk_port.dir/og_lvq_disk_port.cpp.o
+[14/20] Linking CXX executable qgraph05_og_lvq_disk_port
+[15/20] Building CXX object layer03/CMakeFiles/qgraph05_og_lvq_buffer_test.dir/og_lvq_buffer_test.cpp.o
+[16/20] Linking CXX executable qgraph05_og_lvq_buffer_test
+[17/20] Building CXX object layer03/CMakeFiles/qgraph05_symphonyqg_search_test.dir/symphonyqg_search_test.cpp.o
+[18/20] Linking CXX executable qgraph05_symphonyqg_search_test
+[19/20] Building CXX object layer03/CMakeFiles/qgraph05_glass_official_search_test.dir/home/kai3/coco/quantization_graph/src/disk_bench/tests/audit_glass_official_search.cpp.o
+In file included from /home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/graph_searcher.hpp:13,
+                 from /home/kai3/coco/quantization_graph/src/disk_bench/tests/audit_glass_official_search.cpp:5:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp: In instantiation of ‘void glass::Refiner<QuantType>::Search(const float*, int32_t, int32_t*, float*) const [with QuantType = glass::SQ8QuantizerUniform<glass::Metric::IP>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:46:10:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:62:28: warning: narrowing conversion of ‘dist’ from ‘float’ to ‘int’ [-Wnarrowing]
+   62 |             heap.push({id, dist});
+      |                            ^~~~
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp: In instantiation of ‘void glass::Refiner<QuantType>::Search(const float*, int32_t, int32_t*, float*) const [with QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:46:10:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:62:28: warning: narrowing conversion of ‘dist’ from ‘float’ to ‘int’ [-Wnarrowing]
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp: In instantiation of ‘void glass::Refiner<QuantType>::RefineImpl(const auto:41&, const int32_t*, int32_t, int32_t*, float*, int32_t) const [with auto:41 = glass::ComputerImpl<glass::Tensor, helpa::dot_s8_s8, int, float, signed char, signed char>; QuantType = glass::SQ8QuantizerUniform<glass::Metric::IP>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:89:23:   required from ‘void glass::Refiner<QuantType>::SearchBatch(const float*, int32_t, int32_t, int32_t*, float*) const [with QuantType = glass::SQ8QuantizerUniform<glass::Metric::IP>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:73:10:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:102:28: warning: narrowing conversion of ‘dist’ from ‘float’ to ‘int’ [-Wnarrowing]
+  102 |             heap.push({id, dist});
+      |                            ^~~~
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp: In instantiation of ‘void glass::Refiner<QuantType>::RefineImpl(const auto:41&, const int32_t*, int32_t, int32_t*, float*, int32_t) const [with auto:41 = glass::ComputerImpl<glass::Tensor, helpa::l2_s7_s7, int, float, signed char, signed char>; QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>; int32_t = int]’:
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:89:23:   required from ‘void glass::Refiner<QuantType>::SearchBatch(const float*, int32_t, int32_t, int32_t*, float*) const [with QuantType = glass::SQ8QuantizerUniform<glass::Metric::L2>; int32_t = int]’
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:73:10:   required from here
+/home/kai3/coco/quantization_graph/src/disk_bench/native/../../../baselines/pyglass/glass/searcher/refiner.hpp:102:28: warning: narrowing conversion of ‘dist’ from ‘float’ to ‘int’ [-Wnarrowing]
+[20/20] Linking CXX executable qgraph05_glass_official_search_test
+   Compiling diskann-fair v0.1.0 (/home/kai3/coco/quantization_graph/src/graph_core)
+warning: methods `paper_estimate` and `paper_estimate_batch` are never used
+    --> src/ours_diskann.rs:1019:8
+     |
+ 957 | impl QueryComputer {
+     | ------------------ methods in this implementation
+...
+1019 |     fn paper_estimate(&self, encoded: &[u8], epsilon0: f32) -> RabitqPaperEstimate {
+     |        ^^^^^^^^^^^^^^
+...
+1082 |     fn paper_estimate_batch(
+     |        ^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `rabitq_paper_estimate` is never used
+   --> src/ours_diskann.rs:156:8
+    |
+156 |     fn rabitq_paper_estimate(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `rabitq_paper_estimate_batch` is never used
+   --> src/ours_diskann.rs:188:8
+    |
+188 |     fn rabitq_paper_estimate_batch(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `diskann-fair` (lib) generated 3 warnings
+warning: field `centroid_count` is never read
+   --> src/ours_diskann.rs:249:5
+    |
+246 | pub struct RabitqSpace {
+    |            ----------- field in this struct
+...
+249 |     centroid_count: usize,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated items `new_dbpedia_default`, `dim`, `centroid_count`, `encode_parts`, `export_sidecar`, and `prepare_query` are never used
+   --> src/ours_diskann.rs:262:12
+    |
+261 | impl RabitqSpace {
+    | ---------------- associated items in this implementation
+262 |     pub fn new_dbpedia_default(dim: usize, seed: u32, center: &[f32]) -> Result<Arc<Self>, String> {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+372 |     pub fn dim(&self) -> usize {
+    |            ^^^
+...
+376 |     pub fn centroid_count(&self) -> usize {
+    |            ^^^^^^^^^^^^^^
+...
+383 |     pub fn encode_parts(&self, raw: &[f32]) -> ANNResult<(Vec<u8>, Vec<u8>)> {
+    |            ^^^^^^^^^^^^
+...
+395 |     pub fn export_sidecar(
+    |            ^^^^^^^^^^^^^^
+...
+430 |     pub fn prepare_query(self: &Arc<Self>, query: &[f32]) -> ANNResult<QueryComputer> {
+    |            ^^^^^^^^^^^^^
+
+warning: field `norms` is never read
+   --> src/ours_diskann.rs:542:5
+    |
+541 | pub(crate) struct AdaptiveRoute {
+    |                   ------------- field in this struct
+542 |     norms: Vec<f32>,
+    |     ^^^^^
+
+warning: methods `load_norms`, `resident_bytes`, `project`, and `score` are never used
+   --> src/ours_diskann.rs:552:19
+    |
+551 | impl AdaptiveRoute {
+    | ------------------ methods in this implementation
+552 |     pub(crate) fn load_norms(&mut self, path: &Path, calibrate: bool) -> ANNResult<()> {
+    |                   ^^^^^^^^^^
+...
+573 |     pub(crate) fn resident_bytes(&self) -> usize {
+    |                   ^^^^^^^^^^^^^^
+...
+576 |     pub(crate) fn project(&self, query: &[f32]) -> Vec<f32> {
+    |                   ^^^^^^^
+...
+581 |     pub(crate) fn score(&self, id: usize, projected: &[f32]) -> f32 {
+    |                   ^^^^^
+
+warning: methods `paper_estimate` and `paper_estimate_batch` are never used
+    --> src/ours_diskann.rs:1019:8
+     |
+ 957 | impl QueryComputer {
+     | ------------------ methods in this implementation
+...
+1019 |     fn paper_estimate(&self, encoded: &[u8], epsilon0: f32) -> RabitqPaperEstimate {
+     |        ^^^^^^^^^^^^^^
+...
+1082 |     fn paper_estimate_batch(
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: `diskann-fair` (bin "run_diskann_fair") generated 7 warnings (2 duplicates)
+    Finished `release` profile [optimized] target(s) in 30.21s
+   Compiling diskann-disk v0.55.0 (/home/kai3/coco/quantization_graph/baselines/diskann/diskann-disk)
+    Finished `release` profile [optimized + debuginfo] target(s) in 19.84s
+PASS qgraph05_direct_io_test
+Disk experiment builds completed under /home/kai3/coco/quantization_graph/build/disk

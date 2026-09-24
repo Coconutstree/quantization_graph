@@ -1,0 +1,14 @@
+{
+  "acceptance": "passed",
+  "dataset": "gist",
+  "experiment": "03_disk_system",
+  "formal_ready": true,
+  "layout_version": "paper-results-v2",
+  "note": "Acceptance refers to source protocol checks, not directory placement.",
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "protocol_sha256": "7dd58fb1a5c0f1174f848aed3b4f7f4a048dad503050fa10997f18526821d37c",
+  "run_id": "gist_aligned_20260921_03_ram4",
+  "run_metadata_relative": "../../../manifests/gist_aligned_20260921_03_ram4",
+  "schema_version": 1,
+  "tables_manifest": "tables/formal_test_rows.manifest.json"
+}

@@ -1,0 +1,1 @@
+<p>历史图读法：05B 中 PQ/SQ/SAQ 共用 baseline 图；Ours 使用独立 ours_native 图。因此它同时包含 baseline 量化器受控对比与 Ours 自有图结果，不能称四种方法都在同一张图上运行。旧图未满足新版资源验收，保留用于追溯。</p>

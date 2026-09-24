@@ -1,0 +1,29 @@
+<title>03 End-to-End：固定 beam=4、单轮、官方 baseline</title>
+<p>版本：2026-09-24。协议 `03_official_beam4_single_rss4g_v1`。</p>
+<p>本方案替代 03 旧的 SymphonyQG 名单、多轮、beam 扫描及 validation 性能选优要求；05/06 历史诊断不变。</p>
+<h1 seq="auto">目标和边界</h1>
+<p>比较 Ours、DiskANN、Starling、AiSAQ 在同一 SSD/NVMe、32 workers 和 4 GiB 全进程峰值 RSS 上限下的 Recall@10–QPS。统一实际运行内存上限，不统一图、图度、编码长度、缓存或内存组成。SymphonyQG、Glass、OG-LVQ、PipeANN 不参与本轮。</p>
+<p>每配置只测一轮，所有支持的对应 beam 参数固定 4；其他并发参数保留官方配置。搜索宽度固定为 10/20/40/60/100/160/240/400/580，映射到各自原生参数，不假定等宽度等工作量。匹配实际 Recall 比较性能。不绘制跨轮误差带，不宣称系统最优参数或跨轮统计稳定性。</p>
+<h1 seq="auto">数据和表示</h1>
+<p>GIST、来源核验后的 BIGANN10M 为四方法主对比；AGNews、DBpedia 为高维补充。使用相同 base、查询划分、距离度量、ground truth 和 k=10。Starling 的官方 FP32 节点超过 4 KiB 时记录不支持，不截维、不改输入或磁盘格式。</p>
+<p>Ours 固定论文图索引策略、正式搜索实现、standard、graph_first 及 hot+dynamic。完整 1-bit 表示能常驻则使用完整表示，否则沿用预算选择 PCA 的规则；06 表示维度实验仅为消融，不按其 test 成绩切换主实验表示。热点只来自 validation，绑定索引、beam=4、九档宽度、路由与资产哈希。</p>
+<p>validation 仅用于热点、资源预检和正确性，取消性能选优。warmup 使用独立 validation 查询，test 前按查询内容检查不重叠。历史查询使用情况必须披露；重新切分已用于开发的查询不能称为独立最终 test。</p>
+<h1 seq="auto">官方 baseline</h1>
+<p>锁定源码版本与审计补丁，使用官方构图、量化、磁盘布局、缓存和搜索。统计与独立预热放在官方搜索调用之外，不修改内核。参考进程关闭可选统计导出；有序 Top10 必须一致，并从返回 ID 和原始向量重算距离及 Recall。该一致性证明统计接口未改变结果，不等价于独立实现的算法证明。</p>
+<p>采用固定版本适用的官方配置，无适用配置使用其默认值，逐项保存来源。仅允许为 4 GiB 准入调整原生缓存容量，不按 QPS 选缓存；关闭可选缓存后仍超预算则缺席。不联合优化 PQ 长度、导航比例、磁盘布局。</p>
+<p>- DiskANN：沿用仓库锁定 Rust 官方磁盘构图/PQ/搜索路径及现有经审计适配；原生 beam 固定 4。</p>
+<p>- Starling：依据锁定版本 scripts/config_sample.sh，R48、build L128、SQ=0、use_ratio=1、CACHE=0、MEM_L=0、partition iterations=16。该官方示例默认不启用导航搜索，必须如实标注，不能称为导航调优最优配置。GIST R48 满足节点页兼容限制；BIGANN 使用官方 B=0.3 GiB 对应约 32-byte PQ；其余数据不扫描编码长度。输入格式转换只去除 fvecs 行头，不改变 float32 值。</p>
+<p>- AiSAQ：依据 workflows/AiSAQ_index.md 全 inline 示例，R64、build L125、QD32、inline_pq=64、rearrange=false；启用 use_aisaq，搜索其余项取官方默认（vector beam=1、aio、PQ/node/page 可选缓存为 0）。不混搭其他示例的 rearrange、多入口参数。</p>
+<p>当前可选缓存按上述官方配置为 0，validation 先检查最大宽度下的资源和正确性；不为了填满 4 GiB 人为增加缓存。正式九档仍逐点检查全过程 RSS。构建内存与查询期 4 GiB 分别记录。baseline 名称标注 commit，不称“官方最优参数”。</p>
+<h1 seq="auto">执行和准入</h1>
+<p>1. 固定版本、配置、CPU/NUMA、数据、SSD 路径，核验已有索引是否可复用；新 run-id、新目录，保留历史数据。</p>
+<p>2. 官方接口先通过真实小数据正确性检查，再使用 validation 做资源预检及 Ours 热点准备；最终参数与资产写入不可变 manifest。</p>
+<p>3. 每方法每宽度独立进程、独立初始化缓存，预热 100 个独立查询后只测一轮 test。计时包括原生查询预处理、搜索、读盘、缓存维护及内存结果生成；文件导出、离线正确性评估不计入 QPS。</p>
+<p>4. 从加载至退出记录峰值 RSS、swap、原始结果、源码/二进制/索引/查询/参数哈希。RSS &gt; 4 GiB、swap、资产失配、warmup/test 重叠、缺失官方接口均拒绝准入。</p>
+<p>5. 同设备串行运行，无其他竞争负载。启动前核验非旋转 SSD/NVMe；未知或 HDD 均拒绝正式性能测试。存储预处理仍为各实际搜索文件一次顺序 O_DIRECT 读取；不宣称控制器缓存冷态。</p>
+<p>6. 曲线和汇总重新验证原始记录；主数据每方法必须有完整九点，高维缺席原因单列。故障重跑保留原记录、原因和新 run-id，不因 QPS 不理想挑点重跑。</p>
+<p>原生查询 I/O 计数与整进程 Linux block I/O 分别报告，后者包含加载和预热。官方 QueryStats 若未覆盖 PQ 读盘字节，明确标记缺失，不推算为完整设备字节或填 0。</p>
+<h1 seq="auto">论文贡献与当前状态</h1>
+<p>主结果报告单轮曲线、匹配 Recall 的 QPS、实测内存、磁盘索引大小及 I/O。结论限定为固定 beam=4、列明配置和硬件下的实测表现。</p>
+<p>图索引贡献单独用受控消融验证：固定量化表示、搜索实现、缓存规则及预算，仅替换图索引策略；每张图通过同一 validation 流程构建热点。不改变 03 官方 baseline 定义。</p>
+<p>当前主机仅核验到 HDD RAID，正式 SSD 性能实验未启动。小数据测试只能证明接口/正确性，不能作为本轮 Recall–QPS 结果。等待明确 SSD/NVMe 挂载目录后执行正式队列。</p>

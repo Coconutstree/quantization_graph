@@ -1,0 +1,1 @@
+Automated checks: all 36 observations retained; editable vector and high-resolution raster exports; PDF font audit completed. Static width warning is the 89/25.4-inch expression; positive QPS assertion guards logarithmic scale. Human visual inspection of the new dataset render remains pending.

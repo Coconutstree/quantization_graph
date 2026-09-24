@@ -1,0 +1,126 @@
+--- docs/analysis/agnews_verification_20260917/code_before/native_rust/src/main.rs	2026-09-17 17:49:52.150917814 +0800
++++ experiments/05_disk_system_fair/native_rust/src/main.rs	2026-09-17 17:50:24.038217244 +0800
+@@ -864,7 +864,6 @@
+     runtime: &tokio::runtime::Runtime,
+     query_id: usize,
+     query: &[f32],
+-    truth: &[u32],
+     width: usize,
+     beam: usize,
+ ) -> Result<QueryRun> {
+@@ -889,7 +888,7 @@
+         .map_err(|_| "query stats mutex was poisoned".to_string())?;
+     Ok(QueryRun {
+         query_id,
+-        recall: recall_hits(&ids, truth) as f64 / 10.0,
++        recall: 0.0, // Filled after the entire measured search batch finishes.
+         ids,
+         latency_us,
+         stats,
+@@ -939,7 +938,6 @@
+         for worker_id in 0..workers {
+             let codec = codec.clone();
+             let queries = queries.clone();
+-            let groundtruth = groundtruth.clone();
+             let order = order.clone();
+             let factory = memory_factory.clone();
+             let cache = shared_cache.clone();
+@@ -976,7 +974,6 @@
+                         &runtime,
+                         query_id,
+                         queries.row(query_id),
+-                        &groundtruth[query_id],
+                         width,
+                         beam,
+                     )?;
+@@ -998,7 +995,6 @@
+                         &runtime,
+                         query_id,
+                         queries.row(query_id),
+-                        &groundtruth[query_id],
+                         width,
+                         beam,
+                     )?;
+@@ -1030,12 +1026,15 @@
+         .ok_or("measurement has no end time")?
+         .duration_since(measured_start.ok_or("measurement has no start time")?)
+         .as_secs_f64();
+-    let runs = results
++    let mut runs = results
+         .into_inner()
+         .map_err(|_| "query results mutex was poisoned".to_string())?
+         .into_iter()
+         .map(|run| run.ok_or_else(|| "a query worker did not produce a result".to_string()))
+         .collect::<Result<Vec<_>>>()?;
++    for run in &mut runs {
++        run.recall = recall_hits(&run.ids, &groundtruth[run.query_id]) as f64 / 10.0;
++    }
+     Ok(BatchRun {
+         runs,
+         wall_seconds,
+@@ -1051,7 +1050,6 @@
+     query_id: usize,
+     trace_enabled: bool,
+     query: &[f32],
+-    truth: &[u32],
+     width: usize,
+     beam: usize,
+     ablation: OursAblation,
+@@ -1086,7 +1084,7 @@
+     } = result.stats;
+     Ok(QueryRun {
+         query_id,
+-        recall: recall_hits(&result.ids, truth) as f64 / 10.0,
++        recall: 0.0, // Filled after the entire measured search batch finishes.
+         ids: result.ids,
+         latency_us,
+         stats: io,
+@@ -1147,7 +1145,6 @@
+         for worker_id in 0..workers {
+             let codec = codec.clone();
+             let queries = queries.clone();
+-            let groundtruth = groundtruth.clone();
+             let order = order.clone();
+             let memory_graph = memory_graph.clone();
+             let memory_payload = memory_payload.clone();
+@@ -1198,7 +1195,6 @@
+                         query_id,
+                         false,
+                         queries.row(query_id),
+-                        &groundtruth[query_id],
+                         width,
+                         beam,
+                         ablation,
+@@ -1221,7 +1217,6 @@
+                         query_id,
+                         direct,
+                         queries.row(query_id),
+-                        &groundtruth[query_id],
+                         width,
+                         beam,
+                         ablation,
+@@ -1256,12 +1251,15 @@
+         .ok_or("Ours measurement has no end time")?
+         .duration_since(measured_start.ok_or("Ours measurement has no start time")?)
+         .as_secs_f64();
+-    let runs = results
++    let mut runs = results
+         .into_inner()
+         .map_err(|_| "Ours query results mutex was poisoned".to_string())?
+         .into_iter()
+         .map(|run| run.ok_or_else(|| "an Ours query did not produce a result".to_string()))
+         .collect::<Result<Vec<_>>>()?;
++    for run in &mut runs {
++        run.recall = recall_hits(&run.ids, &groundtruth[run.query_id]) as f64 / 10.0;
++    }
+     Ok(BatchRun {
+         runs,
+         wall_seconds,
+@@ -1707,6 +1705,7 @@
+     ]);
+     let mut fields = vec![
+         ("measurement_scope", json_escape("test_only_excludes_warmup")),
++        ("timing_semantics", json_escape("search_wall_excludes_recall_evaluation")),
+         ("storage_cache_protocol", json_escape("uncontrolled")),
+         ("locality_layout_dir", json_escape(args.optional("--locality-layout-dir").unwrap_or(""))),
+         ("locality_combined_sha256", json_escape(args.optional("--locality-combined-sha256").unwrap_or(""))),

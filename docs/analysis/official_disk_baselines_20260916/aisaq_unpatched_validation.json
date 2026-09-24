@@ -1,0 +1,81 @@
+{
+  "source_commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac",
+  "source_clean": true,
+  "source_patches": [],
+  "formal_ready": false,
+  "commands": [
+    [
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/build/apps/build_disk_index",
+      "--data_type",
+      "float",
+      "--dist_fn",
+      "l2",
+      "--data_path",
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/smoke/base.bin",
+      "--index_path_prefix",
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/smoke/index",
+      "-R",
+      "16",
+      "-L",
+      "40",
+      "-B",
+      "7.62939453125e-06",
+      "-M",
+      "8",
+      "-T",
+      "1",
+      "--QD",
+      "8",
+      "--use_aisaq",
+      "--inline_pq",
+      "-1"
+    ],
+    [
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/build/apps/search_disk_index",
+      "--data_type",
+      "float",
+      "--dist_fn",
+      "l2",
+      "--index_path_prefix",
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/smoke/index",
+      "--query_file",
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/smoke/query.bin",
+      "--result_path",
+      "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/smoke/result",
+      "-K",
+      "10",
+      "-L",
+      "10",
+      "40",
+      "-W",
+      "4",
+      "-T",
+      "1",
+      "--num_nodes_to_cache",
+      "0",
+      "--use_aisaq",
+      "--pq_read_io_engine",
+      "aio",
+      "-V",
+      "1",
+      "--pq_cache_size",
+      "0",
+      "--pq_read_page_cache_size",
+      "0"
+    ]
+  ],
+  "runs": [
+    {
+      "stage": "build",
+      "exit_code": 0
+    },
+    {
+      "stage": "search",
+      "exit_code": 255
+    }
+  ],
+  "binaries": {
+    "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/build/apps/build_disk_index": "3bbf737921e34806296beb30d61afde618696c0a5b8564d808b29ad343eef2fa",
+    "/home/kai3/coco/quantization_graph/work/aisaq_official_unpatched_20260916/build/apps/search_disk_index": "50d5f6d35f36179c24192bffef7d02535b63d89f0e7e7304d52c7e6cf3ab35de"
+  }
+}

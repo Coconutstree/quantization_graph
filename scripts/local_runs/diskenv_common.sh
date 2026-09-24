@@ -26,7 +26,7 @@ qg05_setup_diskenv() {
   export CPLUS_INCLUDE_PATH="${QG_LOCAL}/usr/include:${CPLUS_INCLUDE_PATH:-}"
 
   DISK_ROOT="${DISK_ROOT:-${ROOT}/work/05_disk_system_fair/disk_root}"
-  OUT_ROOT="${OUT_ROOT:-results/disk_environment/.formal_runs}"
-  PORTS="${PORTS:-experiments/05_disk_system_fair/ports.local.json}"
+  OUT_ROOT="${OUT_ROOT:-results/archive/legacy_layout_20260918/disk_environment/.formal_runs}"
+  PORTS="${PORTS:-src/disk_bench/ports.local.json}"
   DISK_PROFILE="${DISK_PROFILE:-auto}"
 }

@@ -1,0 +1,18 @@
+{
+  "document_url": "https://my.feishu.cn/docx/BpvBdhAILonRVkxT0Jicnwf4nfH",
+  "revision_before": 138,
+  "revision_after": 150,
+  "status": "synced_and_readback_verified",
+  "patches_verified": 12,
+  "full_experiments_run": false,
+  "source_and_registry_rechecked": true,
+  "formal_registry_changed": false,
+  "code_changed": false,
+  "new_sections": {
+    "7.1 四个主方法分别比较什么": "doxcnVtbbBNMcMxrIVM5iEIUxLf",
+    "7.2 Starling 与 AiSAQ 的配置登记": "doxcnUQZNAZDjhEOZRCLAoDr7Rh",
+    "7.3 三个 core 数据集的支持与验收状态": "doxcnL3u7UMRMXWOfyp6ENOXrhh",
+    "7.4 已加入方法集合，还差哪些执行工作": "doxcncOSxuvN8KSevDjrQDoUTTe"
+  },
+  "readback_sha256": "ea4d2bc682cc83346706a0f58b5509681447a7a73ddd66ccae43bf9b5bf234cf"
+}

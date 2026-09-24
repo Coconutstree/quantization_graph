@@ -1,0 +1,12 @@
+[
+  {
+    "key": "06_starling",
+    "title": "Starling 逐步拆解：内存导航图、块重排与页内搜索",
+    "draft_path": "draft_20f2ae6e_folder/draft.xml"
+  },
+  {
+    "key": "07_aisaq",
+    "title": "AiSAQ 逐步拆解：邻居 PQ 内联、按需读码与 DRAM 开销",
+    "draft_path": "draft_5d8983f1_folder/draft.xml"
+  }
+]

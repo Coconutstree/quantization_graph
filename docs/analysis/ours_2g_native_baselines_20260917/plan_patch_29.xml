@@ -1,0 +1,1 @@
+<p>Ours 磁盘查询在加载前进入 2 GiB cgroup，保存限额与峰值/events；baseline 默认不加统一限额。两者均以 wait4 获取真实生命周期峰值 RSS，VmPeak 只作采样诊断。</p>

@@ -1,0 +1,246 @@
+{
+  "captured_at": "2026-09-14T03:42:56.149577+00:00",
+  "source_directory": "results/disk_environment/05_disk_system_fair/test_L_400_w_32",
+  "files": [
+    {
+      "file": "agnews/Ours-Disk/result.json",
+      "sha256": "4d0529610e2b7e50e615957fcc224eb5f6811e5548d083b9fbbc79f807266333",
+      "bytes": 42061
+    },
+    {
+      "file": "agnews/Ours-Disk/memory_measurement.json",
+      "sha256": "217ff1280c6d41f00f5416da351055229698bc3b8810b1c5dec6f8d4f711e166",
+      "bytes": 941
+    },
+    {
+      "file": "agnews/Ours-Disk/measured_parity.json",
+      "sha256": "bbf01f127b5302411c5c76e66c080505028a4b3e1cd1921f0ab424a673a1b4f5",
+      "bytes": 877
+    },
+    {
+      "file": "agnews/Ours-Disk/storage_protocol.json",
+      "sha256": "3d4c3d4e9f005ba7c7fdca34f394139a5035f2336552bbe8bf0b8b9b984d02a1",
+      "bytes": 3990
+    },
+    {
+      "file": "agnews/DiskANN-PQ-Disk/result.json",
+      "sha256": "56745473332e40307e9d32d6a0125c6ff3458b14efd8825018b18bd278fe8e70",
+      "bytes": 37652
+    },
+    {
+      "file": "agnews/DiskANN-PQ-Disk/memory_measurement.json",
+      "sha256": "1d9a8e02bdf4fce57c616b100846e05f1085a7a706edf250971f6dafcd5350f7",
+      "bytes": 943
+    },
+    {
+      "file": "agnews/DiskANN-PQ-Disk/measured_parity.json",
+      "sha256": "94d69b3575c3dca547575e9f7462341dcb0b27e4d4e1044efa2d75f22f543789",
+      "bytes": 955
+    },
+    {
+      "file": "agnews/DiskANN-PQ-Disk/storage_protocol.json",
+      "sha256": "482f33b381385c18e7696db824a1ccb0a96aeafe323ebba608e8b40b895de4cd",
+      "bytes": 3296
+    },
+    {
+      "file": "agnews/SymphonyQG-DiskPort/result.json",
+      "sha256": "3bb0cb2dfa665b3342e4836229d673ba2baca54f3862e625ed59f9a6049efb71",
+      "bytes": 38192
+    },
+    {
+      "file": "agnews/SymphonyQG-DiskPort/memory_measurement.json",
+      "sha256": "3a1b61bb9d313a5ede6d7f9fa8fc70563e7ac5530e813c74e01c010383c8f9ec",
+      "bytes": 943
+    },
+    {
+      "file": "agnews/SymphonyQG-DiskPort/measured_parity.json",
+      "sha256": "0fca1f27fd7ba7b4906e9e6e658e584414b4c51d8d7da5ccf2aeba09fde144e8",
+      "bytes": 484
+    },
+    {
+      "file": "agnews/SymphonyQG-DiskPort/storage_protocol.json",
+      "sha256": "ff3370b490028fd6b10d4620b2a1f6a2b08b414ec951db96e1d3439f81e43562",
+      "bytes": 2117
+    },
+    {
+      "file": "agnews/OG-LVQ-DiskPort/result.json",
+      "sha256": "5001a7560a9f9fc6808a527dc1284f71c2bdfcb9d3a53aaf220e11088d461f0b",
+      "bytes": 38386
+    },
+    {
+      "file": "agnews/OG-LVQ-DiskPort/memory_measurement.json",
+      "sha256": "eae5555c75277dfe19cc985375528b1027cf95e47d979d111e31fdd066f96431",
+      "bytes": 943
+    },
+    {
+      "file": "agnews/OG-LVQ-DiskPort/measured_parity.json",
+      "sha256": "0138208b83d26deed3db5da056da651be283b7d9c2c9f5b23f14fba28ec2ffbb",
+      "bytes": 484
+    },
+    {
+      "file": "agnews/OG-LVQ-DiskPort/storage_protocol.json",
+      "sha256": "c3cbfc498ecd1faf7dc48153ada88fb3d8759e5683aef0001da9edc1233346e3",
+      "bytes": 2630
+    },
+    {
+      "file": "agnews/Glass-NSG-DiskPort/result.json",
+      "sha256": "b0a9d095534ea3388af90faa0a5e0207f3cbbac5fb783144de18d0b579d9ce6b",
+      "bytes": 38912
+    },
+    {
+      "file": "agnews/Glass-NSG-DiskPort/memory_measurement.json",
+      "sha256": "263de3a5085ea21f6a546a48dd9c546bf401ce0ac08c62b56ce5640ad6630f6b",
+      "bytes": 943
+    },
+    {
+      "file": "agnews/Glass-NSG-DiskPort/measured_parity.json",
+      "sha256": "3629c6d118520353be64cf45ec66c323794bfdbd4f62fa296abc945d93e161ac",
+      "bytes": 484
+    },
+    {
+      "file": "agnews/Glass-NSG-DiskPort/storage_protocol.json",
+      "sha256": "629329741c1dfc0752a9603fd6a25beeda0c468b038fbbd817ed7475a67cd431",
+      "bytes": 2118
+    },
+    {
+      "file": "gist/Ours-Disk/result.json",
+      "sha256": "3e082dab7694ee62a079c4fd0b880876fb09e8160e8288eeff53649e1694ac82",
+      "bytes": 42191
+    },
+    {
+      "file": "gist/Ours-Disk/memory_measurement.json",
+      "sha256": "5cc80c7356f93886f4cd0a88a4ed281d2b2ca193aa0d1c569d4e8f9d967a53ab",
+      "bytes": 943
+    },
+    {
+      "file": "gist/Ours-Disk/measured_parity.json",
+      "sha256": "5c9c2b623de7f5da7f82f46961a46e544484564fa73c228e4072a2b1716bea75",
+      "bytes": 889
+    },
+    {
+      "file": "gist/Ours-Disk/storage_protocol.json",
+      "sha256": "2c3e7d9db7bff792509c720f0a4daae0040f9d28569298b9f0e23faab27c1949",
+      "bytes": 3888
+    },
+    {
+      "file": "gist/DiskANN-PQ-Disk/result.json",
+      "sha256": "566642fcc946a69e3addc7e820907998ee8160f29437f662f825d8ae07e505d0",
+      "bytes": 37557
+    },
+    {
+      "file": "gist/DiskANN-PQ-Disk/memory_measurement.json",
+      "sha256": "6cd545cc8fe7a7b78982cbfcac6a4ad7a8bd2e3de8c98332e25d4e293eb87292",
+      "bytes": 946
+    },
+    {
+      "file": "gist/DiskANN-PQ-Disk/measured_parity.json",
+      "sha256": "13d489ee143e52b399bcdf026628a154101db01cb91f34c039551e0f57dce321",
+      "bytes": 967
+    },
+    {
+      "file": "gist/DiskANN-PQ-Disk/storage_protocol.json",
+      "sha256": "a6cecf368b7a398f53f53a6adf1a85824c29aa95309d82566badad11d5d214d8",
+      "bytes": 3101
+    },
+    {
+      "file": "gist/SymphonyQG-DiskPort/result.json",
+      "sha256": "8bc49bf8c2fed8b12605355ea31f471eed9d21c251a2f3117c8ec813a8f15c32",
+      "bytes": 38256
+    },
+    {
+      "file": "gist/SymphonyQG-DiskPort/memory_measurement.json",
+      "sha256": "622962acbf2c8419ab704bdbede49295312bedb76424ab5c64936c44bd05a484",
+      "bytes": 943
+    },
+    {
+      "file": "gist/SymphonyQG-DiskPort/measured_parity.json",
+      "sha256": "44945cb311c4f186f74d776565f900f118455267c6eadc0c14a08289964ec091",
+      "bytes": 484
+    },
+    {
+      "file": "gist/SymphonyQG-DiskPort/storage_protocol.json",
+      "sha256": "3e53400cbe9f180e430f254076ad595f2d7dea385eb5dde4c5d1be09f570e22a",
+      "bytes": 1946
+    },
+    {
+      "file": "gist/OG-LVQ-DiskPort/result.json",
+      "sha256": "7aba090e37eb09fef954f6dad7402e98be8790f8fbf491ec47dc1355ced6e18a",
+      "bytes": 39270
+    },
+    {
+      "file": "gist/OG-LVQ-DiskPort/memory_measurement.json",
+      "sha256": "c90091493d283b094c0e208797872376dbde0bec829a6b88cfa4faed857397ce",
+      "bytes": 942
+    },
+    {
+      "file": "gist/OG-LVQ-DiskPort/measured_parity.json",
+      "sha256": "5f810302514dc8db2146d8c4b1eb144ef1ca56e0db995f96ced60e2d16c6e38e",
+      "bytes": 484
+    },
+    {
+      "file": "gist/OG-LVQ-DiskPort/storage_protocol.json",
+      "sha256": "fe975d76719ca0143e6f6917a5e759c8bdd3bd114d477195a1b29d5f3ad08e73",
+      "bytes": 2455
+    },
+    {
+      "file": "gist/Glass-NSG-DiskPort/result.json",
+      "sha256": "d638fda250b08a3c878d5273c1678de26d529e32e7085bd40c0ae040a47c0945",
+      "bytes": 39327
+    },
+    {
+      "file": "gist/Glass-NSG-DiskPort/memory_measurement.json",
+      "sha256": "95e7f01f4e8f2fd21790101c32683b215b3a9a57caa99d9eda12f70edc13a841",
+      "bytes": 943
+    },
+    {
+      "file": "gist/Glass-NSG-DiskPort/measured_parity.json",
+      "sha256": "73b6cbb4ef2bf4684b7ac44c5ac8164572eaf2136170ee17f6b9f1c4a9478128",
+      "bytes": 484
+    },
+    {
+      "file": "gist/Glass-NSG-DiskPort/storage_protocol.json",
+      "sha256": "20740cf4a826c770466dba3328c523e787533999ec383dc363ba028811f20485",
+      "bytes": 1947
+    },
+    {
+      "file": "dbpedia/Ours-Disk/result.json",
+      "sha256": "7e069176098af1eb23ec18e326a1fc9a5cfe1cbf7a1c35fb3151460240717521",
+      "bytes": 42305
+    },
+    {
+      "file": "dbpedia/Ours-Disk/memory_measurement.json",
+      "sha256": "3c38d0483b064a37ba9c6989bd3a874bde8b648055437e5b5b467f55e0b1bc7e",
+      "bytes": 943
+    },
+    {
+      "file": "dbpedia/Ours-Disk/measured_parity.json",
+      "sha256": "eaf26ba7e040ad09095b5bcb997b4332e7fa667af21887559ab2d8cc6303eed5",
+      "bytes": 1057
+    },
+    {
+      "file": "dbpedia/Ours-Disk/storage_protocol.json",
+      "sha256": "b92d9160844a9fede61dca74978885efed59f83fe241dc60e9fcf242023ed4ec",
+      "bytes": 3934
+    },
+    {
+      "file": "dbpedia/SymphonyQG-DiskPort/result.json",
+      "sha256": "288b3d2d09b7a219223187a003e4edf866af47e985a7bd33eaef3fe71754acad",
+      "bytes": 38533
+    },
+    {
+      "file": "dbpedia/SymphonyQG-DiskPort/memory_measurement.json",
+      "sha256": "2dd175383b44d0d15cf7de5248ab78247a78ffe3682b39c4c55beb164f5d8d7b",
+      "bytes": 942
+    },
+    {
+      "file": "dbpedia/SymphonyQG-DiskPort/measured_parity.json",
+      "sha256": "3551ba08b2fcba95496555ec851127b3b5dbe57d228d954978e68434e554a800",
+      "bytes": 993
+    },
+    {
+      "file": "dbpedia/SymphonyQG-DiskPort/storage_protocol.json",
+      "sha256": "b11a96454e7e1f558e87406bc99a9fa08777320b02966ac26def034293c47ad2",
+      "bytes": 1972
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "baselines/DEPENDENCY_LOCK.json": "e0aa8ce04492010df364b70c668023d5a0053735f37cf604f5171fe67c59d5ff",
+  "baselines/patches/aisaq-logical-block-size-sysfs.patch": "e4760a3fa868bb91babd4625e7288f51d8e7b3b51fd8e9184cd7b8f38fbbea55",
+  "experiments/05_disk_system_fair/run_official_disk_baseline.py": "535a1e9507a8cc68bb5d217ea4e94ecce72f2bbc6020016232e71313b93b33e2",
+  "experiments/05_disk_system_fair/official_sources.py": "23aa22a543aa298fbd757dbc60b6b26dcc45e2e68dae627c7550ada1f7c46497",
+  "scripts/setup_disk_baselines.py": "1a9c9d1533c187cc9689d3ab8368b00cccb98852749dbd870ff2de73d07b0dce"
+}

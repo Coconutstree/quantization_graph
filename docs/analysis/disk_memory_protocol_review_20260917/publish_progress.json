@@ -1,0 +1,158 @@
+[
+  {
+    "step": 0,
+    "reason": "澄清预算对象、保留原五次重复、区分方案与完成状态",
+    "revision": 53,
+    "body_verified": true
+  },
+  {
+    "step": 1,
+    "reason": "准入按方法配置、预算分开，避免一方法阻塞所有实验",
+    "revision": 54,
+    "body_verified": true
+  },
+  {
+    "step": 2,
+    "reason": "修正混用的大小口径并保存实际头部核验",
+    "revision": 55,
+    "body_verified": true
+  },
+  {
+    "step": 3,
+    "reason": "不把原文归一化描述当作本次已验证结论",
+    "revision": 56,
+    "body_verified": true
+  },
+  {
+    "step": 4,
+    "reason": "以总内存控制替代记账即限额，保留原重复和划分",
+    "revision": 57,
+    "body_verified": true
+  },
+  {
+    "step": 5,
+    "reason": "移除对原生系统强行统一调度和虚构计数的风险",
+    "revision": 58,
+    "body_verified": true
+  },
+  {
+    "step": 6,
+    "reason": "运行ID体现限制机制、预算和实验层",
+    "revision": 59,
+    "body_verified": true
+  },
+  {
+    "step": 7,
+    "reason": "目录不是验收证明",
+    "revision": 60,
+    "body_verified": true
+  },
+  {
+    "step": 8,
+    "reason": "保留原根目录，增加协议与run隔离",
+    "revision": 61,
+    "body_verified": true
+  },
+  {
+    "step": 9,
+    "reason": "明确后续输出表路径的新版解释",
+    "revision": 62,
+    "body_verified": true
+  },
+  {
+    "step": 10,
+    "reason": "核验实际locality开关约束，纠正纯消融归因",
+    "revision": 63,
+    "body_verified": true
+  },
+  {
+    "step": 11,
+    "reason": "统一新预算，保留05B实验对象",
+    "revision": 64,
+    "body_verified": true
+  },
+  {
+    "step": 12,
+    "reason": "修正缓存无限命中和页合并范围描述",
+    "revision": 65,
+    "body_verified": true
+  },
+  {
+    "step": 13,
+    "reason": "区分机制消融和完整系统布局",
+    "revision": 66,
+    "body_verified": true
+  },
+  {
+    "step": 14,
+    "reason": "主baseline与已确认方案一致",
+    "revision": 67,
+    "body_verified": true
+  },
+  {
+    "step": 15,
+    "reason": "增加资源扫描与支持范围，不强行补齐四方法",
+    "revision": 68,
+    "body_verified": true
+  },
+  {
+    "step": 16,
+    "reason": "设计可审计的内存字段，区分未知和零",
+    "revision": 69,
+    "body_verified": true
+  },
+  {
+    "step": 17,
+    "reason": "明确调参与预算曲线解释",
+    "revision": 70,
+    "body_verified": true
+  },
+  {
+    "step": 18,
+    "reason": "移除旧固定2GiB与强制同搜索宽度",
+    "revision": 71,
+    "body_verified": true
+  },
+  {
+    "step": 19,
+    "reason": "约束执行证据取代自报内存和手写formal标记",
+    "revision": 72,
+    "body_verified": true
+  },
+  {
+    "step": 20,
+    "reason": "保留五次统计要求，纠正重复epoch等同独立样本",
+    "revision": 73,
+    "body_verified": true
+  },
+  {
+    "step": 21,
+    "reason": "失败不阻塞其他方法，历史索引可复用、性能不可改标签",
+    "revision": 74,
+    "body_verified": true
+  },
+  {
+    "step": 22,
+    "reason": "保留历史审计同时消除过期状态的当前含义",
+    "revision": 75,
+    "body_verified": true
+  },
+  {
+    "step": 23,
+    "reason": "用本次证据更新旧后台任务陈述",
+    "revision": 76,
+    "body_verified": true
+  },
+  {
+    "step": 24,
+    "reason": "避免一个方法不支持即禁止整个数据集",
+    "revision": 77,
+    "body_verified": true
+  },
+  {
+    "step": 25,
+    "reason": "补充本次核验、内存协议、执行验收与论文依据",
+    "revision": 78,
+    "body_verified": true
+  }
+]

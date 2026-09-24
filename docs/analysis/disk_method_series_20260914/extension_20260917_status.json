@@ -1,0 +1,32 @@
+{
+  "06_starling": {
+    "status": "published_and_verified",
+    "xml_sha256": "a1b3018982789ccd1b29f696d2e27378a71cd263f208686d6fa59be1791465d7",
+    "figures": 2,
+    "formulas": 7,
+    "tables": 4,
+    "profile": {
+      "status": "passed"
+    },
+    "remote_document_created": true,
+    "url": "https://my.feishu.cn/docx/WKeldEixjomxEkxYVd3cSJgTnWb",
+    "body_formula_table_parity": true,
+    "images_verified": 2
+  },
+  "07_aisaq": {
+    "status": "published_and_verified",
+    "xml_sha256": "a83c97d2e486c09a1273b30cca4d6f94a731dc1e338795020dd7e7e4b41a5f02",
+    "figures": 2,
+    "formulas": 5,
+    "tables": 4,
+    "profile": {
+      "status": "passed"
+    },
+    "remote_document_created": true,
+    "url": "https://my.feishu.cn/docx/S7dTdCZE3okkDhxDXC6cqegZn4b",
+    "body_formula_table_parity": true,
+    "images_verified": 2
+  },
+  "publishing_blocker": null,
+  "authorization": "User explicitly approved publication of both complete drafts to the currently logged-in Feishu account."
+}

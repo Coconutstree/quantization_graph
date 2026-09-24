@@ -1,0 +1,55 @@
+{
+  "full_experiments_run": false,
+  "formal_repeats": 1,
+  "checks_passed": 19,
+  "checks_skipped": 1,
+  "live_cgroup_oom_test": "skipped: no writable delegated cgroup",
+  "formal_admission": false,
+  "numa_binding_verified": false,
+  "rust_native_checks": {
+    "workers": 32,
+    "vectors": 512,
+    "queries": 64,
+    "order": "shuffled",
+    "memory_enforcement": "none",
+    "budget_verified": false,
+    "ours": "passed",
+    "shared_pq": "passed",
+    "diskann": "passed on host; io_uring denied in sandbox"
+  },
+  "source_and_binary_sha256": {
+    "experiments/05_disk_system_fair/native_rust/src/main.rs": "81962198bd6f71c0bb6c65a7284f02d2192ffdf1d896c40b9f0e8b37bc5e79de",
+    "experiments/05_disk_system_fair/native_diskann/src/main.rs": "8db0f9a3a69eeeda8349fa5c265a469fd5eda6782b33dff6548746341d4d9a5b",
+    "experiments/05_disk_system_fair/tests/test_rust_native_timing.py": "9217461e18207c050fdabce6f8b0a34ad3df8461c1c51b9597b8e8f5786fcf63",
+    "experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port": "43d4a19257124a47e46fb339b5839732fc34da1e5cfaae0405f4b9f1d9d10fbd",
+    "baselines/diskann/target/release/qgraph05_diskann_port": "10b547cf081388e851db5987669e11e3eac6bc84a9ebc59296b1efb5b5593e31"
+  },
+  "registry_modified": false,
+  "binary_mismatches_before": [
+    "05c:Ours-Disk",
+    "05c:SymphonyQG-DiskPort",
+    "05c:OG-LVQ-DiskPort",
+    "05c:Glass-NSG-DiskPort",
+    "05c:DiskANN-PQ-Disk"
+  ],
+  "feishu": {
+    "document_id": "AhoKdQxEBogmWoxfk6xcxHKjnsg",
+    "before_revision": 350,
+    "after_revision": 354,
+    "edits_verified": 4,
+    "images_before": 3,
+    "images_after": 3,
+    "images_unchanged": true,
+    "remaining_obsolete_single_repeat_sentences": 0
+  },
+  "log_sha256": {
+    "native_timing_tests.log": "32de62cd1c7802782d943c3aa37eda13bc10a37d0223e17c4be0a26e69d53d79",
+    "resource_matrix_tests.log": "2e220b2a3a541046d7a8081ac207fb837d56a4d01758f6ad1839c9e8d9a1ad2f",
+    "build_ours_rust.log": "e446bfc2326eb7aa04ac403118d9250d0827ad33766fb4ba30fd0a5eed54b119",
+    "build_diskann_rust.log": "7cc31c4f21b3c80398993ab127874ce33ab757cc0a5cb5018cbd09501da7bb53",
+    "rust_native_timing_tests.log": "4665441c48ef85bfc0883f9722581c64cfb96a40f01f48a66224f3eb7916512e",
+    "rust_diskann_retry.log": "ae721f04e724617ccce3e6e4128397ee741ba4f3f0092d14509808690d8f375d",
+    "rust_diskann_final.log": "8cf5cbb716218dd5e5b4e24f620317d970bd042092f6ae4704364faae36176e5",
+    "rust_diskann_host.log": "c12896e5a69eade0b31e3fb7b0d1d628c50f04a3b535ef87d2c0360f28bad947"
+  }
+}

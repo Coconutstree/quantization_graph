@@ -1,0 +1,1 @@
+<p>PQ/SQ/SAQ 同一图哈希；Ours 各消融同一 Ours 图哈希；同一查询集、32 worker、Ours 2 GiB 与各 baseline 冻结配置、明确 I/O 口径。</p>

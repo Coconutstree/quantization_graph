@@ -1,0 +1,29 @@
+{
+  "upstream_commit": "6124ddb34ee4d176edea1bd7ad38d1672343df28",
+  "historical_patch_path": "/home/kai3/coco/quantization_graph/build/disk/symphony_verified_03_20260923/symphonyqg.local.patch",
+  "historical_patch_sha256": "2ad756477b95f879ce13d37cde4888159abacbcccca65a18d79416a3fd8b0bff",
+  "review_type": "classification_only_not_admission",
+  "differences": [
+    {
+      "path": "symqglib/qg/qg.hpp",
+      "classification": "algorithm_change_and_interfaces",
+      "reason": "Instrumentation and thread-local overloads, but construction scan now consults passed vis rather than original visited_. Cannot certify as instrumentation/thread API only."
+    },
+    {
+      "path": "symqglib/qg/qg_builder.hpp",
+      "classification": "instrumentation",
+      "reason": "Adds atomic distance counters; not used by the pristine build."
+    },
+    {
+      "path": "symqglib/qg/qg_scanner.hpp",
+      "classification": "algorithm_change",
+      "reason": "Changes signed INT16 extension to unsigned and scalar loop bound. Can change distances/search; excluded from pristine build."
+    },
+    {
+      "path": "symqglib/utils/io.hpp",
+      "classification": "logging_interface",
+      "reason": "Adds optional verbose flag; excluded from pristine build."
+    }
+  ],
+  "decision": "New measurement and reference binaries compile directly against fresh official checkout; old vendor code and old indexes are not reused."
+}

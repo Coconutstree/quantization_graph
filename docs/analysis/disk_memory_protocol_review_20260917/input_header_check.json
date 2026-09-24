@@ -1,0 +1,189 @@
+{
+  "scope": "file headers and sizes only; no full hash or ground-truth recomputation",
+  "datasets": [
+    {
+      "dataset": "agnews",
+      "files": {
+        "base": {
+          "path": "data/agnews/agnews_base.fvecs",
+          "dimension": 1024,
+          "rows": 769382,
+          "bytes": 3154466200
+        },
+        "query": {
+          "path": "data/agnews/agnews_query.fvecs",
+          "dimension": 1024,
+          "rows": 1000,
+          "bytes": 4100000
+        },
+        "groundtruth": {
+          "path": "data/agnews/agnews_groundtruth.ivecs",
+          "dimension": 100,
+          "rows": 1000,
+          "bytes": 404000
+        }
+      }
+    },
+    {
+      "dataset": "dbpedia",
+      "files": {
+        "base": {
+          "path": "data/dbpedia/dbpedia_base.fvecs",
+          "dimension": 1536,
+          "rows": 990000,
+          "bytes": 6086520000
+        },
+        "query": {
+          "path": "data/dbpedia/dbpedia_query.fvecs",
+          "dimension": 1536,
+          "rows": 10000,
+          "bytes": 61480000
+        },
+        "groundtruth": {
+          "path": "data/dbpedia/dbpedia_groundtruth.ivecs",
+          "dimension": 100,
+          "rows": 10000,
+          "bytes": 4040000
+        }
+      }
+    },
+    {
+      "dataset": "gist",
+      "files": {
+        "base": {
+          "path": "data/gist/gist_base.fvecs",
+          "dimension": 960,
+          "rows": 1000000,
+          "bytes": 3844000000
+        },
+        "query": {
+          "path": "data/gist/gist_query.fvecs",
+          "dimension": 960,
+          "rows": 1000,
+          "bytes": 3844000
+        },
+        "groundtruth": {
+          "path": "data/gist/gist_groundtruth.ivecs",
+          "dimension": 100,
+          "rows": 1000,
+          "bytes": 404000
+        }
+      }
+    },
+    {
+      "dataset": "sift10m",
+      "files": {
+        "base": {
+          "path": "data/sift10m/sift10m_base.fvecs",
+          "dimension": 128,
+          "rows": 10000000,
+          "bytes": 5160000000
+        },
+        "query": {
+          "path": "data/sift10m/sift10m_query.fvecs",
+          "dimension": 128,
+          "rows": 10000,
+          "bytes": 5160000
+        },
+        "groundtruth": {
+          "path": "data/sift10m/sift10m_groundtruth.ivecs",
+          "dimension": 1000,
+          "rows": 10000,
+          "bytes": 40040000
+        }
+      }
+    },
+    {
+      "dataset": "deep1B",
+      "files": {
+        "base": {
+          "path": "data/deep1B/deep1B_base.fvecs",
+          "dimension": 96,
+          "rows": 9990000,
+          "bytes": 3876120000
+        },
+        "query": {
+          "path": "data/deep1B/deep1B_query.fvecs",
+          "dimension": 96,
+          "rows": 10000,
+          "bytes": 3880000
+        },
+        "groundtruth": {
+          "path": "data/deep1B/deep1B_groundtruth.ivecs",
+          "dimension": 100,
+          "rows": 10000,
+          "bytes": 4040000
+        }
+      }
+    },
+    {
+      "dataset": "msmarco",
+      "files": {
+        "base": {
+          "path": "data/msmarco/msmarco_base.fvecs",
+          "dimension": 1024,
+          "rows": 113520750,
+          "bytes": 465435075000
+        },
+        "query": {
+          "path": "data/msmarco/msmarco_query.fvecs",
+          "dimension": 1024,
+          "rows": 1677,
+          "bytes": 6875700
+        },
+        "groundtruth": {
+          "path": "data/msmarco/msmarco_groundtruth.ivecs",
+          "dimension": 1000,
+          "rows": 1677,
+          "bytes": 6714708
+        }
+      }
+    },
+    {
+      "dataset": "bigann10m",
+      "files": {
+        "base": {
+          "path": "data/bigann10m/bigann10m_base.fvecs",
+          "dimension": 128,
+          "rows": 10000000,
+          "bytes": 5160000000
+        },
+        "query": {
+          "path": "data/bigann10m/bigann10m_query.fvecs",
+          "dimension": 128,
+          "rows": 10000,
+          "bytes": 5160000
+        },
+        "groundtruth": {
+          "path": "data/bigann10m/bigann10m_groundtruth.ivecs",
+          "dimension": 1000,
+          "rows": 10000,
+          "bytes": 40040000
+        }
+      }
+    },
+    {
+      "dataset": "cohere10m",
+      "files": {
+        "base": {
+          "path": "data/cohere10m/cohere10m_base.fvecs",
+          "dimension": 768,
+          "rows": 10000000,
+          "bytes": 30760000000
+        },
+        "query": {
+          "path": "data/cohere10m/cohere10m_query.fvecs",
+          "dimension": 768,
+          "rows": 10000,
+          "bytes": 30760000
+        },
+        "groundtruth": {
+          "path": "data/cohere10m/cohere10m_groundtruth.ivecs",
+          "dimension": 100,
+          "rows": 10000,
+          "bytes": 4040000
+        }
+      }
+    }
+  ]
+}

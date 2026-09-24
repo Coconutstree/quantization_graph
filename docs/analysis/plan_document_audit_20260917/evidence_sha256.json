@@ -1,0 +1,12 @@
+{
+  "experiments/05_disk_system_fair/native_contract.py": "ec03083d8add906187ee724bb42981d4e71fea1235086e4b8f30b5ad09536adf",
+  "experiments/05_disk_system_fair/ports.local.json": "9cc5b72f36da5492cd4f97b99c7041ed08b7106d749e4e115d20ce7c3471799e",
+  "experiments/05_disk_system_fair/run_official_disk_baseline.py": "b566a862f4e09a5673a9f9274d572d3332f0082a127b37d16e0af18136458aa3",
+  "experiments/05_disk_system_fair/orchestrator.py": "4782fead9e49454ac2c12d751e84b4f77d982072e95c03f6023f32cfd1fe302c",
+  "docs/analysis/official_disk_baselines_20260916/smoke_validation.json": "595bb4caba3d20c1b6d9ee753b46439c64e6eb24a919775725956a478068146f",
+  "docs/analysis/official_disk_baselines_20260916/aisaq_unpatched_validation.json": "209bd2faec67bb0dbc54f04e468bfa1d180b3eec4fbf99776d692d5b864d0678",
+  "docs/analysis/starling_memory_recovery_20260917/validation.json": "5272af866d355a6ee00620bb1cfd787e69deb1a8c3cf4e8e6faf21e1f21b5a0a",
+  "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/Starling-Disk/diagnostics/w32_as4g_20260917/result.json": "ba4b34b42cf1450b33153cb8ea0d8dc0964ac8d10c5e44d01001163bf3ae1638",
+  "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/Starling-Disk/result.json": "d0f73492dafb00a540bce0672284240ee1a6bc78b19a119ebd2f177062a10906",
+  "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/Starling-Disk/result.json": "c60b6c7f33687e64195cd76118a887d5fec5496b7ebefe625a10cebca44823d7"
+}

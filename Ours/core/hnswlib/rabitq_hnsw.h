@@ -143,6 +143,42 @@ class RaBitQHierarchicalNSW {
     }
 
     void setGraphTurboConfig(const GraphTurboConfig &config) { index_.setGraphTurboConfig(config); }
+
+    void setAdaptiveRouteProjection(std::vector<float> mean,
+                                    std::vector<float> components,
+                                    size_t input_dim,
+                                    size_t route_dim) {
+        index_.setAdaptiveRouteProjection(std::move(mean), std::move(components),
+                                           input_dim, route_dim);
+    }
+
+    void setRouteCodeStorage(std::shared_ptr<const RouteCodeStorage> storage,
+                             std::vector<uint32_t> route_dims = {}) {
+        index_.setRouteCodeStorage(std::move(storage), std::move(route_dims));
+    }
+
+    // Install a dataset-specific projected route artifact.  File parsing is
+    // intentionally kept outside the search object so callers can choose
+    // mmap or budget-aware residency without changing the search kernel.
+    void loadAdaptiveRouteArtifacts(std::vector<uint8_t> packed_codes,
+                                    std::vector<float> scales,
+                                    std::vector<float> projection_mean,
+                                    std::vector<float> projection_components,
+                                    size_t input_dim,
+                                    size_t route_dim) {
+        auto storage = std::make_shared<AdaptiveRouteCodeStorage>(
+            std::move(packed_codes), std::move(scales), index_.cur_element_count,
+            route_dim);
+        index_.setRouteCodeStorage(std::move(storage), {});
+        index_.setAdaptiveRouteProjection(std::move(projection_mean),
+                                           std::move(projection_components),
+                                           input_dim, route_dim);
+        GraphTurboConfig config = index_.getGraphTurboConfig();
+        config.mode = GraphTurboMode::RoutePriority;
+        config.route_dim = static_cast<uint32_t>(route_dim);
+        index_.setGraphTurboConfig(config);
+        index_.freezeGraphTurboTopology(true);
+    }
     const GraphTurboConfig &getGraphTurboConfig() const { return index_.getGraphTurboConfig(); }
     void freezeGraphTurboTopology(bool frozen = true) { index_.freezeGraphTurboTopology(frozen); }
     bool graphTurboTopologyFrozen() const { return index_.graphTurboTopologyFrozen(); }

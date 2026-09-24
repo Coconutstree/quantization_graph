@@ -49,23 +49,6 @@ data/
 downloads/
 work/
 
-# Keep generated results local; publish only lightweight CSV summaries and figures.
-results/*
-!results/disk_environment/
-!results/disk_environment/**/
-results/disk_environment/.formal_runs/
-results/disk_environment/**/*
-!results/disk_environment/**/
-!results/disk_environment/**/csv
-!results/disk_environment/**/csv/
-!results/disk_environment/**/csv/**
-!results/disk_environment/**/figures
-!results/disk_environment/**/figures/
-!results/disk_environment/**/figures/**
-!results/disk_environment/**/figures_w32/
-!results/disk_environment/**/figures_w32/**
-results/disk_environment/.formal_runs/**
-
 # Faiss is fetched by scripts/setup_faiss.sh (pinned commit)
 baselines/builds/
 baselines/faiss/
@@ -88,6 +71,8 @@ baselines/tools/fio-package/
 *.graph
 *.index
 baselines/symphonyqg/
+baselines/aisaq/
+baselines/starling/
 
 # Copied ablation inputs for figure generation (not produced by master)
 ablation/
@@ -95,3 +80,25 @@ ablation/
 # 600-dpi print TIFFs are regenerated locally by scripts/plot_vldb2027_figures.py
 # (too large for GitHub: fig09 alone is ~325 MB, over the 100 MB file limit)
 paper/figures/*.tiff
+
+# Paper results: retain lightweight outputs; raw evidence stays local.
+results/*
+!results/README.md
+!results/01_disk_quantizer/
+!results/02_disk_shared_graph/
+!results/03_disk_system/
+results/0*/**/*
+!results/0*/**/
+!results/0*/**/manifest.json
+!results/0*/**/tables/**
+!results/0*/**/figures/**
+results/0*/**/raw/**
+results/0*/**/tables/legacy_snapshot
+results/0*/**/figures/legacy_snapshot
+!results/manifests/
+results/manifests/**
+!results/manifests/path_migration_20260918.json
+artifacts/*
+!artifacts/README.md
+!docs/validation/disk_layout_20260918/*.log
+!docs/validation/results_layout_20260918/*.log

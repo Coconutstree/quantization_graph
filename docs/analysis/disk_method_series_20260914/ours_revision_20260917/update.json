@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "document": {
+      "new_blocks": [
+        {
+          "block_id": "doxcn9CEf5nq9vakDS6oMnXMSqD",
+          "block_token": "QJRFbwqQfooxiYxrzCYc7NDenAe",
+          "block_type": "image"
+        }
+      ],
+      "revision_id": 20,
+      "url": "https://my.feishu.cn/docx/LctHdcd4loJv7kx80KrcCC30nDc"
+    },
+    "result": "success",
+    "warnings": []
+  },
+  "_notice": {
+    "update": {
+      "command": "lark-cli update",
+      "current": "1.0.87",
+      "latest": "1.0.96",
+      "message": "lark-cli 1.0.96 available, current 1.0.87, run: lark-cli update"
+    }
+  }
+}

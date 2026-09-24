@@ -1,0 +1,1 @@
+<p>仅 Ours 在固定 32 worker 下扫描 1/2/4/8 GiB；baseline 保持各自冻结配置，不要求随 Ours 改预算。</p>

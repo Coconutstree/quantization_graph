@@ -1,0 +1,1 @@
+<p>本方案借鉴固定资源条件和实际内存测量，但 32 线程、Ours 2 GiB 与 baseline 各自配置属于本项目协议。Linux RLIMIT_AS 限制虚拟地址空间；cgroup v2 memory.max 约束资源组所计入内存，memory.swap.max=0 禁止该组使用 swap。cgroup 用量可包含文件缓存、内核内存，且内核允许某些场景短暂超过 memory.max，所以应同时保存统计与事件，避免将其简化成进程 RSS 的绝对上限。</p>

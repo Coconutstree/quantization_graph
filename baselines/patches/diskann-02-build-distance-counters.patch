@@ -1,0 +1,141 @@
+--- a/baselines/diskann/diskann/src/graph/mod.rs
++++ b/baselines/diskann/diskann/src/graph/mod.rs
+@@ -14,6 +14,26 @@
+ pub mod config;
+ pub use config::Config;
+ 
++use std::sync::atomic::{AtomicU64, Ordering};
++
++/// Total distance evaluations (search + prune) performed by graph construction
++/// since the last [`reset_graph_build_distance_evaluations`].
++static GRAPH_BUILD_DISTANCE_EVALUATIONS: AtomicU64 = AtomicU64::new(0);
++
++/// Reset the graph-construction distance counter before a build pass.
++pub fn reset_graph_build_distance_evaluations() {
++    GRAPH_BUILD_DISTANCE_EVALUATIONS.store(0, Ordering::Relaxed);
++}
++
++/// Return the number of distance evaluations recorded during graph construction.
++pub fn graph_build_distance_evaluations() -> u64 {
++    GRAPH_BUILD_DISTANCE_EVALUATIONS.load(Ordering::Relaxed)
++}
++
++pub(crate) fn add_graph_build_distance_evaluations(count: u64) {
++    GRAPH_BUILD_DISTANCE_EVALUATIONS.fetch_add(count, Ordering::Relaxed);
++}
++
+ pub mod index;
+ pub use index::DiskANNIndex;
+ 
+--- a/baselines/diskann/diskann/src/graph/index.rs
++++ b/baselines/diskann/diskann/src/graph/index.rs
+@@ -1734,6 +1734,7 @@
+                         *other_id,
+                         computer.evaluate_similarity(candidate.reborrow(), other.reborrow()),
+                     ));
++                    super::add_graph_build_distance_evaluations(1);
+                 }
+ 
+                 pool.sort_unstable_by(neighbor::ord::fast_distance);
+@@ -1764,6 +1765,7 @@
+                         *other_id,
+                         computer.evaluate_similarity(candidate.reborrow(), other.reborrow()),
+                     ));
++                    super::add_graph_build_distance_evaluations(1);
+                 }
+ 
+                 pool.sort_unstable_by(neighbor::ord::fast_distance);
+@@ -1984,6 +1986,7 @@
+                         scratch.visited.insert(id);
+                         scratch.best.insert(Neighbor::new(id, distance));
+                         scratch.cmps += 1;
++                        super::add_graph_build_distance_evaluations(1);
+                     })
+                     .await?;
+             }
+@@ -2019,6 +2022,7 @@
+                     .for_each(|neighbor| scratch.best.insert(*neighbor));
+ 
+                 scratch.cmps += neighbors.len() as u32;
++                super::add_graph_build_distance_evaluations(neighbors.len() as u64);
+                 scratch.hops += scratch.beam_nodes.len() as u32;
+             }
+ 
+@@ -2467,6 +2471,7 @@
+                             *id,
+                             computer.evaluate_similarity(vector.reborrow(), other.reborrow()),
+                         ));
++                        super::add_graph_build_distance_evaluations(1);
+                     }
+                 }
+             }
+@@ -2539,7 +2544,8 @@
+                             id,
+                             computer
+                                 .evaluate_similarity(this_vector.reborrow(), element.reborrow()),
+-                        ))
++                        ));
++                        super::add_graph_build_distance_evaluations(1);
+                     }
+                 }
+             }
+@@ -2737,7 +2743,10 @@
+                     // and update the occlude factor.
+                     let distance = match &cache[result_position] {
+                         (_, Some(v)) => {
+-                            computer.evaluate_similarity((*neighbor).reborrow(), v.reborrow())
++                            let computed =
++                                computer.evaluate_similarity((*neighbor).reborrow(), v.reborrow());
++                            super::add_graph_build_distance_evaluations(1);
++                            computed
+                         }
+                         (_, None) => f32::MAX,
+                     };
+--- a/baselines/diskann/diskann-quantization/src/algorithms/kmeans/mod.rs
++++ b/baselines/diskann/diskann-quantization/src/algorithms/kmeans/mod.rs
+@@ -8,3 +8,21 @@
+ 
+ pub mod lloyds;
+ pub mod plusplus;
++
++use std::sync::atomic::{AtomicU64, Ordering};
++
++/// Process-wide counter of distance computations performed by the k-means
++/// kernels (k-means++ initialization + Lloyd iterations). The port reads and
++/// resets this after PQ training so the export artifact can report build-time
++/// distance counts without changing any training signature.
++static KMEANS_DISTANCE_COUNT: AtomicU64 = AtomicU64::new(0);
++
++#[inline]
++pub fn add_kmeans_distance_count(n: u64) {
++    KMEANS_DISTANCE_COUNT.fetch_add(n, Ordering::Relaxed);
++}
++
++#[inline]
++pub fn take_kmeans_distance_count() -> u64 {
++    KMEANS_DISTANCE_COUNT.swap(0, Ordering::Relaxed)
++}
+--- a/baselines/diskann/diskann-quantization/src/algorithms/kmeans/lloyds.rs
++++ b/baselines/diskann/diskann-quantization/src/algorithms/kmeans/lloyds.rs
+@@ -60,6 +60,10 @@
+         "dataset and nearest-buffer should have the same length"
+     );
+ 
++    // Every (vector, center) pair contributes exactly one distance evaluation
++    // to the in-place kernel below.
++    super::add_kmeans_distance_count(dataset.nrows() as u64 * centers.nrows() as u64);
++
+     const N: usize = 16;
+     const N2: usize = N / 2;
+ 
+--- a/baselines/diskann/diskann-quantization/src/algorithms/kmeans/plusplus.rs
++++ b/baselines/diskann/diskann-quantization/src/algorithms/kmeans/plusplus.rs
+@@ -438,6 +438,8 @@
+             last,
+             previous_square_norm,
+         );
++        // One full distance pass over the dataset for the newly selected center.
++        super::add_kmeans_distance_count(data.nrows() as u64);
+ 
+         // Pick a threshold.
+         // Due to the way we compute distances, values less than 0.0 are technically

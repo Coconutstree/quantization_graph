@@ -1,0 +1,12 @@
+{
+  "checks": {
+    "body_text_equal": true,
+    "equations_equal": true,
+    "tables_equal": true,
+    "images_present": true
+  },
+  "equations": 8,
+  "tables": 5,
+  "images": 1,
+  "revision": 20
+}

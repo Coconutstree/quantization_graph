@@ -1,0 +1,32 @@
+[
+  {
+    "key": "01_ours",
+    "title": "Ours 磁盘版：先用 1-bit 筛选，再用 4-bit 搜索，最后用残差重排",
+    "feishu_url": "https://my.feishu.cn/docx/LctHdcd4loJv7kx80KrcCC30nDc",
+    "document_id": "LctHdcd4loJv7kx80KrcCC30nDc"
+  },
+  {
+    "key": "02_diskann",
+    "title": "DiskANN-PQ 磁盘版逐步拆解：内存 PQ 导航与磁盘精确评分",
+    "feishu_url": "https://my.feishu.cn/docx/D1a4d1sksoDMuyxFvRec30Dgnle",
+    "document_id": "D1a4d1sksoDMuyxFvRec30Dgnle"
+  },
+  {
+    "key": "03_symphonyqg",
+    "title": "SymphonyQG 磁盘适配逐步拆解：边局部 RaBitQ、FastScan 与隐式重排",
+    "feishu_url": "https://my.feishu.cn/docx/GQwrdL4feo9AtExH1qzcIGZxnfN",
+    "document_id": "GQwrdL4feo9AtExH1qzcIGZxnfN"
+  },
+  {
+    "key": "04_og_lvq",
+    "title": "OG-LVQ 磁盘适配逐步拆解：逐向量标量量化、Vamana 与按页取码",
+    "feishu_url": "https://my.feishu.cn/docx/BfYtdjApkoSXxgxbzKVcSHDAnvg",
+    "document_id": "BfYtdjApkoSXxgxbzKVcSHDAnvg"
+  },
+  {
+    "key": "05_glass_nsg",
+    "title": "Glass-NSG 磁盘适配逐步拆解：稀疏导航图、SQ4U 与双端整数距离",
+    "feishu_url": "https://my.feishu.cn/docx/HXtcd7yGUoY7xTxWSI6cl2ydnHd",
+    "document_id": "HXtcd7yGUoY7xTxWSI6cl2ydnHd"
+  }
+]

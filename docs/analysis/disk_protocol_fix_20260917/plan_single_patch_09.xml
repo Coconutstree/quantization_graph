@@ -1,0 +1,1 @@
+<p>每个 operating point 只运行一次，repeat_id=0；formal_test_rows.csv 直接保存这次实测值。相同配置的重复行拒绝验收，不生成中位数文件，也不计算跨运行 IQR/CV。</p>

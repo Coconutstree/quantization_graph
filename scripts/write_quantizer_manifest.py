@@ -131,8 +131,8 @@ def method_rows(dataset: str) -> list[dict[str, Any]]:
             "implementation": "ours_diskann_rabitq_bridge",
             "source_path": str(ours_path),
             "commit": run_git_commit(ours_path),
-            "binary_or_module_path": "experiments/02_diskann_fair/target/release/run_diskann_fair",
-            "build_status": exists_status("experiments/02_diskann_fair/target/release/run_diskann_fair", executable=True),
+            "binary_or_module_path": "src/graph_core/target/release/run_diskann_fair",
+            "build_status": exists_status("src/graph_core/target/release/run_diskann_fair", executable=True),
             "package_version": "",
             "generated_at_utc": now,
             "notes": "Use current project encode/query-distance path; build_status may be missing until Ours runner is rebuilt.",
@@ -179,7 +179,7 @@ def main() -> int:
         default=list(DEFAULT_DATASETS),
         help="Dataset names to write manifests for. Default: dbpedia gist.",
     )
-    parser.add_argument("--out-root", default="results/disk_environment")
+    parser.add_argument("--out-root", default="results/archive/legacy_layout_20260918/disk_environment")
     args = parser.parse_args()
 
     out_root = Path(args.out_root)

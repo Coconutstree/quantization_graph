@@ -1,0 +1,49 @@
+diff --git a/src/aisaq_pq_reader.cpp b/src/aisaq_pq_reader.cpp
+index 4109643..eccb57b 100644
+--- a/src/aisaq_pq_reader.cpp
++++ b/src/aisaq_pq_reader.cpp
+@@ -16,6 +16,7 @@
+ #include <sys/sysmacros.h>
+ #include <fcntl.h>
+ #include <sys/ioctl.h>
++#include <fstream>
+ #include <libaio.h>
+ #include <liburing.h>
+ 
+@@ -775,12 +776,24 @@ int aisaqPQReader::init_common(const char *pq_file_path, bool rearranged)
+     snprintf(device_path, sizeof(device_path), "/dev/block/%d:%d",
+              major(file_stat.st_dev), minor(file_stat.st_dev));
+     int fd = open(device_path, O_RDONLY);
+-    if (fd <= 0) {
+-        std::cerr << "failed to detect PQ vectors file block size" << std::endl;
+-        return -1;
++    const bool detected = fd >= 0 && ioctl(fd, BLKSSZGET, &m_block_size) == 0;
++    if (fd >= 0) {
++        close(fd);
++    }
++    if (!detected) {
++        // Containers may expose sysfs but not the backing block-device node.
++        // Read the same kernel logical block size; never guess an alignment.
++        const std::string sysfs_path = "/sys/dev/block/" +
++            std::to_string(major(file_stat.st_dev)) + ":" +
++            std::to_string(minor(file_stat.st_dev)) + "/queue/logical_block_size";
++        std::ifstream logical_size(sysfs_path);
++        if (!(logical_size >> m_block_size) || m_block_size < SECTOR_SIZE ||
++            (m_block_size & (m_block_size - 1)) != 0) {
++            std::cerr << "failed to detect PQ vectors file block size via device or sysfs" << std::endl;
++            return -1;
++        }
++        std::cout << "PQ logical block size from sysfs: " << m_block_size << std::endl;
+     }
+-    ioctl(fd, BLKSSZGET, &m_block_size);
+-    close(fd);
+ 
+     /* init m_num_vectors, m_pq_vector_size, m_rearranged_pq_page_size */
+     fd = open(pq_file_path, O_RDONLY);
+@@ -933,4 +946,4 @@ void aisaqPQReader::add_pending_io_completion_event(aisaqPQReaderContext &ctx, u
+     ctx.m_pending_io_completion_events_count++;
+ }
+ 
+-}
+\ No newline at end of file
++}

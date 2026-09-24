@@ -1,0 +1,10 @@
+{
+  "formal_ready": false,
+  "status": "requires_acceptance",
+  "remaining": [
+    "complete workspace category accounting or reviewed conservative-bound policy",
+    "cross-binary timing-scope acceptance",
+    "acceptance of documented warm-storage protocol; controller cache is uncontrolled"
+  ],
+  "note": "Measured parity and a 2GiB process address-space bound are evidence, not blanket formal approval."
+}

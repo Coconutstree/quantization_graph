@@ -1,0 +1,17 @@
+{
+  "ok": false,
+  "identity": "user",
+  "error": {
+    "type": "network",
+    "subtype": "transport",
+    "message": "API call failed: Post \"https://open.feishu.cn/open-apis/docs_ai/v1/documents/BpvBdhAILonRVkxT0Jicnwf4nfH/fetch\": EOF"
+  },
+  "_notice": {
+    "update": {
+      "command": "lark-cli update",
+      "current": "1.0.87",
+      "latest": "1.0.96",
+      "message": "lark-cli 1.0.96 available, current 1.0.87, run: lark-cli update"
+    }
+  }
+}

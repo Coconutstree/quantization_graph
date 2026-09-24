@@ -20,3 +20,9 @@ duplicating 15 GiB. New or regenerated SAQ artifacts must use `work/`.
 No runner should silently fall back to a sibling checkout. Environment or
 CMake overrides remain explicit opt-ins for development only and must be
 recorded in formal manifests.
+
+Official SSD baselines AiSAQ and Starling are fetched and built with
+`python3 scripts/setup_disk_baselines.py`. Their commits, Starling submodules,
+and the AiSAQ storage-metadata compatibility patch are pinned in
+`DEPENDENCY_LOCK.json`. Native CLI smoke success does not grant formal-suite
+acceptance; see `docs/plans/OFFICIAL_DISK_BASELINES.md`.

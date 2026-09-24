@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.20)
 project(quantization_graph_repro LANGUAGES CXX)
 
 find_program(BASH_PROGRAM bash REQUIRED)
-find_program(GXX_PROGRAM g++ REQUIRED)
+find_program(GXX_PROGRAM NAMES g++-11 g++ REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 option(QGRAPH_SETUP_CPP_DEPS "Prepare repository-local C/C++ dependencies before building" ON)
 option(QGRAPH_SETUP_BASELINES "Clone/build third-party baselines before formal build" ON)
 option(QGRAPH_BUILD_FORMAL "Build formal local native/Rust ports" ON)
-option(QGRAPH_WRITE_05_PORTS "Regenerate experiments/05_disk_system_fair/ports.local.json" ON)
+option(QGRAPH_WRITE_05_PORTS "Regenerate src/disk_bench/ports.local.json" ON)
 
 set(QGRAPH_JOBS "${CMAKE_BUILD_PARALLEL_LEVEL}" CACHE STRING "Parallel jobs passed to repository build scripts; empty lets scripts use nproc")
 set(QGRAPH_CARGO_OFFLINE "0" CACHE STRING "Set to 1 to force cargo --offline in scripts/build_formal_local.sh")

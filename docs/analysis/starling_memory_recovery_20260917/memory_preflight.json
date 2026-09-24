@@ -1,0 +1,17 @@
+{
+  "known_lower_bound_bytes": 2148741824,
+  "categories": {
+    "worker_fixed_buffers": 2042937344,
+    "pq_codes": 31000000,
+    "partition_vectors": 24000000,
+    "partition_ids": 4000000,
+    "id_to_page": 4000000,
+    "navigation_vectors": 38749440,
+    "queries": 3072000,
+    "pq_centroids": 983040
+  },
+  "per_worker_fixed_buffers": 63841792,
+  "accounting_complete": false,
+  "abi": "Linux x86_64; sizeof(std::vector<unsigned>)=24",
+  "note": "A lower bound only; excludes stacks, libraries, allocator overhead and other index structures."
+}

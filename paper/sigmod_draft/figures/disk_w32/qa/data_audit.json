@@ -1,0 +1,194 @@
+{
+  "total_observations": 543,
+  "artifacts": [
+    {
+      "dataset": "agnews",
+      "method": "Ours-Disk",
+      "observations": 40,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": true,
+      "recall_min": 0.93175,
+      "recall_max": 0.994375,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "agnews",
+      "method": "DiskANN-PQ-Disk",
+      "observations": 40,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.9498749999999981,
+      "recall_max": 0.9982499999999997,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "agnews",
+      "method": "SymphonyQG-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.36425,
+      "recall_max": 0.999,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "agnews",
+      "method": "OG-LVQ-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.918875,
+      "recall_max": 0.953,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "agnews",
+      "method": "Glass-NSG-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.900125,
+      "recall_max": 0.945,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "gist",
+      "method": "Ours-Disk",
+      "observations": 40,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": true,
+      "recall_min": 0.620875,
+      "recall_max": 0.9865,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "gist",
+      "method": "DiskANN-PQ-Disk",
+      "observations": 40,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.6613749999999997,
+      "recall_max": 0.9788749999999979,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "gist",
+      "method": "SymphonyQG-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.1195,
+      "recall_max": 0.99325,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "gist",
+      "method": "OG-LVQ-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.592625,
+      "recall_max": 0.905625,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "gist",
+      "method": "Glass-NSG-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        800
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.48725,
+      "recall_max": 0.796625,
+      "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6"
+    },
+    {
+      "dataset": "dbpedia",
+      "method": "Ours-Disk",
+      "observations": 40,
+      "test_queries_per_point": [
+        9000
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": true,
+      "recall_min": 0.879355555556,
+      "recall_max": 0.994077777778,
+      "query_order_sha256": "86dc7e7ac961ede6a4c0d7aff163e73e07d3c21f157941a9c373c00fbca4c3c5"
+    },
+    {
+      "dataset": "dbpedia",
+      "method": "SymphonyQG-DiskPort",
+      "observations": 49,
+      "test_queries_per_point": [
+        9000
+      ],
+      "formal_ready": false,
+      "memory_accounting_complete": false,
+      "locality_layout": false,
+      "recall_min": 0.185722,
+      "recall_max": 0.939567,
+      "query_order_sha256": "86dc7e7ac961ede6a4c0d7aff163e73e07d3c21f157941a9c373c00fbca4c3c5"
+    }
+  ],
+  "missing_artifacts": [
+    {
+      "dataset": "dbpedia",
+      "method": "DiskANN-PQ-Disk",
+      "status": "unmeasured"
+    },
+    {
+      "dataset": "dbpedia",
+      "method": "OG-LVQ-DiskPort",
+      "status": "unmeasured"
+    },
+    {
+      "dataset": "dbpedia",
+      "method": "Glass-NSG-DiskPort",
+      "status": "unmeasured"
+    }
+  ],
+  "excluded_observations": 0,
+  "markers": "Every fifth curve vertex; all vertices retained in lines and CSV",
+  "uncertainty": "Single run per setting; no between-run intervals",
+  "scope": "Locality Ours; acceptance and complete memory accounting pending"
+}

@@ -28,7 +28,74 @@
     },
     "diskann": {
       "commit": "3218478b5f7d1721840c29309e22d9fd74b1b4bc",
-      "path": "baselines/diskann"
+      "path": "baselines/diskann",
+      "url": "https://github.com/microsoft/DiskANN",
+      "manifest": "baselines/diskann.manifest.json",
+      "patch_policy": "baselines/diskann is pinned upstream content; every deliberate deviation is declared here, stored under baselines/patches and enforced by scripts/verify_diskann_baseline.py",
+      "patches": [
+        {
+          "path": "baselines/patches/diskann-01-internal-api-exposure.patch",
+          "sha256": "fc43818e4715434bf1ed85990d50d224cfde885c096123dd3d6132903adaf524",
+          "purpose": "expose already-existing in-memory SQ/spherical provider accessors and the spherical quantizer restore path so the algorithm-preserving 02/05B disk ports can persist and re-evaluate canonical compressed codes; no search or quantization behavior changes",
+          "patched_files": {
+            "diskann-providers/src/model/graph/provider/async_/inmem/mod.rs": "8d7684634d818e92d4911802b83cace11d825b210007e072ca3dea83039b2b39",
+            "diskann-providers/src/model/graph/provider/async_/inmem/scalar.rs": "528b5b5b961f8f5f04247905f73a9437e7428d9c5532e405d042df089b64615f",
+            "diskann-providers/src/model/graph/provider/async_/inmem/spherical.rs": "4deb05385c14c147791e2c50db0077e1e8b5cf895f423596bc867d1c969896d2",
+            "diskann-providers/src/model/graph/provider/async_/fast_memory_quant_vector_provider.rs": "9b7bac23e22c2d8c39b980090e7309dffb8702d7f6e75a8f3071321c6d750500",
+            "diskann-quantization/src/spherical/quantizer.rs": "79f21d1eb8d92240088e5856fd5bf4fffba116d51d49a17eca73abd500bec7bb"
+          }
+        },
+        {
+          "path": "baselines/patches/diskann-02-build-distance-counters.patch",
+          "sha256": "a216f34e9b9992830a7abc0371674ef0f9aab3bf1ed05d4dbfeaf2a780d003bd",
+          "purpose": "process-global counters for graph-construction and PQ k-means distance evaluations, reported as graph_build_distance_evaluations and build_distance_computations; measurement only, no control flow change",
+          "patched_files": {
+            "diskann/src/graph/mod.rs": "779e70576006d50927fbd62f716504a02bea3204239c7a9831cc0d49283aea2c",
+            "diskann/src/graph/index.rs": "74582438f5b61ae77a595fd59f490b592ed49654611800dd31ec7be1d3e336eb",
+            "diskann-quantization/src/algorithms/kmeans/mod.rs": "26dcf9d00d2c743a858a5777c4a6a83184433a775a44a009ec1ba8c9bd0b533c",
+            "diskann-quantization/src/algorithms/kmeans/lloyds.rs": "e43b9f44b74641eca6f11aa602de53695539d4ade1dffadfb994d2aa01f65a97",
+            "diskann-quantization/src/algorithms/kmeans/plusplus.rs": "3ca05c9ffb8ac069cc0753f6339ef27ab2ee8f2e5851e18a64ba7ff20768a412"
+          }
+        },
+        {
+          "path": "baselines/patches/diskann-03-io-completion-safety.patch",
+          "sha256": "0521e93beeb01152262c9b06aad45a9399a0062f0771fa1e64603af23c923ddd",
+          "purpose": "wait for every io_uring completion of a submitted batch, validate completion identity, reject short reads and fail-stop on fatal ring errors instead of releasing borrowed buffers with requests outstanding; happy-path O_DIRECT semantics unchanged. Added diskann-disk/tests/io_completion_regression.rs covers the reuse-after-error case",
+          "patched_files": {
+            "diskann-disk/src/search/provider/aligned_file_reader/reader/linux.rs": "f1f042787656934a6187afbbdbd786e9c014bf117900da54aad1017d2f9dbee2",
+            "diskann-disk/tests/io_completion_regression.rs": "65f8d95521b12c4530c6352a25deca93263fde878bf54cd81dcfea89a8264d70"
+          }
+        }
+      ]
+    },
+    "aisaq": {
+      "commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac",
+      "path": "baselines/aisaq",
+      "url": "https://github.com/kioxia-jp/aisaq-diskann.git",
+      "branch": "aisaq_release",
+      "patches": [
+        {
+          "path": "baselines/patches/aisaq-storage-and-query-evidence.patch",
+          "sha256": "89cbde50ec9696eb4a0709392e5a779e8a4503f52c8af931e63283d383fe9661",
+          "purpose": "storage compatibility and post-timing evidence; optional disjoint-query warmup outside timing, official search calls unchanged"
+        }
+      ]
+    },
+    "starling": {
+      "commit": "17dc3e8a011533a62374445f53963e951b72883a",
+      "path": "baselines/starling",
+      "url": "https://github.com/zilliztech/starling.git",
+      "submodules": {
+        "graph_partition": "ee8c04d2dbca4306636578f37992ee5c4c8f429f",
+        "graph_partition/oneTBB": "c8504c4ec866eb474d323e9df326778f30f9850d"
+      },
+      "patches": [
+        {
+          "path": "baselines/patches/starling-storage-and-query-evidence.patch",
+          "sha256": "6b249f62830d24729a93744f500bc63993c72c8a701944d2e34a53ab2f841bd3",
+          "purpose": "storage compatibility and post-timing evidence; optional disjoint-query warmup outside timing, official search calls unchanged"
+        }
+      ]
     }
   },
   "repository_local_runtime_assets": {

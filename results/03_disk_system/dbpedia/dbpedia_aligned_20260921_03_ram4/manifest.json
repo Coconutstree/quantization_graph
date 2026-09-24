@@ -1,0 +1,14 @@
+{
+  "acceptance": "passed",
+  "dataset": "dbpedia",
+  "experiment": "03_disk_system",
+  "formal_ready": true,
+  "layout_version": "paper-results-v2",
+  "note": "Acceptance refers to source protocol checks, not directory placement.",
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "protocol_sha256": "01bf9b896c1dee7dc35a3adb59ffb0c9e262a174aab2ecbc0fe38190ec2ad263",
+  "run_id": "dbpedia_aligned_20260921_03_ram4",
+  "run_metadata_relative": "../../../manifests/dbpedia_aligned_20260921_03_ram4",
+  "schema_version": 1,
+  "tables_manifest": "tables/formal_test_rows.manifest.json"
+}

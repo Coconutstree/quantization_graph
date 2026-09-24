@@ -1,0 +1,143 @@
+"""Generate two source-grounded explainers using the existing series template."""
+from pathlib import Path
+import json
+import shutil
+
+P = Path(__file__).resolve().parent
+ROOT = P.parents[2]
+ns = {}
+prefix = (P / 'build_series.py').read_text().split('# Ours keeps')[0]
+prefix = prefix.replace("FONT='/tmp/ours_figure_NotoSansCJKsc-Regular.otf'", "FONT=str(OUT/'sources/diagram_font.otf')")
+prefix = prefix.replace("shutil.copyfile(FONT,OUT/'sources/diagram_font.otf')", '')
+exec(prefix, ns)
+Doc, E = ns['Doc'], ns['E']
+
+def part(self, t):
+    self.xml.append(f'<h1 seq="auto">{E(t)}</h1>')
+    self.md.append('## ' + t)
+
+def sub(self, t):
+    self.xml.append(f'<h2 seq="auto">{E(t)}</h2>')
+    self.md.append('### ' + t)
+
+Doc.part, Doc.sub = part, sub
+STAR = 'https://github.com/zilliztech/starling/blob/17dc3e8a011533a62374445f53963e951b72883a/'
+AI = 'https://github.com/KioxiaAmerica/aisaq-diskann/blob/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac/'
+SCOPE = '面向已了解向量距离、PQ 和图近邻搜索的研究人员。沿用本系列模板：第一部分先讲原方法的全流程、符号、分步机制、存储查询与误差边界；第二部分说明本地接入和验证状态。公式以 L2 为例。核对日期：2026-09-17；本文没有运行新的性能实验。'
+
+def finish(doc, draft):
+    # The release candidate is first written directly to the CLI-assigned draft path.
+    content = '\n'.join(doc.xml) + '\n'
+    (ROOT / draft).write_text(content)
+    (P / (doc.key + '.xml')).write_text(content)
+    (P / (doc.key + '.md')).write_text('\n\n'.join(doc.md) + '\n')
+    return {'key': doc.key, 'title': doc.title, 'draft_path': draft}
+
+d = Doc('06_starling', 'Starling 逐步拆解：内存导航图、块重排与页内搜索', SCOPE)
+d.part('论文原方法与固定官方实现')
+d.sub('先看全流程与符号')
+d.p('Starling 解决的是磁盘图搜索中的两个问题：从固定入口走到相关区域需要多次读盘；读入一页却只使用其中一个节点，浪费带宽。它保留磁盘图的拓扑，通过内存导航图选入口、重排节点的物理位置、扩大页内有效处理范围来改善 I/O 效率。主线仍使用 PQ 为新邻居提供近似距离。')
+d.p('论文面向向量数据库的数据 segment；一个 segment 有独立的资源预算。不能把论文中的预算场景解释为命令行自带全进程内存硬限制。下面的参数、记录长度与具体执行细节以固定官方代码为准，不将所有工程开关都归为论文新增贡献。')
+d.source('原方法来源', 'Starling，SIGMOD 2024，数据布局与块搜索', 'https://arxiv.org/abs/2401.02116')
+d.table(['符号', '类型与含义'], [('N，D；x，q', '数据库大小、原维数；数据库向量与查询向量'), ('G，R；P，C', '磁盘图、最大出度；页字节数、每页可容纳节点数'), ('π(v)，B', '节点 v 所在页；一个节点分区/物理块'), ('p，Gnav，Lnav', '导航采样比例、导航图、导航搜索宽度'), ('m，K；Tj(a)', 'PQ 子空间数、每子空间中心数；查询距离表'), ('L，W，ρ', '磁盘候选池宽度、读取 beam、同页额外节点扩展比例')])
+d.fig('Starling：从动态入口到页内搜索', [('构建磁盘图与 PQ', '保留可导航图结构\nPQ 码用于候选估距'), ('建立内存导航图', '采样向量构建小图\n查询先找接近的入口'), ('分区并重排节点', '相关节点尽量放同页\n保存节点到页的映射'), ('查询选择待读页', '内存 PQ 维护候选池\n按页去重读取请求'), ('处理同页节点', '计算页内向量距离\n选择部分邻接表扩展'), ('维护结果并继续', '新邻居用 PQ 估距\n已读向量参与结果排序')], '机制示意；图中原向量评分对应未启用 SQ / disk-PQ 的分支。')
+d.sub('步骤 1：构建磁盘图与 PQ 编码')
+d.p('输入是数据库向量、距离度量和图度数预算。官方基于 DiskANN 的构建路径生成磁盘图，再训练分块 PQ。对每个子空间，数据库向量只保存最近中心的编号；256 个中心对应每子码一字节。图决定可到达路径，PQ 决定搜索时优先读谁，两者不能互相替代。')
+d.eq(r'k_j(x)=\arg\min_{0\le a<K}\|x^{(j)}-c_{j,a}\|_2^2,\qquad b_{\rm PQ}=m\quad(K=256).')
+d.p('公式省略实现中的共享中心平移记号。若启用平移，数据库编码与 query 查表必须使用同一变换。本文不把 PQ 写成每个原维度固定几 bit 的标量量化。')
+d.source('代码定位', '磁盘构建与 PQ 预算', STAR + 'src/aux_utils.cpp')
+d.sub('步骤 2：图分区与物理重排')
+d.p('输入是图和单页容量，输出是节点分区与节点到页的映射。固定官方分区器先初始化分区，再执行容量受限的 LDG 迭代。它统计一个节点的出邻居及入邻居已落入哪些分区，在连接数量与分区剩余容量之间折中。重排改变物理存储，不等于重新训练图或把边改成分区内边。')
+d.eq(r's(v,B)=a(v,B)\left(1-\frac{|B|}{C}\right),\qquad |B|<C.')
+d.p('这里 a(v,B) 表示代码中按出边和入边累计的邻接计数；互为邻居的关系可能分别计数。选择得分较高且未满的分区；若没有合适分区，则选仍有空位的分区。这是当前 LDG 实现的解释式，不是全局最优保证，也不能代表论文讨论的全部布局算法。')
+d.p('教学例子：如果 v 的三个邻接关系落在页 A、一个落在页 B，且两页剩余空间相近，将 v 放入 A 更可能让一次读取带回有用节点。但实际 query 未必沿这些边走，因此分区连通性高不保证每个 query 都省 I/O。')
+d.source('代码定位', 'select_partition 与 graph_partition_LDG', 'https://github.com/SonglinLife/SSD_BASED_PLAN/blob/ee8c04d/include/partitioner.h')
+d.sub('步骤 3：建立内存导航图并选择入口')
+d.p('从数据库采样一小部分向量，另建驻留内存的导航图。query 先在这个小图中搜索，把返回的原数据库 ID 作为磁盘搜索入口。它不是缓存若干磁盘节点那么简单：导航图有自己的向量、边和搜索工作区。官方提供均匀采样和基于访问频率的选点；频率应来自训练或验证查询，不应使用最终测试查询调参。')
+d.eq(r'N_{\rm nav}\approx pN,\qquad M_{\rm nav,main}\approx pN(4D+4R_{\rm nav})\quad(\mathrm{FP32}).')
+d.p('上述只估算向量和边的主要字节，未包含向量对齐、ID、容器容量与线程工作区。采样率控制图规模，mem_L 控制导航搜索宽度；mem_L=0 时当前搜索程序不加载导航图。二者都不是以 GiB 为单位的总内存上限。')
+d.source('代码定位', '导航图采样、构建和搜索开关', STAR + 'scripts/run_benchmark.sh')
+d.sub('步骤 4：索引真正存下什么')
+d.table(['位置', '对象', '作用'], [('DRAM', '全库 PQ 码与共享码本', '发现新邻居后，无需为了取 PQ 再读目标节点'), ('DRAM', '导航图向量、边、ID', '为 query 选择动态入口'), ('DRAM', 'id2page 与页内 ID 列表', '将逻辑节点映射到物理页并解释页内容'), ('DRAM', '可选节点缓存、全部线程工作区', '缓存复用、候选维护、I/O 缓冲'), ('SSD', '重排后的向量与邻接表记录', '一次读取可处理同页多个节点')])
+d.fig('Starling：DRAM、SSD 与结果评分', [('DRAM 常驻', '全库 PQ 码 + 码本\n小型导航图与向量\n节点/页面映射\n缓存与线程工作区'), ('SSD 页面', '多个重排后的节点\n每节点含原向量\n以及邻接 ID 列表\n页容量取决于记录大小'), ('查询时分工', '导航图选择入口\nPQ 选择跨页候选\n页内距离选择扩展\n已评估节点维护结果')], '原始 FP32 分支可做精确距离；SQ / disk-PQ 分支必须另行描述精度。', True)
+d.eq(r'S_{\rm node}=D\,\mathrm{sizeof}(T)+4(R+1),\qquad C=\left\lfloor\frac{4096}{S_{\rm node}}\right\rfloor.')
+d.p('这是当前普通磁盘构建路径的记录容量公式。R=64、FP32 时，D=960、1024、1536 对应 4100、4356、6404 字节，均超过一页。该路径后续使用 C 做计算，不能假设自动支持跨页节点。官方存在 SQ 功能不等于当前脚本的初始 FP32 建图路径已经绕开这个限制。')
+d.sub('步骤 5：query 查表、选择页面与页内扩展')
+d.eq(r'T_j(a)=\|q^{(j)}-c_{j,a}\|_2^2,\qquad \widehat d^2(q,x)=\sum_{j=1}^{m}T_j(k_j(x)).')
+d.p('query 准备 PQ 距离表后，用导航入口初始化候选池。选择尚未访问页面中的优质候选，按页去重并发出请求。读入页后先处理触发这次读取的节点，计算其原始向量距离并展开邻接表；新邻居继续用内存 PQ 码估距。')
+d.p('同页其他节点也会计算向量距离并参与结果维护。当前 page_search 代码按距离排序这些额外节点，只展开其中一定数量的邻接表。若页有 s 个节点，额外扩展数量为 floor(ρ(s−1))，触发节点单独处理。ρ 控制的是额外邻接表扩展数量，不是只读取页面的一部分。')
+d.eq(r'n_{\rm extra}=\lfloor\rho(s-1)\rfloor,\qquad d^2(q,x)=\sum_{i=1}^{D}(q_i-x_i)^2.')
+d.p('例如 s=5、ρ=0.5，读入的仍是整页：处理触发节点，给另外四个节点评分，并额外展开其中两个的邻接表。页内距离在 FP32 分支是原向量距离；启用 SQ 时不能沿用“原始 FP32 exact”的表述。')
+d.source('代码定位', 'page_search：页面去重、页内评分和 use_ratio', STAR + 'src/page_search.cpp')
+d.sub('步骤 6：把页内计算与下一轮 I/O 重叠')
+d.p('固定代码先提交本轮页面读取，再处理上一轮已读页面中的剩余节点，并处理缓存命中；之后等待本轮读取完成，优先处理本轮触发节点，把余下页内工作留到下一轮。这样上一轮的计算可覆盖一部分下一轮 I/O 等待。W 是单查询的读取 beam，T 是并发查询线程数，二者不能混用。')
+d.p('最终在已评估节点中选 top-k。读取原向量时即可维护精确结果，不要求另设统一的搜索后精排阶段；若配置使用压缩磁盘向量或独立 reorder 数据，必须按相应分支说明。')
+d.sub('内存预算和误差边界')
+d.eq(r'M_{\rm total}=Nm+M_{\rm codebook}+M_{\rm nav}+M_{\rm mapping}+M_{\rm cache}+T M_{\rm scratch}+M_{\rm other}.')
+d.table(['参数', '实际含义', '不能据此声称'], [('-B / search_DRAM_budget', '构建时按预算推导 PQ 字节数，带预留与码长截断', '整个搜索进程被硬限制在 B GiB'), ('MEM_RAND_SAMPLING_RATE / MEM_R', '导航图样本比例 / 图度数', '导航图只占样本原向量文件大小'), ('mem_L', '导航图搜索宽度；0 关闭导航图', '以 MB 或 GiB 配置导航内存'), ('num_nodes_to_cache', '缓存节点数量', '0 表示没有任何内存索引'), ('-T、-L、-W', '线程数、候选池宽度、读取 beam', '只影响速度、不增加工作区')])
+d.p('PQ 误差会改变跨页优先级；页内扩展比例会改变后续访问集合。已读节点的精确评分只能修正这些节点间的排序，不能找回未访问的近邻。更多页内扩展也可能增加候选与计算，因此页面利用率、读取字节、延迟与 recall 应共同评价。')
+d.source('参数依据', '搜索命令行', STAR + 'tests/search_disk_index.cpp')
+d.part('我们的磁盘接入、验证状态与执行顺序')
+d.p('本地固定 Starling 提交 17dc3e8a011533a62374445f53963e951b72883a，并记录图分区子模块版本。采用官方 CLI；Python 外层只转换数据、组织命令、保存日志与哈希，不移植 page_search，也不以 ours 的图或量化器替换原方法。')
+d.table(['环节', '当前接入'], [('数据', 'fvecs 无损转换为官方 float bin，保留维度、值与 ID'), ('构建', '官方磁盘图/PQ → 随机采样 → 内存导航图 → partitioner → index_relayout'), ('查询', '官方 search_disk_index；use_page_search=1、mem_L 非零、use_sq=0'), ('内存', 'PQ、导航图、映射、缓存、全部线程工作区均需计入总预算'), ('验证', '已完成 1024 条、64 维和 16 条 query 的小规模功能验证'), ('待验收', '三套目标高维数据兼容性、统一资源限制、计时口径和正式性能曲线')])
+d.p('本地接入记录显示，L=10/40 的小样本结果 ID 合法、top-10 无重复，返回距离通过原向量 L2² 重算检查。这是功能检查，不是目标规模的性能或公平性验收。新四方法方案要求独立验证集调参、匹配 Recall@10、32 workers、至少三次正式测量；本篇不新增性能数字。')
+d.p('运行入口为 experiments/05_disk_system_fair/run_official_disk_baseline.py，默认只打印命令计划，显式 execute 才执行。基础独立 runner 尚未完成统一预算验收；另有 2026-09-17 的 GIST 外层恢复驱动加入内存下界预检。RLIMIT_AS=2 GiB 协议属于地址空间受限实验，不能改称 2 GiB DRAM 实验。')
+d.p('2026-09-17 更新：已有 GIST R48 官方索引，不能再把全部目标高维数据概括为仅完成 64 维 smoke test。固定版本给每线程分配 4×16384×aligned_dim 字节坐标工作区；GIST 960 维为每线程 60 MiB，32 线程共 1920 MiB。加上其余已知对象，预检下界已超过 2 GiB，且仍未含全部开销。原生 32 线程／2 GiB 初始化失败已定位到分配失败后的空指针清零。相同索引和二进制在 32 线程／4 GiB、16 线程／2 GiB 的 16 查询诊断中完成，结果一致。4 GiB 恢复运行是独立诊断，不能并入原 2 GiB 主对比；全量运行状态以原结果目录为准。本篇只引用已有证据，没有启动或重跑实验。')
+d.p('新增本地证据：docs/analysis/starling_memory_recovery_20260917/README.md、memory_preflight.json、validation.json。')
+d.p('教学复习：导航图减少起步阶段的搜索距离；图分区改善一页中节点的相关性；页搜索真正使用这些节点；PQ 仍负责新邻居的廉价估距。四者各自承担不同任务。')
+d.source('本地协议', 'docs/plans/DISK_BASELINE_FAIR_COMPARISON_20260916.md；docs/plans/OFFICIAL_DISK_BASELINES.md')
+d.source('固定代码', 'Starling 官方版本', STAR.removesuffix('blob/17dc3e8a011533a62374445f53963e951b72883a/') + 'tree/17dc3e8a011533a62374445f53963e951b72883a')
+manifest = [finish(d, 'draft_20f2ae6e_folder/draft.xml')]
+
+d = Doc('07_aisaq', 'AiSAQ 逐步拆解：邻居 PQ 内联、按需读码与 DRAM 开销', SCOPE)
+d.part('论文原始设计与官方版本扩展')
+d.sub('先看问题、全流程与符号')
+d.p('DiskANN 通常让全库 PQ 码驻留 DRAM：读到节点 u 的邻接 ID 后，直接从内存取邻居 v 的 PQ 码来估计距离。AiSAQ 将这份随数据库规模增长的全量码从强制驻留内存中移走。原始全内联设计把邻居的 PQ 码放进 u 的磁盘记录，读取 u 时就能给邻居打分。它用磁盘存储冗余换取更低的常驻内存需求。')
+d.p('DRAM-free 指不要求全库 PQ 码驻留，不等于程序零内存。码本、入口数据、visited、候选队列和 I/O 缓冲仍占内存。当前官方版本进一步允许部分内联、独立 PQ 按需读取、重排和缓存；这些扩展单独说明，不追溯归入 2024 年原论文的每项贡献。')
+d.source('原始设计来源', 'AiSAQ: All-in-Storage ANNS with Product Quantization for DRAM-free Information Retrieval', 'https://arxiv.org/abs/2404.06004')
+d.table(['符号', '类型与含义'], [('N，D；x_u，q', '节点数、原维数；节点 u 的向量、查询向量'), ('N⁺(u)，R', 'u 的出邻居集合、最大图度数'), ('m，K；c_j,a；k_j(v)', 'PQ 子空间数、中心数、子中心与邻居编码编号'), ('I，Snode，P', '每节点内联 PQ 数、节点记录字节、I/O 页字节'), ('L，W，V', '候选宽度、搜索 beam、vector beamwidth'), ('T，Cstatic，Cpage', '查询线程数、共享静态 PQ 缓存、每线程 PQ 页缓存')])
+d.fig('AiSAQ 原始全内联：邻居的 PQ 随当前节点读取', [('建立图并训练 PQ', '图决定可达路径\n每个向量编码为短码'), ('复制邻居 PQ 到节点', 'u 记录含邻接 ID\n以及这些邻居的 PQ'), ('query 准备距离表', '码本与 LUT 留在内存\n全库 PQ 不必驻留'), ('选择并读取节点 u', '读取向量与邻接表\n同时取得邻居 PQ'), ('为邻居估距并入队', '用 PQ 查表维护候选\nu 自身做原向量评分'), ('继续遍历并返回', '下一轮读取优质候选\n已评估节点维护结果')], '内联的是邻居 v 的 PQ，不只是当前节点 u 自身的 PQ；本图为全内联主线。')
+d.sub('步骤 1：图与量化器各自负责什么')
+d.p('官方实现基于 DiskANN 的构建与搜索框架。离线建立可导航图，按子空间训练 PQ 码本，并将数据库向量编码成中心编号。AiSAQ 的核心不是换一种距离公式，而是改变评分所需 PQ 数据的存放位置及获取方式。')
+d.eq(r'k_j(v)=\arg\min_{0\le a<K}\|x_v^{(j)}-c_{j,a}\|_2^2,\qquad b_{\rm code}=m\quad(K=256).')
+d.p('m=32 表示每个向量有 32 字节 PQ 码，不是每维 32 bit。共享码本另算；实际训练的平移/旋转等预处理应在编码与 query 侧一致。本文公式只展开标准 L2 ADC 主线。')
+d.source('固定实现依据', 'AiSAQ 官方功能与继承的 DiskANN 构建框架', AI + 'README.md')
+d.sub('步骤 2：原始全内联记录怎样组织')
+d.p('展开 u 时真正需要的是各个邻居 v 的 PQ 编码。因此全内联记录在 u 的向量和邻接表之外，附上邻居 PQ。若许多节点都指向同一个 v，v 的短码会出现在多个记录中；这些是用于评分的编码副本，不是复制多个完整原向量。')
+d.eq(r'\mathrm{record}(u)=[x_u\mid N^+(u)\mid\{\mathrm{PQ}(v):v\in N^+(u)\}].')
+d.eq(r'S_{\rm node}\approx 4D+4(R+1)+Im+H,\qquad 0\le I\le R.')
+d.p('这里使用 FP32 和固定最大度数作教学估算，H 表示版本相关字段、原始 ID 等额外元数据；文件头、对齐和页填充另计。原始全内联为 I=R。教学例：D=128、R=64、m=32 时，主要字段为 512+260+2048=2820 字节；当 D=1024 时为 4096+260+2048=6404 字节，已经跨越 4 KiB。内联节省取 PQ 的额外请求，不保证每节点只读一页。')
+d.p('全内联 PQ 副本的主要字节量约为 NRm，准确值取决于记录填充和实际度数；独立 PQ 文件等其他索引文件仍须计入磁盘总量，不能把这个估算当成整个索引大小。')
+d.source('代码定位', 'AiSAQ 记录元数据、内联码解析与查询', AI + 'src/pq_flash_index.cpp')
+d.sub('步骤 3：query 查表与搜索推进')
+d.eq(r'T_j(a)=\|q^{(j)}-c_{j,a}\|_2^2,\qquad \widehat d^2(q,x_v)=\sum_{j=1}^{m}T_j(k_j(v)).')
+d.p('输入是浮点 query、码本和入口信息。query 先构造距离表，再选择待扩展节点并读取记录。读回 u 后，对 u 的存储向量评分，同时对新邻居去重；使用邻居 PQ 码查表，更新候选池，决定下一步读谁。未启用 disk-PQ 时，u 的原向量可直接做精确 L2；启用磁盘压缩时不能把该距离统称为 exact。')
+d.p('最终结果从已评估集合选出。全内联避免了“发现邻居后，再为其 PQ 单独读盘”的依赖，但候选仍按近似距离推进。即使已读节点的距离精确，也不保证找到全库精确 top-k。')
+d.sub('步骤 4：当前官方版本的部分内联与按需 PQ')
+d.table(['配置', 'PQ 从哪里来', '主要取舍'], [('I=R，全内联', '邻居 PQ 随 u 的节点记录读回', '较少额外 PQ 请求，较大节点记录和复制开销'), ('0<I<R，部分内联', '部分随节点读取，其余从独立 PQ 存储取得', '在节点膨胀与额外读取之间折中'), ('I=0，无内联', '邻居 PQ 按需从存储或缓存取得', '记录更小，但候选评分依赖 PQ 读取'), ('I=-1，构建自动选择', '由官方构建器计算不增加索引文件大小的内联数量', '不等于固定 0，也不等于全内联')])
+d.p('非内联码的读取可以利用共享静态 PQ 缓存；官方还提供重排后的按页读取与每线程 LRU 页缓存。rearrange 为向量重新分配内部 ID、改善 PQ 读取局部性，返回时恢复原 ID。全内联时官方忽略 rearrange，因为不需要通过它优化常规邻居 PQ 的独立读取。')
+d.fig('AiSAQ：内联、按需读取与内存边界', [('DRAM', '共享码本与 query LUT\n入口 ID / 少量入口 PQ\n可选共享静态 PQ 缓存\n每线程页缓存和工作区'), ('SSD 节点记录', '节点自身的向量\n邻居 ID 列表\nI 份邻居 PQ 短码\n可选原始 ID 等字段'), ('SSD 独立 PQ', '非内联短码的来源\n按需读取与页面复用\nrearrange 改善局部性\n全内联减少此类读取')], 'DRAM-free 不等于 RSS=0；32 个线程的独立页缓存必须合计。', True)
+d.source('官方扩展依据', 'AiSAQ 构建与搜索参数说明', AI + 'workflows/AiSAQ_index.md')
+d.sub('步骤 5：并发读取、入口与缓存')
+d.p('当前官方提供 vector_beamwidth，要求 V≤W，用于控制一组搜索推进中的节点数量并组织 PQ 读取并发。它不等于查询线程数。PQ 读取后端可选 aio 或 uring；该选项控制 PQ reader，不能据此声称全部节点 I/O 都切换为同一种后端。')
+d.p('官方支持额外入口点：加载阶段保留入口 ID 及其 PQ 码，再由 query 评分选择起点。这与 Starling 的采样内存导航图不同，不能把两者都画成同一张 RAM 图。')
+d.p('静态 PQ 缓存是共享的；动态 PQ 读页缓存按线程设置，官方说明上限为每线程 32 MiB，并要求索引启用 rearrange。节点缓存是另一个对象。全内联分支不会利用静态 PQ 缓存来读取普通邻居码，因为码已在节点记录里。')
+d.sub('真正的内存账目与参数含义')
+d.eq(r'M_{\rm search}\approx M_{\rm codebook}+M_{\rm entry}+C_{\rm static}+C_{\rm node}+T(C_{\rm page}+M_{\rm scratch})+M_{\rm other}.')
+d.p('该式表达的是不再强制含 Nm 的全库 PQ 驻留项；不意味着任意配置的总内存与 N 完全无关。缓存比例、visited、元数据、过滤配置和分配器都会影响实际峰值。32 threads × 4 MiB/线程，仅 PQ 页缓存容量就是 128 MiB，管理开销另计。')
+d.table(['参数', '含义与单位'], [('--use_aisaq', '构建和搜索都显式开启；省略搜索开关可走全 PQ 驻留的非 AiSAQ 模式'), ('--QD', '显式 PQ 码字节数；指定后 -B 不再决定码长'), ('--inline_pq', '内联邻居 PQ 个数；-1 自动选择，默认 R'), ('--pq_cache_size', '共享静态 PQ 缓存；支持 B/K/M/G/%；无后缀按向量数解释'), ('--pq_read_page_cache_size', '每线程 PQ 页缓存；无后缀按字节解释；需 rearrange'), ('--num_nodes_to_cache', '节点缓存数量，与 PQ 缓存分别核算'), ('-M / -B', '构建预算 / PQ 配置相关预算，不是全进程搜索内存硬上限')])
+d.sub('误差、代价与容易混淆的结论')
+d.p('相同 PQ 码与 query 查表下，改变码的存放位置不会直接改变单次 ADC 公式；但 beam、入口、缓存和读取组织的配置可能改变搜索推进，不能只凭公式相同就断言结果和性能完全等价。内联降低独立取码需求，同时增加磁盘记录和可能的跨页读取；是否划算取决于维度、图度数、PQ 码长与设备。')
+d.p('在百万向量、32 B/PQ 的教学规模中，全库短码约 30.5 MiB。此时可以比较完整系统，但不能只凭该规模证明超大规模驻留瓶颈。研究结论应由不同总预算或更大规模的实测支持。')
+d.part('我们的磁盘接入、验证状态与执行顺序')
+d.p('本地固定 AiSAQ 提交 f0a48e984c685bd498e3c4f88386b47e0e4ab1ac。外层 runner 将 fvecs 转为官方 bin，分别调用官方 build_disk_index 和 search_disk_index，两处都加 use_aisaq。PQ 码长通过 QD 显式设置，不借用 ours 的图、量化器或搜索循环。')
+d.table(['环节', '当前接入与边界'], [('构建', '官方图/PQ、inline_pq，按配置启用 rearrange'), ('查询', '官方 AiSAQ 模式，PQ reader 使用 aio，V 与缓存参数显式传入'), ('默认值', 'runner 的 inline_pq=-1、PQ caches=0；不同于官方全内联默认'), ('兼容补丁', '设备扇区查询在 /dev/block 缺失时从同设备 sysfs 取 logical_block_size'), ('功能验证', '1024 条 64 维向量、16 queries、L=10/40；ID 与距离检查通过'), ('正式状态', '目标数据、总资源约束、缓存预热和计时一致性仍需验收')])
+d.p('兼容补丁不修改搜索、建图或编码公式，但源码有差异，必须披露。正式主实验优先使用无补丁版本；若只能使用兼容版本，应验证行为及相关环境影响，不能称为完全未修改的官方程序。')
+d.p('当前小样本验证显示 top-10 无重复、ID 合法，返回距离通过原始 FP32 数据的 float64 L2² 重算检查。它没有证明 GIST、AGNews、DBpedia 三套目标规模已完成正式运行，也没有产生与 ours 公平可比的新 QPS 曲线。')
+d.p('实际执行顺序：冻结源码与补丁 → 核验数据和维度 → 官方构建并记录真实布局 → 加载码本/入口/配置缓存 → query 查表 → 读取节点与必要的非内联 PQ → 更新候选及结果 → 统一评估。外部资源限制须与其他方法相同；不能把 QD、缓存容量或 -B 单独当成总 DRAM 上限。')
+d.p('教学复习：展开 u 要给邻居 v 打分；AiSAQ 把 v 的 PQ 放到读取 u 时可取得的位置，或通过独立 PQ 读取补齐。Starling 重点提高每页节点的利用率，AiSAQ 重点消除全库 PQ 强制驻留；两者解决的问题不同。')
+d.source('本地协议与补丁', 'docs/plans/OFFICIAL_DISK_BASELINES.md；docs/plans/DISK_BASELINE_FAIR_COMPARISON_20260916.md；baselines/patches/aisaq-logical-block-size-sysfs.patch')
+d.source('固定代码', 'AiSAQ 官方版本', 'https://github.com/KioxiaAmerica/aisaq-diskann/tree/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac')
+manifest.append(finish(d, 'draft_5d8983f1_folder/draft.xml'))
+(P / 'extension_20260917_manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+print(json.dumps(manifest, ensure_ascii=False, indent=2))

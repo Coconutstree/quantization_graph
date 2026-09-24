@@ -1,0 +1,1 @@
+<p>小型检查和源码记录见 docs/analysis/ours_2g_native_baselines_20260917/。当前缺少 cgroup 委派会阻塞 Ours 2 GiB 的真实限额检查；baseline 原生配置的 RSS 观测不依赖该委派。CPU/NUMA 工具、二进制版本、原生一致性和计时验收仍分别检查，不能把内存政策放宽当作这些项目已通过。</p>

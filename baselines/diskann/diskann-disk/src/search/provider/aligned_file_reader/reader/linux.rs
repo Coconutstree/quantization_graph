@@ -105,16 +105,43 @@ impl AlignedFileReader for LinuxAlignedFileReader {
                 Self::submit_aligned_read(aligned_read, ring, read_id as u64)?;
             }
 
-            // Wait for the batch to complete.
-            ring.submit_and_wait(batch_size)?;
-
-            // N.B.: Flushing the completion queue appears to be important for proper
-            // operation.
-            // Flush the completion queue.
-            for cqe in ring.completion() {
-                if cqe.result() < 0 {
-                    return Err(std::io::Error::from_raw_os_error(cqe.result()).into());
+            // Borrowed buffers must remain live until every submitted read completes,
+            // including when a completion reports an error or a short read.
+            let mut completed = vec![false; batch_size];
+            let mut remaining = batch_size;
+            let mut failure = None;
+            while remaining != 0 {
+                match ring.submit_and_wait(remaining) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    // A fatal ring error cannot safely release borrowed buffers with
+                    // outstanding kernel writes. Fail-stop instead of unwinding them.
+                    Err(e) => {
+                        eprintln!("fatal io_uring wait failure with {remaining} reads outstanding: {e}");
+                        std::process::abort();
+                    }
                 }
+                for cqe in ring.completion() {
+                    let id = cqe.user_data() as usize;
+                    if id < batch_start || id >= batch_start + batch_size || completed[id - batch_start] {
+                        eprintln!("unexpected or duplicate io_uring completion: {id}");
+                        std::process::abort();
+                    }
+                    completed[id - batch_start] = true;
+                    remaining -= 1;
+                    let result = cqe.result();
+                    if result < 0 {
+                        failure.get_or_insert_with(|| std::io::Error::from_raw_os_error(-result));
+                    } else if result as usize != read_requests[id].aligned_buf().len() {
+                        failure.get_or_insert_with(|| std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            format!("short direct read: {result} bytes for request {id}"),
+                        ));
+                    }
+                }
+            }
+            if let Some(error) = failure {
+                return Err(error.into());
             }
         }
 
@@ -154,6 +181,27 @@ mod tests {
                 && self.coordinates == other.coordinates
                 && self.neighbors == other.neighbors
         }
+    }
+
+    #[test]
+    fn short_read_does_not_leave_pending_completions() {
+        let path = std::env::temp_dir().join(format!("diskann-short-read-{}", std::process::id()));
+        std::fs::write(&path, vec![37u8; 4096]).unwrap();
+        let mut reader = LinuxAlignedFileReader::new(path.to_str().unwrap()).unwrap();
+        let mut bytes = Poly::broadcast(0u8, 4096 * 4, AlignedAllocator::A512).unwrap();
+        let mut requests: Vec<_> = bytes.chunks_mut(4096).enumerate()
+            .map(|(i, part)| AlignedRead::new(if i == 0 { 4096 } else { 0 }, part).unwrap())
+            .collect();
+        assert!(reader.read(&mut requests).is_err());
+        drop(requests);
+        // Reuse the same ring and buffers after a failed batch.
+        let mut requests: Vec<_> = bytes.chunks_mut(4096)
+            .map(|part| AlignedRead::new(0, part).unwrap()).collect();
+        reader.read(&mut requests).unwrap();
+        drop(requests);
+        assert!(bytes.iter().all(|&value| value == 37));
+        drop(reader);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

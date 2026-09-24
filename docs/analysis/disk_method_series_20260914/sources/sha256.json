@@ -1,0 +1,15 @@
+{
+  "LVQ.pdf": "976115ec744c7de67dbf95a7ba1e032c39fe27b0cb48253e90426922301aca33",
+  "OQG.pdf": "f20d0062134669dad44d6457c3412a1e0e5ad682f3a035e5e5c4ddbeb15f9b8c",
+  "SymphonyQG.pdf": "f4975b13e017324dacdab8ed40af9c7c5fb53beaa691355156823f369f0b6b9e",
+  "experiments/05_disk_system_fair/native/og_lvq_disk_port.cpp": "310a3871ce60ebc13011ecd3536cf6c95ec19bb86a8a5d8ce19047b041598be1",
+  "experiments/05_disk_system_fair/native/symphonyqg_disk_port.cpp": "1827adbca75ce21e04afa425e037d11896dbe38e5b1078cfb52495c328fd81d7",
+  "experiments/05_disk_system_fair/native/glass_disk_port.cpp": "e136c0aa4c7083b624f78b2820450cef70784f9512b7dea0c1971a2e5d8d7ef3",
+  "experiments/05_disk_system_fair/native_diskann/src/main.rs": "db3954fef89360e2b1f26b5c41a01556a39c8b9f46ee6569e2a5a89376160732",
+  "experiments/05_disk_system_fair/native_rust/src/ours_port.rs": "c7211851a2be08bf1614982e06e0bf4be4a91e23daa5c433f26593c05a9084be",
+  "experiments/05_disk_system_fair/native_rust/src/locality.rs": "5b1dfb3db7cbe4c0dfff5a71a6dec4d11996d77d5bca893b9e82a07907a02806",
+  "baselines/pyglass/glass/quant/sq4u_quant.hpp": "6444fc69e56712145b1c89cc4d0854dbff4d618220d16614ed6ddccc4769c35a",
+  "baselines/symphonyqg/symqglib/qg/qg_scanner.hpp": "91601b5f6025f6fcadd8c444c534301b4d1cf8c0a816fe40c11cfdab8014f2b9",
+  "Ours/core/hnswlib/space_rabitq.h": "0f944979146f293317a35e92b3d6744364aef2764b8eba409391ff6e9e7158f8",
+  "paper/sigmod_draft/manuscript.md": "3b3b225862d89270da072713402dda1c461628d33fb4ca45d872fb771afe1883"
+}

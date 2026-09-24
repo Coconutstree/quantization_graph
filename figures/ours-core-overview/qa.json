@@ -1,0 +1,42 @@
+{
+  "drawio_cells": 168,
+  "native_vertices": 130,
+  "native_edges": 33,
+  "svg_text_nodes": 134,
+  "pdf_pages": 1,
+  "pdf_images": 0,
+  "pdf_vector_paths": 143,
+  "pdf_fonts": [
+    [
+      6,
+      "ttf",
+      "TrueType",
+      "YRUUPF+Arial-BoldMT",
+      "f-0-0",
+      "WinAnsiEncoding"
+    ],
+    [
+      7,
+      "ttf",
+      "TrueType",
+      "EZOAUK+ArialMT",
+      "f-1-0",
+      "WinAnsiEncoding"
+    ]
+  ],
+  "width_mm": 178,
+  "height_mm": 86.03333333333333,
+  "min_font_pt": 6.72755905511811,
+  "renderer": "native draw.io XML -> subset SVG renderer -> CairoSVG PDF",
+  "drawio_desktop_export": false,
+  "xml_and_text_checks": "pass",
+  "visual_review": "pass; local PDF preview; see qa.md for native-app and venue limits",
+  "scientific_scope": "resident-routing, illustrative candidates",
+  "sha256": {
+    "ours-core-overview.drawio": "03cbc432429ec4fdba566b8b8e2b0c8cbd1607333b4590578dd00f5a9f4a3a21",
+    "ours-core-overview.svg": "75355a1a746760c8bc716193c629c43c9578f472d39f202ecd52868ae65ef8ed",
+    "ours-core-overview.pdf": "c3fe3ccd509cdcb34f841de1086c2e07404f9e17586dd9974933d7b7e0861e3f",
+    "ours-core-overview.png": "37ad5e97f1d106f4c12340542d98afd7cb9bd0f7b62e2b6f791c63be59fe1146",
+    "build_figure.py": "0559ee382013074806e81350bfed8d819ea1a4ef2b45a3ed65b12417a4cff752"
+  }
+}

@@ -1,0 +1,14 @@
+<pre lang="text"><code>主实验 workers = 32；预算扫描 workers = 32
+formal repeats = 5，repeat_id = {0,1,2,3,4}
+input/metric/query split verified = true
+native source, index and config fingerprints verified = true
+config frozen before test = true
+memory_enforcement = cgroup_v2 (disk-backed new protocol)
+memory.max = declared budget in bytes; memory.swap.max = 0
+resource scope includes search startup, loading, scratch, warmup and queries
+resource peaks/events and actual constraints recorded; no OOM/failure
+search wall-clock scope, query count and warmup verified = true
+I/O and cache conditions audited = true
+required metrics available; missing optional metrics explicitly null
+formal_ready = true only after all applicable checks pass
+05A resident: unconstrained_reference, io_backend=resident, direct_io=false</code></pre><p>memory.max 为内核强制预算，并非“任意瞬时观测绝不超过”的数学保证。保存峰值和 events；出现超额或内存压力事件时核验是否完成回收、是否 OOM、统计范围是否正确，异常点先保持诊断状态。不得仅检查自报的几类字节之和就给出正式验收。</p>

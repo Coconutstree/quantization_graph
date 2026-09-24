@@ -1,0 +1,14 @@
+{
+  "acceptance": "pending",
+  "dataset": "gist",
+  "experiment": "03_disk_system",
+  "formal_ready": false,
+  "layout_version": "paper-results-v2",
+  "note": "Acceptance refers to source protocol checks, not directory placement.",
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "protocol_sha256": "1a1f0dfe5399df3e078f106ae957b2c8f68325a9f4f64b5079eae88aa65aa3e4",
+  "run_id": "gist_03_pristine_symphony_20260923",
+  "run_metadata_relative": "../../../manifests/gist_03_pristine_symphony_20260923",
+  "schema_version": 1,
+  "tables_manifest": null
+}

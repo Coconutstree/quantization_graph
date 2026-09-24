@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "query_comparisons": 32000,
+  "reference_artifact_sha256": "2f3830c56a0a09ee9b44246aae67a66a3367fd17e16bff734825f745789cc059",
+  "disk_artifact_sha256": "15d14cde2730fd7fa0b24ba3630ccd8bfa8de000c248a5fc2950fd7b064ca9b3",
+  "compared_fields": [
+    "result_ids",
+    "recall_at_10",
+    "visited_nodes",
+    "distance_evaluations"
+  ],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "scope": "disk_run_reproducibility_plus_native_memory_parity",
+  "native_reference_evidence": {
+    "schema_version": 1,
+    "method": "Ours-Disk",
+    "memory_backend": "same exported graph and payload pages in DRAM",
+    "direct_backend": "O_DIRECT + Linux native AIO/libaio",
+    "max_recall_delta": 0.0,
+    "mean_top10_overlap": 1.0,
+    "mean_visited_count_relative_delta": 0.0,
+    "mean_distance_count_relative_delta": 0.0,
+    "query_comparisons": 32000
+  }
+}

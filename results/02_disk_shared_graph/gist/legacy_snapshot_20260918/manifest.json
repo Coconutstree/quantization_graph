@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "layout_version": "paper-results-v2",
+  "experiment": "02_disk_shared_graph",
+  "dataset": "gist",
+  "run_id": "legacy_snapshot_20260918",
+  "origin": "historical_unpartitioned_snapshot",
+  "original_path": "results/disk_environment/02_diskann_fair/gist",
+  "acceptance": "not_revalidated",
+  "formal_ready": false,
+  "note": "Snapshot may contain multiple historical runs. Raw bytes and original acceptance fields remain unchanged."
+}

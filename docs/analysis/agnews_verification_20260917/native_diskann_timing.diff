@@ -1,0 +1,43 @@
+--- docs/analysis/agnews_verification_20260917/code_before/native_diskann/src/main.rs	2026-09-17 17:49:52.150917814 +0800
++++ experiments/05_disk_system_fair/native_diskann/src/main.rs	2026-09-17 17:50:24.222213202 +0800
+@@ -726,7 +726,7 @@
+         .num_threads(workers)
+         .build()?;
+     let started = Instant::now();
+-    let runs = pool.install(|| {
++    let mut runs = pool.install(|| {
+         order
+             .par_iter()
+             .map(|&query_id| -> Result<QueryRun> {
+@@ -749,7 +749,7 @@
+                 Ok(QueryRun {
+                     cache_stats: cache_scope.stats(),
+                     query_id,
+-                    recall: recall_at_10(&ids, &groundtruth[query_id]),
++                    recall: 0.0, // Filled after the measured batch, not between searches.
+                     ids,
+                     latency_us,
+                     stats: result.stats.query_statistics,
+@@ -757,9 +757,13 @@
+             })
+             .collect::<Result<Vec<_>>>()
+     })?;
++    let wall_seconds = started.elapsed().as_secs_f64();
++    for run in &mut runs {
++        run.recall = recall_at_10(&run.ids, &groundtruth[run.query_id]);
++    }
+     Ok(BatchRun {
+         runs,
+-        wall_seconds: started.elapsed().as_secs_f64(),
++        wall_seconds,
+         peak_rss_bytes: peak_rss_bytes(),
+     })
+ }
+@@ -1287,6 +1291,7 @@
+             "resident_bytes": meta.resident_bytes,
+             "codebook_bytes": meta.codebook_bytes,
+             "measurement_scope": "test_only_excludes_warmup",
++            "timing_semantics": "search_wall_excludes_recall_evaluation",
+             "storage_cache_protocol": "uncontrolled",
+             "worker_scratch_bytes": null,
+             "worker_scratch_reservation_bytes": worker_scratch_bytes,

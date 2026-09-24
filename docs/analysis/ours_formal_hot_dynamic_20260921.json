@@ -1,0 +1,432 @@
+{
+  "status": "passed",
+  "queries_per_branch": 8,
+  "widths": [
+    40,
+    80
+  ],
+  "workers": 4,
+  "measurements": {
+    "full_cached": {
+      "budget_bytes": 2147483648,
+      "peak_rss_bytes": 133832704,
+      "budget_admitted": true,
+      "status": "completed",
+      "swap_bytes": 0
+    },
+    "full_test": {
+      "budget_bytes": 2147483648,
+      "peak_rss_bytes": 133832704,
+      "budget_admitted": true,
+      "status": "completed",
+      "swap_bytes": 0
+    },
+    "pca_cached": {
+      "budget_bytes": 85411583,
+      "peak_rss_bytes": 133832704,
+      "budget_admitted": false,
+      "status": "budget_exceeded",
+      "swap_bytes": 0
+    },
+    "pca_test": {
+      "budget_bytes": 85411583,
+      "peak_rss_bytes": 133832704,
+      "budget_admitted": false,
+      "status": "budget_exceeded",
+      "swap_bytes": 0
+    }
+  },
+  "results": {
+    "full": {
+      "plan": {
+        "budget_bytes": 2147483648,
+        "cache_available_bytes": 2062072064,
+        "centroid_bytes": 1024,
+        "codes_bytes": 262144,
+        "count": 8192,
+        "dimension": 256,
+        "estimate_only": true,
+        "factors_bytes": 163840,
+        "gate": "original",
+        "mode": "full1bit",
+        "original_dimension": 256,
+        "original_rotation_reservation_bytes": 1048576,
+        "other_reserved_bytes": 34620160,
+        "padded_dimension": 256,
+        "pca_query_reservation_bytes": 0,
+        "pca_rotation_reservation_bytes": 0,
+        "policy": "resident_full_else_pca1bit_m32_no_residual_v1",
+        "process_reservation_bytes": 33554432,
+        "projection_bytes": 0,
+        "query_reservation_bytes": 17152,
+        "required_bytes": 85411584,
+        "residual_norm_bytes": 0,
+        "shortlist_m": null,
+        "worker_reservation_bytes": 50364416,
+        "workers": 4
+      },
+      "parity": {
+        "schema_version": 1,
+        "method": "Ours-Disk",
+        "memory_backend": "same exported graph and payload pages in DRAM",
+        "direct_backend": "O_DIRECT + Linux native AIO/libaio",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 1.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0,
+        "query_comparisons": 16
+      },
+      "full4_candidates": 320.75,
+      "record_cache": [
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 2061846784,
+            "dynamic": {
+              "capacity_nodes": 6620,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 2142024,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 2670924,
+            "static_hits": [
+              2886,
+              2886
+            ],
+            "static_nodes": 1572,
+            "static_payload_bytes": 492036,
+            "static_reserved_bytes": 528900
+          },
+          "width": 40
+        },
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 2061846784,
+            "dynamic": {
+              "capacity_nodes": 6620,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 2142024,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 2670924,
+            "static_hits": [
+              5535,
+              5535
+            ],
+            "static_nodes": 1572,
+            "static_payload_bytes": 492036,
+            "static_reserved_bytes": 528900
+          },
+          "width": 80
+        }
+      ],
+      "heldout_record_cache": [
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 2061846784,
+            "dynamic": {
+              "capacity_nodes": 6620,
+              "compact_records": 33,
+              "hits": [
+                39,
+                39
+              ],
+              "misses": [
+                4,
+                4
+              ],
+              "node_evictions": 0,
+              "node_insertions": 4,
+              "reserved_bytes": 2142024,
+              "resident_nodes": 33,
+              "residual_records": 33,
+              "valid_payload_bytes": 10329
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 2670924,
+            "static_hits": [
+              3265,
+              3265
+            ],
+            "static_nodes": 1572,
+            "static_payload_bytes": 492036,
+            "static_reserved_bytes": 528900
+          },
+          "width": 40
+        },
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 2061846784,
+            "dynamic": {
+              "capacity_nodes": 6620,
+              "compact_records": 151,
+              "hits": [
+                171,
+                171
+              ],
+              "misses": [
+                37,
+                37
+              ],
+              "node_evictions": 0,
+              "node_insertions": 37,
+              "reserved_bytes": 2142024,
+              "resident_nodes": 151,
+              "residual_records": 151,
+              "valid_payload_bytes": 47263
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 2670924,
+            "static_hits": [
+              5158,
+              5158
+            ],
+            "static_nodes": 1572,
+            "static_payload_bytes": 492036,
+            "static_reserved_bytes": 528900
+          },
+          "width": 80
+        }
+      ],
+      "test_reused_validation_profile": true,
+      "pages_before": [
+        65.75,
+        123.75
+      ],
+      "pages_after": [
+        2.625,
+        20.875
+      ]
+    },
+    "pca": {
+      "plan": {
+        "budget_bytes": 85411583,
+        "cache_available_bytes": 48127,
+        "centroid_bytes": 1024,
+        "codes_bytes": 65536,
+        "count": 8192,
+        "dimension": 64,
+        "estimate_only": true,
+        "factors_bytes": 163840,
+        "full1bit_required_bytes": 85411584,
+        "gate": "empirical_epsilon_1.9",
+        "mode": "pca1bit",
+        "original_dimension": 256,
+        "original_rotation_reservation_bytes": 1048576,
+        "other_reserved_bytes": 34620160,
+        "padded_dimension": 64,
+        "pca_query_reservation_bytes": 16384,
+        "pca_rotation_reservation_bytes": 65536,
+        "policy": "resident_full_else_pca1bit_m32_no_residual_v1",
+        "process_reservation_bytes": 33554432,
+        "projection_bytes": 66560,
+        "query_reservation_bytes": 17152,
+        "required_bytes": 85363456,
+        "residual_norm_bytes": 0,
+        "shortlist_m": 32,
+        "worker_reservation_bytes": 50364416,
+        "workers": 4
+      },
+      "parity": {
+        "schema_version": 1,
+        "method": "Ours-Disk",
+        "memory_backend": "same exported graph and payload pages in DRAM",
+        "direct_backend": "O_DIRECT + Linux native AIO/libaio",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 1.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0,
+        "query_comparisons": 16
+      },
+      "full4_candidates": 493.875,
+      "record_cache": [
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 3071,
+            "dynamic": {
+              "capacity_nodes": 0,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 0,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 0,
+            "static_hits": [
+              0,
+              0
+            ],
+            "static_nodes": 0,
+            "static_payload_bytes": 0,
+            "static_reserved_bytes": 0
+          },
+          "width": 40
+        },
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 3071,
+            "dynamic": {
+              "capacity_nodes": 0,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 0,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 0,
+            "static_hits": [
+              0,
+              0
+            ],
+            "static_nodes": 0,
+            "static_payload_bytes": 0,
+            "static_reserved_bytes": 0
+          },
+          "width": 80
+        }
+      ],
+      "heldout_record_cache": [
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 3071,
+            "dynamic": {
+              "capacity_nodes": 0,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 0,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 0,
+            "static_hits": [
+              0,
+              0
+            ],
+            "static_nodes": 0,
+            "static_payload_bytes": 0,
+            "static_reserved_bytes": 0
+          },
+          "width": 40
+        },
+        {
+          "beam": 1,
+          "cache": {
+            "budget_bytes": 3071,
+            "dynamic": {
+              "capacity_nodes": 0,
+              "compact_records": 0,
+              "hits": [
+                0,
+                0
+              ],
+              "misses": [
+                0,
+                0
+              ],
+              "node_evictions": 0,
+              "node_insertions": 0,
+              "reserved_bytes": 0,
+              "resident_nodes": 0,
+              "residual_records": 0,
+              "valid_payload_bytes": 0
+            },
+            "policy": "validation_hot_then_dynamic_fifo16_v1",
+            "reserved_bytes": 0,
+            "static_hits": [
+              0,
+              0
+            ],
+            "static_nodes": 0,
+            "static_payload_bytes": 0,
+            "static_reserved_bytes": 0
+          },
+          "width": 80
+        }
+      ],
+      "test_reused_validation_profile": true,
+      "pages_before": [
+        66.125,
+        132.125
+      ],
+      "pages_after": [
+        57.875,
+        123.75
+      ]
+    }
+  },
+  "scope": "small_fixture_correctness_only_not_formal_performance",
+  "native_binary_sha256": "fac51dddb22cba5b7e2bc216149deb0e3555dd535f7a2a0dee4fe9c4b0fb2c8f",
+  "source_sha256": {
+    "experiments/02_disk_shared_graph/native/src/main.rs": "6e7562af3be2c5fc15038bf871d72003ae5b4fb62a3da2f1f9ad6dc1d6c72cb1",
+    "experiments/02_disk_shared_graph/native/src/ours_port.rs": "3463bc0e07d768d58dc6275dad07264a645844a1e5ddff9a2fb553c95d50d652",
+    "experiments/02_disk_shared_graph/native/src/record_cache.rs": "fb6d3a5f8eefe194506ae61596c4ddd85c95c865c00520e845c4fc9c45aa1e77",
+    "experiments/02_disk_shared_graph/native/src/dynamic_records.rs": "eef0022c98c574f7c7f85b7f449774344eb23919e6313ed57418f2fcb0796987",
+    "src/disk_bench/ours_records.py": "a10899c0a434597bffb106821ce81697590ca10f68aae4cea1793ce5214f418a",
+    "src/disk_bench/tests/run_ours_pca_native_integration.py": "1da9fa3e2c1ab1e6c3a07316ba09797ee7cd7cb63b76e81c198263dfc6261b0c"
+  }
+}

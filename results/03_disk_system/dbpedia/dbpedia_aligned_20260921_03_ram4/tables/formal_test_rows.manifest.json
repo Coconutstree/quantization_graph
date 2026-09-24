@@ -1,0 +1,50 @@
+{
+  "baseline_native_budgets": {},
+  "cache_mode": "standard",
+  "dataset": "dbpedia",
+  "experiment": "03_disk_system",
+  "experiment_group": "primary",
+  "formal_ready": true,
+  "frontier_csv": "/home/kai3/coco/quantization_graph/results/03_disk_system/dbpedia/dbpedia_aligned_20260921_03_ram4/tables/formal_test_frontier.csv",
+  "frontier_csv_sha256": "09c974442eae0e9ea8eb301c067a42df57de95c860769d7b5ba1a6352e30478b",
+  "layer": "05c",
+  "memory_comparison": "shared_ram_budget_rss",
+  "methods": [
+    "Ours-Disk",
+    "SymphonyQG-DiskPort",
+    "Glass-NSG-DiskPort",
+    "DiskANN-PQ-Disk"
+  ],
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "raw_csv_sha256": "d82421382b276c70d1ff355e9ebd0cc23df907e757dce2ab1e144e3da9b65461",
+  "repeats": 1,
+  "rows": 36,
+  "run_id": "dbpedia_aligned_20260921_03_ram4",
+  "schema_version": 2,
+  "search_dram_budget_gib": 4.0,
+  "source_artifacts": [
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/dbpedia/dbpedia_aligned_20260921_03_ram4/raw/Ours-Disk/test/Ours-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "0aef37e48a5607bca011803091cdfa4bbacd9dfcd5377e59cc527ce3362ba6c4"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/dbpedia/dbpedia_aligned_20260921_03_ram4/raw/SymphonyQG-DiskPort/test/SymphonyQG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "c804bdb61663689ead2232164212958c4a5eae91ad912746d7c11aac48067765"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/dbpedia/dbpedia_aligned_20260921_03_ram4/raw/Glass-NSG-DiskPort/test/Glass-NSG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "1fdcbdbd35d571cc9caea8b40515a9797df13f14911764cb5811c07fcd88fc8d"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/dbpedia/dbpedia_aligned_20260921_03_ram4/raw/DiskANN-PQ-Disk/test/DiskANN-PQ-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "e0cb04c4fc9a29f5aca250102c1285507e821ac3b3724a9c2d47de8f65cdeccf"
+    }
+  ],
+  "statistic": "single_run",
+  "storage_modes": [
+    "hybrid_disk"
+  ],
+  "workers": [
+    32
+  ]
+}

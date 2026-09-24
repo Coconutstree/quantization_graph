@@ -1,0 +1,5 @@
+<h3>当前能否启动正式实验：仍未通过环境与端口准入</h3>
+<p>内存环境实测：沙箱中的 cgroup 挂载只读；宿主机挂载可写，但当前账号创建独立子组返回 Permission denied，检查 70 个可见 cgroup 目录未发现可写目录，用户 systemd 会话总线也不可用。当前环境没有 numactl。因此尚未执行真实 memory.max=4 GiB、swap=0 的成功限额与 OOM 检查，也未验证 NUMA 内存绑定。新入口应继续拒绝正式运行，不能回退为 RLIMIT_AS 或仅声明预算。</p>
+<p>版本与准入实测：Ours、DiskANN、Symphony、Glass、OG-LVQ 五个二进制与 ports.local.json 固定哈希均不匹配；其中 Ours/DiskANN/Symphony 虽写 ready，仍会被运行入口的哈希检查拒绝。AiSAQ/Starling 的正式适配保持 pending。此次未自动重写哈希或提高准入状态；需在正确性、资源、计时与缓存策略验收后固定新版本。</p>
+<p>解释边界：32 workers 的极小查询检查使用未限额诊断模式，测得的 RSS 不是 AGNews 的 4 GiB 验收数据。旧表的 2 GiB 限额证据缺失、对象大小冒充峰值、不同 Recall 的最高 QPS 和未受控设备/缓存条件仍未被重测解决。只跑一次符合当前规则；相同总预算内允许原生缓存大小不同。4 GiB 是待预检起点，是否构成受磁盘限制的负载需由实际驻留量与 I/O 决定。</p>
+<p>可复核记录：docs/analysis/agnews_verification_20260917/README.md，包含宿主与沙箱环境、历史 artifact/CSV 哈希、版本比对、编译日志和小规模检查日志。本轮没有运行全量实验，没有发布新的性能排名。</p>

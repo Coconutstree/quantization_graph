@@ -1,0 +1,8 @@
+Nature Figure PDF Text Audit
+pdf: docs/analysis/disk_method_series_20260914/fastscan_explainer/fastscan_explained.pdf
+minimum required: 5 pt
+minimum found: 10 pt
+text runs: 41
+below minimum: 0
+verdict: PASS
+note: Tf scanning does not replace final-size visual inspection or account for every PDF transform

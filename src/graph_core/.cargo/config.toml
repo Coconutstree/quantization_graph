@@ -1,0 +1,5 @@
+# Align our own native ports with the DiskANN baseline build configuration
+# (baselines/diskann/.cargo/config.toml) so the 03/05 comparison does not mix
+# different code-generation targets.
+[target.'cfg(target_arch="x86_64")']
+rustflags = ["-C", "target-cpu=x86-64-v3"]

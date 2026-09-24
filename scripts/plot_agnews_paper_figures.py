@@ -108,7 +108,7 @@ def _current_rid() -> str:
 
 def _ours_local_rows() -> pd.DataFrame:
     p = Path(
-        f"results/disk_environment/.formal_runs/runs/{_current_rid()}/05C_disk_system_fair/"
+        f"results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/{_current_rid()}/05C_disk_system_fair/"
         "agnews/artifacts/test/Ours-Disk__hybrid_disk__B2__standard__w32__r0.json"
     )
     if not p.exists():
@@ -127,11 +127,11 @@ def _ours_local_rows() -> pd.DataFrame:
 
 
 def read_rows() -> pd.DataFrame:
-    base = Path("results/disk_environment/03_system_fair/agnews/csv")
+    base = Path("results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv")
     new = pd.read_csv(base / "formal_test_rows.csv")
     new = new[new["method"].isin(["OG-LVQ-DiskPort", "Glass-NSG-DiskPort"])].copy()
     fix_agg = Path(
-        "results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/"
+        "results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/"
         "05C_disk_system_fair/agnews/aggregate/formal_test_rows.csv"
     )
     sym = pd.read_csv(fix_agg)

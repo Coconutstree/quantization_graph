@@ -1,0 +1,50 @@
+{
+  "protocol_id": "disk_ours2g_native_baselines_20260917",
+  "ours_primary_limit_bytes": 2147483648,
+  "baseline_memory": "native configurations, no added common OS cap",
+  "baseline_budget_equality_required": false,
+  "formal_repeats": 1,
+  "full_experiments_run": false,
+  "checks_passed": 49,
+  "checks_skipped": 1,
+  "cgroup_ours_2g": "blocked: no delegation",
+  "registry_modified": false,
+  "feishu": {
+    "agnews": {
+      "status": "synced_and_readback_verified",
+      "revision_before": 354,
+      "revision_after": 360,
+      "patches_verified": 6,
+      "protected_resources_unchanged": true,
+      "image_count": 3,
+      "readback_file": "agnews_after.json",
+      "readback_sha256": "7b2caa59575c926723372820b36797dfda67558b4809640868ebd0f7443f17d0"
+    },
+    "plan": {
+      "status": "synced_and_readback_verified",
+      "revision_before": 104,
+      "revision_after": 138,
+      "patches_verified": 34,
+      "protected_resources_unchanged": true,
+      "image_count": 0,
+      "readback_file": "plan_after.json",
+      "readback_sha256": "2a706601c2b96e6a9bbac1ce25aff38746b682b9571516fa154f0a3336e0bad8"
+    }
+  },
+  "source_sha256": {
+    "memory_runner.py": "3b31f8613a2b4275bcbb8c4c578f891fa549ebaef8bcb2292e1492772a79eae1",
+    "protocol.py": "7096d65609f8bd1fbfc63add196beeafed3d33c4f099ed9c3aee67532b6477a8",
+    "orchestrator.py": "4782fead9e49454ac2c12d751e84b4f77d982072e95c03f6023f32cfd1fe302c",
+    "native_contract.py": "ec03083d8add906187ee724bb42981d4e71fea1235086e4b8f30b5ad09536adf",
+    "plot_05_disk_suite.py": "d65a8ff8d03e8dbf112efee339355a6ca9c68373f7036be7c70c63e837bea6e6",
+    "run_official_disk_baseline.py": "b566a862f4e09a5673a9f9274d572d3332f0082a127b37d16e0af18136458aa3",
+    "tests/test_method_memory_policy.py": "77b33545c0702c610e495e5ce3107861405d545f26900e8a05a2309d1a270e62",
+    "tests/test_measured_protocol.py": "0138e32455cb2960ab5547cb3318ed9522b833204c0240c0d239ca98a6c3a6f7"
+  },
+  "log_sha256": {
+    "method_memory_tests.log": "01b75afe12d114d9c6c58aa5869406fafaf315fa78ae29d1f0d289826197ba8c",
+    "protocol_tests.log": "3c2854e67de4b0307e6916d47994dbbb216aae1d31cd568bbc8b299904705525",
+    "official_cli_tests.log": "484819fc6115ded4f95980c301dc1cb3bd42b75d97061c070633332d47142c79",
+    "contract_tests.log": "a0e91de092b472e0d5aae503b66c6a5ca0f79c29c70369ca21fbbfb03e7043eb"
+  }
+}

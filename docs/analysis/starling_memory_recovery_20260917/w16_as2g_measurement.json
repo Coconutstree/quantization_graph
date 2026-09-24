@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "wall_seconds": 8.315418150275946,
+  "sampled_peak_rss_bytes": 1149001728,
+  "sampled_vm_peak_bytes": 1430777856,
+  "rlimit_as_bytes": 2147483648,
+  "sampling_interval_seconds": 0.1
+}

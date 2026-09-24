@@ -1,0 +1,1 @@
+<p>原生 CLI 的 run_official_disk_baseline.py --execute 默认保留 AiSAQ/Starling 自身的 PQ、导航和缓存配置，只测真实峰值 RSS，不要求 cgroup 或统一 4 GiB。只有显式传入 --search-memory-gib 才启用该方法的 cgroup 限额。该入口仍为诊断，formal_ready=false，正式 artifact、计时与原生一致性验收继续保留。</p>

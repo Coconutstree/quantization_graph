@@ -1,0 +1,8 @@
+{
+  "date": "2026-09-17",
+  "title": "Ours 磁盘版：先用 1-bit 筛选，再用 4-bit 搜索，最后用残差重排",
+  "doc": "LctHdcd4loJv7kx80KrcCC30nDc",
+  "scope": "full rewrite, locality v1, no algorithm change",
+  "images": 1,
+  "equations": 8
+}

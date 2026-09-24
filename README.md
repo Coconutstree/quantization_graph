@@ -1,361 +1,144 @@
-# quantization_graph — Ours-DiskANN（VLDB 2027）
+# 磁盘 ANN 论文实验代码
 
-面向论文 **Ours-DiskANN** 的可复现仓库：一种 4-bit 全量化对称 Vamana 图索引方法
-（ExRaBitQ4），附带 01/02/03 内存实验、05 磁盘系统公平实验，以及三个数据集
-（DBpedia-1M / GIST-1M / AGNews）的端到端复现脚本。克隆后按本文档安装依赖、
-编译并运行，即可复现论文实验表格与图表；05 需要独占本地 NVMe/SSD 和正式 native
-disk ports，单独运行。
+01–03 按从量化组件到完整系统组织；04 为 Ours 优化与消融，05 单独比较不同内存预算。
 
-## 1. 方法（Method）
+| 实验 | 入口 | 研究问题 |
+|---|---|---|
+| 01：量化与 I/O | `experiments/01_disk_quantizer/run.py` | 固定候选条件下的量化精度、计算成本、驻留/SSD payload 和读取开销 |
+| 02：共享图检索 | `experiments/02_disk_shared_graph/run.py` | 共享基线图上的 PQ/SQ/SAQ 对比，以及明确标注自身图的 Ours 对照 |
+| 03：完整磁盘系统 | `experiments/03_disk_system/run.py` | Ours、DiskANN、Starling、AiSAQ；4 GiB RSS、beam=4、32 workers、单轮 |
+| 04：Ours 优化与消融 | `experiments/04_ours_memory_budget/` | 缓存策略、PCA、residual 等机制的独立消融 |
+| 05：内存预算 | `experiments/05_memory_budget/run.py` | 相同 0.5/2/4/8 GiB 预算下的跨方法 Recall、QPS、I/O 和 RSS |
 
-Ours-DiskANN 由四部分组成：
+02 中 Ours 仍使用自己的量化建图，不能把这一对照描述成所有方法共享同一张图。03 当前不纳入 SymphonyQG；执行规则见 [固定 beam 官方对照方案](docs/plans/03_FIXED_OFFICIAL_BEAM4.md)。各 baseline 的正式准入状态由端口登记和证据校验决定；目录整理不会把 pending/blocked 方法改为已验收。
 
-| 组件 | 说明 |
-|---|---|
-| 4-bit 载荷 | ExRaBitQ4（block16）：4 bit/dim 主码 + residual-4 元数据，无 fp32 底库 |
-| 图 | DiskANN3 / Vamana，`M` 度、`L_build` 构图 beam（默认 M=64、L=400） |
-| 构图优化 | refine_passes=1、build_prune_cap=256、build_early_stop_hops=2（对称 4-bit 距离构图） |
-| 查询 | paper-prune + sidecar 剪枝估计，residual4 block16（mse/fp16）top-100 重排 |
-
-统一入口：`Ours/experiments/run_ours.py`（`--M 32,64`）；核心算法在 `Ours/core/hnswlib/`。
-
-## 2. 实验设计（Experiments）
-
-01/02/03 三个内存实验按协议（见 `docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md`）分层隔离：
-
-- **实验一（01_quantizer_fair）**：4-bit 量化器公平。共享固定候选
-  （`fixed_candidates_k1000`），比较 PQ / SQ / SAQ / Ours_K1 的量化距离误差、
-  Recall@10 与压缩距离核吞吐。
-- **实验二（02_diskann_fair）**：载荷公平。同一构图协议（R=`M` / L=`L`），
-  为 PQ / SQ / SAQ / Ours 各自构建 4-bit 量化图并扫描。
-- **实验三（03_system_fair）**：端到端系统公平。Ours / SymphonyQG / OG-LVQ /
-  Glass-NSG 使用**同参数固定配置**（不做验证自动选参），直接对比 Recall-QPS、
-  延迟与索引。
-- **实验五（05_disk_system_fair）**：磁盘系统公平。对应 `docs/plans/DISK_SYSTEM_EXPERIMENT_PLAN.md`，
-  在同一独占本地 NVMe/SSD 上运行 05A/05B/05C 三层证据链：固定候选量化载荷 I/O、
-  共享图磁盘机制实验、五系统端到端磁盘对比。05 只改变存储后端，保留 01/02/03 的
-  图、codec、距离核、搜索循环和参数语义。
-
-**固定参数**（默认；可通过 `M` / `L` 环境变量覆盖，四个系统始终同参数）：
-
-| 系统 | 固定配置 |
-|---|---|
-| Ours | M=`M`，L_build=`L`，alpha=1.2，refine1 + cap256 + back-stop2，paper-prune+sidecar，residual4 rerank(top-100) |
-| SymphonyQG | R=`M`，EF=`L`，iters=3 |
-| OG-LVQ | R=`M`，W=`L`，alpha=1.2，LVQ4（4 bit/dim） |
-| Glass-NSG | R=`M`，L=`L`（构图 beam=`L`），ef 全扫描 |
-
-数据集：DBpedia-1M（1536-d）、GIST-1M（960-d）、AGNews（1024-d）；查询单线程计时，
-构图 64 线程。查询切分约定：前 N 条为验证集、其余为测试集（agnews/gist N=200，dbpedia N=1000）。
-
-**SymphonyQG 基线说明（重要）**：官方 AVX512 FastScan 路径
-（`symqglib/qg/qg_scanner.hpp`）用 `_mm512_cvtepi16_epi32` 对 uint16 累加结果做
-**符号扩展**。当补零后的维度 ≥ 2048（即原维度 > 1024，如 DBpedia 1536→2048）时，
-查询侧 6-bit 点积 Σ(q̃·code) 常超 32767，被当成负数，量化导航距离大面积失真，
-DBpedia 端到端 Recall@10 仅约 0.46。将两处 `cvtepi16_epi32` 改为
-`cvtepu16_epi32`（零扩展）后，同一索引端到端召回 0.46→0.88（ef=580），
-逼近其图 fp32 上限 0.89。本仓库 03 表格/图中 SymphonyQG 的 DBpedia 行即采用
-修复后实测值（`results/disk_environment/03_system_fair/dbpedia/csv/`），修复前的归因实验
-（PCA-960 恢复 0.997）仍可复现，但机制是实现缺陷而非量化算法或数据问题。
-
-**实验五正式磁盘约束（重要）**：05 的正式结果不能来自 Python/NumPy smoke runner，
-也不能回退到 buffered I/O、相邻 checkout 或 `/tmp` binding。所有正式 05 结果必须
-通过 `experiments/05_disk_system_fair/orchestrator.py` 的 schema-2 contract 校验：
-native port 状态为 `ready`、二进制 SHA-256 固定、4 KiB `O_DIRECT` 和 native async I/O
-必需、数据/查询划分/图文件都有 manifest hash，正式 test 阶段固定 5 次重复。
-
-## 3. 目录结构（Layout）
+## 代码结构
 
 ```text
-.
-├── Ours/                  # 方法实现与统一入口（core/hnswlib、run_ours.py、tests）
-├── experiments/
-│   ├── 01_quantizer_fair/ # 实验一：4-bit 量化器公平（C++ + 扫描）
-│   ├── 02_diskann_fair/   # 实验二 + 方法实现（Rust + native bridge）
-│   ├── 03_system_fair/    # 实验三：端到端系统公平（Python adapters）
-│   ├── 04_query_codec_1bit_scan/ # 查询 codec 消融
-│   └── 05_disk_system_fair/ # 实验五：正式磁盘公平实验（native ports + orchestrator）
-├── baselines/diskann/     # DiskANN3（vendored）
-├── scripts/               # 构建、复现、数据、表格与绘图脚本
-├── data/                  # 数据转换脚本与说明（原始数据不提交）
-├── docs/                  # 实验协议、说明与临时笔记
-├── requirements.txt       # Python 依赖（pip）
-├── environment.yml        # conda 一键环境（含 cmake/g++/Rust）
-├── NOTICE.md / LICENSE    # 第三方组件与 Apache-2.0
+experiments/
+  01_disk_quantizer/
+    run.py                 # 量化与 I/O 实验入口
+    native/                # PQ/SQ/Ours/SAQ 磁盘端口和 CMake 目标
+    tools/                 # 量化共用实现、固定候选生成器
+  02_disk_shared_graph/
+    run.py                 # 共享图实验入口
+    native/                # Rust 搜索入口、磁盘 provider、Ours 路径、I/O bridge
+  03_disk_system/
+    run.py                 # 完整系统实验入口
+    native/                # Glass/Symphony/OG-LVQ 端口和 CMake 目标
+    native_diskann/         # 官方 DiskANN 磁盘端口、缓存与 reader
+    adapters/              # 官方 AiSAQ/Starling 调用、诊断和 SVS worker
+  04_ours_memory_budget/   # Ours 优化和机制消融
+  05_memory_budget/
+    run.py                 # 独立内存预算入口，复用现有磁盘系统实现
+src/
+  disk_bench/              # 共用调度、协议、绘图、I/O 与跨层测试
+  graph_core/              # 02/03 共用的建图算法、Rust crate、Ours C++ bridge
+Ours/core/                 # 跨层复用的 Ours 量化/Vamana 算法
+baselines/                 # 第三方实现、版本锁与补丁
+scripts/                   # 安装、构建、数据准备和运行脚本
+legacy/                    # 旧实验（含旧 Ours/experiments），非正式入口
+logs/                      # 运行终端输出、建图日志、队列状态，非源码
+results/                   # 按实验编号保存结果、诊断和历史归档
+artifacts/                 # 图、索引、查询划分等可复用的大文件
 ```
 
-结果布局见 `docs/RESULTS_LAYOUT.md`；正式结果只保留 disk 根目录：
+`data/` 中的数据未迁移。图索引迁至 `artifacts/`，文件内容和哈希保持不变；`work/` 保留为工作目录。native 二进制名称、内部 `05a/05b/05c` 协议 ID 保持兼容；01/02/03 分别使用它们，新的独立 05 内存预算实验复用 `05c` 系统端口，以 `experiment=05_memory_budget` 区分。
+
+## 构建
+
+安装与硬件要求沿用 `environment.yml`、`requirements.txt`、`scripts/setup_cpp_deps_local.sh`、`scripts/setup_deps.sh` 及 `baselines/DEPENDENCY_LOCK.json`。代码包含 AVX-512 优化和 Linux direct I/O / io_uring 路径，需要相应 CPU、系统库及权限。
+
+从干净环境准备依赖、数据和图索引，到生成图表的完整步骤见 [复现说明](docs/REPRODUCING.md)。已验证环境快照和直接依赖版本分别在 `docs/validation/release_layout_20260918/environment.json`、`requirements-tested.txt`；新机器全流程安装尚未验证。
+
+完成依赖准备后构建：
+
+```bash
+JOBS=4 bash scripts/build_formal_local.sh
+python scripts/write_05_ports_local.py
+```
+
+C++ 磁盘程序输出到 `build/disk/native/`，候选生成器输出到 `build/disk/01_disk_quantizer/`；Rust 程序在 `src/graph_core/target/release/` 和 `baselines/diskann/target/release/`。顶层 CMake 入口继续可用，正式构建不再构建旧 03 内存检索程序。原生 AiSAQ/Starling 安装与验收见 `docs/plans/OFFICIAL_DISK_BASELINES.md`，其中旧源码路径按 `docs/EXPERIMENT_LAYOUT.md` 映射。
+
+## 运行
+
+先检查所选方法及数据集，不会启动正式测量：
+
+```bash
+python experiments/01_disk_quantizer/run.py --phase doctor --datasets gist
+python experiments/02_disk_shared_graph/run.py --phase doctor --datasets gist
+python experiments/03_disk_system/run.py --phase doctor --datasets gist
+python experiments/05_memory_budget/run.py --phase doctor --datasets gist --search-dram-budget-gib 0.5
+```
+
+每个独立入口仅允许自己的层。也可统一运行三层：
+
+```bash
+python scripts/run_disk_experiments.py --phase doctor --layers 01,02,03 --datasets gist
+```
+
+测量阶段为 `export → validate → tune → run → plot`。跨阶段必须保持同一 run-id 和配置；独立入口使用不同 run-id；要将三层放到同一个 run-id，使用统一入口并始终选择同一组 layers。
+
+以下示例需把 SSD 路径、CPU 集合和 NUMA 节点替换成当前机器的有效值；`doctor` 通过及正式准入通过后执行：
+
+```bash
+RUN_ID=gist_disk_20260918
+SSD_ROOT=/path/to/ssd/qgraph
+CPU_LIST=$(seq -s, 0 31)
+for PHASE in export validate tune run plot; do
+  python scripts/run_disk_experiments.py \
+    --phase "$PHASE" --layers 01,02 --datasets gist \
+    --run-id "$RUN_ID" --disk-root "$SSD_ROOT" --disk-profile nvme \
+    --cpu-affinity "$CPU_LIST" --numa-node 0 --workers 32 --repeats 1 || break
+done
+```
+
+上面的分阶段示例用于 01/02；03 使用 [独立固定参数队列](experiments/03_disk_system/README.md)，不执行 tune。03 主实验统一使用 4 GiB（[预算预检依据](docs/analysis/03_common_budget_20260921/report.md)）；0.5/2/4/8 GiB 的预算扫描独立使用 [05 内存预算入口](experiments/05_memory_budget/README.md)，每个预算使用新的 run-id。所有方法共用计划 RAM 预算，按实测进程 RSS 验收，不要求 cgroup 或 sudo。CPU/NUMA 与算法准入检查仍保留；新协议不混入旧的 Ours 单独限额结果，不能把 doctor 或小样本测试当作正式论文结果。
+
+## 输出与论文图表
+
+新结果按“实验 → 数据集 → 运行”组织：
 
 ```text
 results/
-└── disk_environment/
-    ├── 01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}  # disk 05A
-    ├── 02_diskann_fair/<dataset>/{csv,logs,figures,manifests}    # disk 05B
-    ├── 03_system_fair/<dataset>/{csv,logs,figures,manifests}     # disk 05C
-    ├── .formal_runs/runs/<run-id>/                              # immutable 05 run workspace
-    └── archive/05_disk_system_fair_legacy/
+  01_disk_quantizer/<dataset>/<run-id>/
+  02_disk_shared_graph/<dataset>/<run-id>/
+  03_disk_system/<dataset>/<run-id>/
+  05_memory_budget/<dataset>/<run-id>/
+    manifest.json         # 来源、验收状态、公共运行记录的相对路径
+    raw/<method>/<phase>/ # 原生结果、逐查询记录、资源证据及日志
+    manifests/            # 调参记录和参数锁定
+    tables/               # 汇总 CSV 及其证据清单
+    figures/              # 从通过验收的数据生成的图表
+  manifests/<run-id>/      # 公共协议、输入哈希和运行环境
+  diagnostics/            # 诊断、smoke 测试和失败记录
+  archive/                # 旧内存实验及其他历史材料
+artifacts/                # 图、索引、查询划分，不是论文结果
 ```
 
-## 4. 依赖与安装（Requirements）
-
-推荐从仓库根目录执行下面所有命令。
+每个运行只保留一份原始证据。`--out-root` 可替换结果根目录。绘图命令：
 
 ```bash
-# Python 运行时（二选一）
-pip install -r requirements.txt
-conda env create -f environment.yml && conda activate quantization-graph
+python scripts/plot_disk_experiments.py \
+  --results-root results --run-id gist_disk_20260918 \
+  --layers 01,02,03 --datasets gist
 ```
 
-非 pip 依赖一键安装（联网；Faiss / SAQ / SymphonyQG 绑定，数据集可选）：
+不跨 run-id 混合配置，不把诊断/失败记录当作有效性能点，不从单次运行生成跨运行中位数或误差条。详见 `docs/RESULTS_LAYOUT.md`。
+
+## 验证与历史代码
 
 ```bash
-bash scripts/setup_deps.sh               # 克隆并编译 Faiss / SAQ / SymphonyQG 绑定
-bash scripts/setup_deps.sh --with-data   # 额外下载公开数据集
+python -m unittest discover -s tests -p 'test_*.py'
+python src/disk_bench/tests/test_native_contract.py
+python src/disk_bench/tests/test_disk_suite.py
+python -m unittest discover -s src/disk_bench/tests -p 'test_*.py'
+cargo check --offline --locked --manifest-path src/graph_core/Cargo.toml --bins
+ctest --test-dir build/disk/native --output-on-failure
 ```
 
-手动准备时需要 Rust、cmake >= 3.20、g++ C++17/OpenMP、BLAS，以及 `scripts/setup_faiss.sh`
-构建的 Faiss。SAQ、SymphonyQG、DiskANN3 的锁定版本见 `baselines/DEPENDENCY_LOCK.json`。
+原生测试需要先构建。DiskANN io_uring 测试需要宿主允许该系统调用。`legacy/` 用于保存旧实验与研究记录，不参与当前主实验构建；旧脚本有历史路径和环境要求，不能作为本版本正式论文运行入口。
 
-数据集格式固定为 `data/<dataset>/<dataset>_base.fvecs`、
-`data/<dataset>/<dataset>_query.fvecs`、
-`data/<dataset>/<dataset>_groundtruth.ivecs`，详情见 `data/README.md`。
+本次验证与仍存在的正式运行限制见 `docs/DISK_REFACTOR_VALIDATION_20260918.md`。
 
-公开数据集准备（含 GIST）：
-
-```bash
-# 下载并转换 DBpedia-1M / GIST-1M / AGNews，输出到 data/<dataset>/
-bash scripts/download_data.sh
-
-# 只准备 GIST-1M 时可单独执行：
-mkdir -p data/gist
-wget -c http://ann-benchmarks.com/gist-960-euclidean.hdf5 \
-  -O data/gist/gist-960-euclidean.hdf5
-python data/convert_hdf5_to_ann.py \
-  --input data/gist/gist-960-euclidean.hdf5 \
-  --output-dir data/gist --prefix gist
-python scripts/check_datasets.py --datasets gist --data-root data \
-  --out-root results/disk_environment/dataset_artifacts
-```
-
-## 5. 编译（Build）
-
-推荐的一键编译入口：
-
-```bash
-mkdir -p build/cmake_repro
-cd build/cmake_repro
-cmake ../..
-make -j
-```
-
-也可以分目标执行：
-
-```bash
-make setup_cpp_deps   # 本地解包 C/C++ 依赖
-make setup_deps       # Faiss / SAQ / SymphonyQG
-make formal_local     # 01/03/05 native/Rust ports
-make write_05_ports   # 生成 05 ports.local.json
-make download_data    # 下载并转换公开数据集
-```
-
-原始分步命令也可使用：
-
-```bash
-# 02：run_diskann_fair（需 Rust 工具链；--offline 可用本地 crate 缓存）
-cd experiments/02_diskann_fair && cargo build --release --offline
-
-# 01：faiss_quantizer_smoke / faiss_hard_negative_candidates
-cmake -S experiments/01_quantizer_fair -B build/01_quantizer_fair   -DCMAKE_BUILD_TYPE=Release
-cmake --build build/01_quantizer_fair -j 16
-
-# SAQ：create_index / test_qps / test_relative_error
-cmake -S baselines/saq -B baselines/saq/build_gcc11 \
-  -DCMAKE_BUILD_TYPE=Release -DBUILD_UNIT_TESTS=OFF \
-  -DCMAKE_PREFIX_PATH="${SAQ_CMAKE_PREFIX_PATH:-/usr}"   # 依赖默认走系统（apt: libfmt/glog/gflags/gtest）
-cmake --build baselines/saq/build_gcc11 --target create_index test_qps test_relative_error -j 16
-
-# 05：正式磁盘实验 native dependencies / ports（Faiss、SAQ、05 C++ ports、Rust ports）
-bash scripts/build_formal_local.sh
-
-# 05：根据本机编译产物重算 binary_sha256，生成正式 port registry
-python scripts/write_05_ports_local.py
-```
-
-## 6. 复现（Reproduction）
-
-### 6.1 内存环境：01/02/03
-
-一键跑批顺序为 01 → 02 → 03。默认输出根目录是 `results/disk_environment`。
-
-```bash
-# 默认：全部数据集，M=64，L=400
-PYTHON=python3 bash scripts/run_master_round2.sh
-
-# 只跑指定数据集
-DATASETS=agnews bash scripts/run_master_round2.sh
-
-# 指定数据集 + 自定义 M/L（03 固定配置自动跟随）
-DATASETS="agnews gist" M=32 L=200 OUT_ROOT=results/disk_environment bash scripts/run_master_round2.sh
-```
-
-参数：`DATASETS`（空格分隔，默认 agnews gist dbpedia）；`M`（图度，默认 64）；
-`L`（构图 beam，默认 400）；`OUT_ROOT`（结果根目录，默认 results/disk_environment）；`PYTHON`（默认 python3）。
-
-单独运行某一步：
-
-```bash
-# 01（固定候选 + PQ/SQ/Ours + SAQ + 表格导出）
-DATASETS=agnews OUT_ROOT=results/disk_environment bash scripts/run_faiss_quantizer_fair.sh
-DATASETS=agnews OUT_ROOT=results/disk_environment bash scripts/run_saq_fixed_candidates_fair.sh
-
-# 02（各方法 4-bit 量化图 + ef 扫描，R=M / L=L）
-experiments/02_diskann_fair/target/release/run_diskann_fair \
-  --dataset agnews --methods PQ,SQ,SAQ,Ours --max-degree 64 --build-beam 400 \
-  --out-root results/disk_environment --repeats 1 --threads 64 --refine-passes 1 \
-  --build-prune-cap 256 --build-early-stop-hops 2 \
-  --query-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs \
-  --gt-path results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs
-
-# 03（固定配置端到端；先由 master 写入固定 selected config，再执行扫描）
-python experiments/03_system_fair/run_system_fair.py --dataset agnews \
-  --systems Ours,SymphonyQG,OG-LVQ,Glass-NSG --run --repeats 1 --threads 64 --out-root results/disk_environment
-```
-
-复现论文表格与图：
-
-```bash
-python scripts/export_paper_quantizer_table.py \
-  --datasets dbpedia gist agnews \
-  --out-root results/disk_environment \
-  --summary-csv results/disk_environment/paper_tables/01_quantizer_fair_summary.csv \
-  --columns-md results/disk_environment/paper_tables/01_quantizer_fair_columns.md \
-  --work-root work
-python scripts/export_system_fair_table.py \
-  --datasets dbpedia,gist,agnews \
-  --out-root results/disk_environment
-python scripts/plot_vldb2027_figures.py   # 输出 paper/figures/
-```
-
-### 6.2 磁盘环境：05A/05B/05C
-
-05 正式复现按 NVMe 场景编写，需要独占本地 NVMe/SSD 设备路径，不使用原始 `work/05_*_smoke`
-产物作为论文结果。正式运行前请确认：
-
-- 数据集已放在 `data/<dataset>/`；
-- 01/02/03 已为同一数据集跑过，且 03 query split、02 shared graph / Ours graph 已生成；
-- `baselines/DEPENDENCY_LOCK.json` 中的本地依赖存在；
-- 已运行 `bash scripts/build_formal_local.sh`；
-- 已运行 `python scripts/write_05_ports_local.py` 生成
-  `experiments/05_disk_system_fair/ports.local.json`；每次重编译 native ports 后都要重跑该脚本，
-  因为 orchestrator 会逐项校验 `binary_sha256`。
-
-GIST-only 最小正式 NVMe 复现链如下，适合先验证一台新机器能完整跑通：
-
-```bash
-# 1) 安装依赖和 GIST 数据
-pip install -r requirements.txt
-bash scripts/setup_deps.sh
-mkdir -p data/gist
-wget -c http://ann-benchmarks.com/gist-960-euclidean.hdf5 \
-  -O data/gist/gist-960-euclidean.hdf5
-python data/convert_hdf5_to_ann.py \
-  --input data/gist/gist-960-euclidean.hdf5 \
-  --output-dir data/gist --prefix gist
-python scripts/check_datasets.py --datasets gist --data-root data \
-  --out-root results/disk_environment/dataset_artifacts
-
-# 2) 编译 01/02/03/05 所需二进制，并生成本机 ports.local.json
-bash scripts/build_formal_local.sh
-python scripts/write_05_ports_local.py
-
-# 3) 先跑 GIST 的 01/02/03，生成 05 需要复用的 query split 和 02 图
-DATASETS=gist OUT_ROOT=results/disk_environment PYTHON=python3 bash scripts/run_master_round2.sh
-
-# 4) 跑 GIST 的正式 05。默认使用本仓库 work 目录，并自动识别 nvme/hdd_raid。
-RUN_ID=formal_diskenv_gist
-PORTS=experiments/05_disk_system_fair/ports.local.json
-DISK_ROOT=work/05_disk_system_fair/disk_root
-DISK_PROFILE=auto
-OUT_ROOT=results/disk_environment/.formal_runs
-
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase doctor --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase export --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase validate --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase tune --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase run --run-id "$RUN_ID" --layers all --datasets gist \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT" \
-  --workers 1,2,4,8,16,32 --repeats 5
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase plot --run-id "$RUN_ID" --layers all --datasets gist --out-root "$OUT_ROOT"
-```
-
-三数据集正式 05 复现命令如下。所有阶段必须使用同一个 `RUN_ID`：
-
-```bash
-RUN_ID=formal_diskenv_20260822
-PORTS=experiments/05_disk_system_fair/ports.local.json
-DISK_ROOT=work/05_disk_system_fair/disk_root
-DISK_PROFILE=auto
-OUT_ROOT=results/disk_environment/.formal_runs
-
-# 只读诊断：工具链、依赖锁、数据、03 query split、02 图、port registry、磁盘 preflight
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase doctor --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-
-# 导出磁盘索引/载荷 artifacts
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase export --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-
-# validation parity / contract gate
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase validate --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-
-# validation tuning lock；正式 run 必须先有同 RUN_ID 的 tuning.lock.json
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase tune --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT"
-
-# 正式 test：workers 覆盖 1,2,4,8,16,32，repeats 固定为 5；GIST 自动追加 budget 诊断点
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase run --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia \
-  --ports "$PORTS" --disk-root "$DISK_ROOT" --disk-profile "$DISK_PROFILE" --out-root "$OUT_ROOT" \
-  --workers 1,2,4,8,16,32 --repeats 5
-
-# 聚合 CSV 和 05 图；plot 阶段不需要 disk-root
-python experiments/05_disk_system_fair/run_disk_suite.py \
-  --phase plot --run-id "$RUN_ID" --layers all --datasets agnews,gist,dbpedia --out-root "$OUT_ROOT"
-```
-
-只复现某一层或某个数据集时，用 `--layers 05a` / `--layers 05b,05c` 和
-`--datasets gist` 缩小范围。要强制复现独占 NVMe 数据，可设置
-`DISK_ROOT=/mnt/exclusive_nvme/qgraph DISK_PROFILE=nvme`；在当前 HDD/RAID
-开发环境中保留 `DISK_PROFILE=auto` 即可。
-
-## 7. 结果与产物（Outputs）
-
-- 正式 disk 结果：`results/disk_environment/{01_quantizer_fair,02_diskann_fair,03_system_fair}/<dataset>/`
-- 05 正式运行中间产物：`results/disk_environment/.formal_runs/runs/<run-id>/`
-- 旧 05 原始运行归档：`results/disk_environment/archive/05_disk_system_fair_legacy/`
-- 诊断和消融结果：`results/disk_environment/diagnostics/`
-- 论文汇总表：`results/disk_environment/paper_tables/`
-- 运行日志归档：`logs/disk_environment/`
-
-注意：如果顶层 `results/` 下仍出现 `nobody:nogroup` 拥有的旧 query-codec 诊断目录，
-先修正所有权后再移入 `results/disk_environment/diagnostics/`。
-
-## 8. 引用与许可（Citation & License）
-
-- 第三方组件与许可见 `NOTICE.md`；基线锁定版本见 `docs/plans/BASELINE_EXPERIMENT_PLAN_MS_V2.md`；
-- 仓库采用 Apache-2.0（见 `LICENSE`）。论文引用信息待定稿后补充。
+脚本职责见 [scripts/README.md](scripts/README.md)，论文图表的命令、run-id 与数据对应见 [paper/FIGURE_PROVENANCE.md](paper/FIGURE_PROVENANCE.md)。

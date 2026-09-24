@@ -1,0 +1,98 @@
+{
+  "schema_version": 2,
+  "system03_protocol": "03_official_beam4_single_rss4g_v1",
+  "note": "Separate fixed-03 builds; per-index validation and per-point RSS/reference admission still required; registry ready is not a performance result.",
+  "ports": {
+    "05c:Ours-Disk": {
+      "status": "ready",
+      "command": [
+        "/home/kai3/coco/quantization_graph/build/03_fixed_native_20260924/ours/release/qgraph05_shared_graph_port"
+      ],
+      "source_suite": "03_system_fair",
+      "source_kernel": "ExRaBitQ4 symmetric Vamana; resident DB1 or budget-selected PCA+1bit M32 (no residual)",
+      "port_kind": "native_disk_system",
+      "implementation_fingerprint": "05c-ours-pca1bit-hot-dynamic-v5",
+      "binary_sha256": "ef08b6ff6b17c7cf4bf5ac1f6e34cfc5eee344d498233ad7d2e4702d61f867d0",
+      "source_commit": "7b8e792ecdf2965903bc55b4d892f76cac825306+local",
+      "source_snapshot_path": "/home/kai3/coco/quantization_graph/build/03_fixed_native_20260924/source_snapshot.json",
+      "source_snapshot_sha256": "e698cee23a98d82427aa04b103ce8ab74011b9528ce053686559fbb8e8b2de12"
+    },
+    "05c:DiskANN-PQ-Disk": {
+      "status": "ready",
+      "command": [
+        "/home/kai3/coco/quantization_graph/build/03_fixed_native_20260924/diskann/release/qgraph05_diskann_port"
+      ],
+      "source_suite": "03_system_fair",
+      "source_kernel": "official diskann-disk PQ search",
+      "port_kind": "official_native_disk",
+      "implementation_fingerprint": "05c-official-diskann-pq-release-io-uring-v4",
+      "binary_sha256": "149a0076fedddbf2f39feb72e6578d4d10729b6cde416f40f070b3a0d677af7b",
+      "source_commit": "3218478b5f7d1721840c29309e22d9fd74b1b4bc",
+      "source_snapshot_path": "/home/kai3/coco/quantization_graph/build/03_fixed_native_20260924/source_snapshot.json",
+      "source_snapshot_sha256": "e698cee23a98d82427aa04b103ce8ab74011b9528ce053686559fbb8e8b2de12"
+    },
+    "05c:Starling-Disk": {
+      "status": "ready",
+      "command": [
+        "/home/kai3/coco/quantization_graph/build/03_fixed_official_20260924/starling/tests/search_disk_index"
+      ],
+      "source_suite": "official_disk_baselines",
+      "source_kernel": "official Starling PQ page search with navigation graph",
+      "port_kind": "official_native_disk",
+      "implementation_fingerprint": "starling-17dc3e8a011533a62374445f53963e951b72883a-fixed03-independent-warmup-v1",
+      "binary_sha256": "4024b33d0f41d0dba21e070b058cf975bf373ed9cc0ac8937b86483aa3e1b795",
+      "artifact_bridge": "official_cli_system03_v1",
+      "official_build_root": "/home/kai3/coco/quantization_graph/build/03_fixed_official_20260924",
+      "source_snapshot": {
+        "commit": "17dc3e8a011533a62374445f53963e951b72883a",
+        "path": "baselines/starling",
+        "url": "https://github.com/zilliztech/starling.git",
+        "submodules": {
+          "graph_partition": "ee8c04d2dbca4306636578f37992ee5c4c8f429f",
+          "graph_partition/oneTBB": "c8504c4ec866eb474d323e9df326778f30f9850d"
+        },
+        "patches": [
+          {
+            "path": "baselines/patches/starling-storage-and-query-evidence.patch",
+            "sha256": "6b249f62830d24729a93744f500bc63993c72c8a701944d2e34a53ab2f841bd3",
+            "purpose": "storage compatibility and post-timing evidence; optional disjoint-query warmup outside timing, official search calls unchanged"
+          }
+        ]
+      },
+      "source_commit": "17dc3e8a011533a62374445f53963e951b72883a"
+    },
+    "05c:AiSAQ-Disk": {
+      "status": "ready",
+      "command": [
+        "/home/kai3/coco/quantization_graph/build/03_fixed_official_20260924/aisaq/apps/search_disk_index"
+      ],
+      "source_suite": "official_disk_baselines",
+      "source_kernel": "official AiSAQ PQFlashIndex with use_aisaq",
+      "port_kind": "official_native_disk",
+      "implementation_fingerprint": "aisaq-f0a48e984c685bd498e3c4f88386b47e0e4ab1ac-storage-sysfs-v1-fixed03-independent-warmup-v1",
+      "binary_sha256": "f42dc9e4d1d19b1ba358f6ff429eeb31fa56a126b0aebb806824b28c88c6460b",
+      "artifact_bridge": "official_cli_system03_v1",
+      "official_build_root": "/home/kai3/coco/quantization_graph/build/03_fixed_official_20260924",
+      "source_snapshot": {
+        "commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac",
+        "path": "baselines/aisaq",
+        "url": "https://github.com/kioxia-jp/aisaq-diskann.git",
+        "branch": "aisaq_release",
+        "patches": [
+          {
+            "path": "baselines/patches/aisaq-storage-and-query-evidence.patch",
+            "sha256": "89cbde50ec9696eb4a0709392e5a779e8a4503f52c8af931e63283d383fe9661",
+            "purpose": "storage compatibility and post-timing evidence; optional disjoint-query warmup outside timing, official search calls unchanged"
+          }
+        ]
+      },
+      "source_commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac"
+    }
+  },
+  "primary_03_methods": [
+    "Ours-Disk",
+    "DiskANN-PQ-Disk",
+    "Starling-Disk",
+    "AiSAQ-Disk"
+  ]
+}

@@ -1,0 +1,1 @@
+<p>05B 保留 PQ/SQ/SAQ 共用 float32 baseline Vamana 图、Ours 使用 ExRaBitQ4 对称距离构建自有图的安排。Ours 内部消融固定自己的图、输入、物理布局和可控制的查询条件；跨方法差异包含构图与搜索差异。既有 full4-resident/no-gate 分支还可能改变 query codec，必须逐项披露，不能只按名称把差值归因于 gate。当前 locality 读取器要求 coalescing+reuse，不能直接用它跑关闭二者的四级消融；完整四级机制实验先固定支持各状态的普通布局，locality 另作明确的布局实验。</p>

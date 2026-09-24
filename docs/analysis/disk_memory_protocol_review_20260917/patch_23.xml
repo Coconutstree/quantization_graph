@@ -1,0 +1,1 @@
+<p>历史 R16 发现旧 sift10m 为 BIGANN/SIFT1B 别名，随后按 UCI 数据的固定区间重建。2026-09-17 本次读取 data/sift10m/dataset_manifest.json，并核对到 10M×128 的 base、10,000 条 query 和每 query 1000 个 GT ID 的文件；manifest 声明独立划分与 squared L2 真值。此次未重算全量哈希、GT，也未核验其全部 SAQ/图索引产物，故不再沿用“流水线正在后台运行”作为当前状态，亦不自动升格为 formal。</p>

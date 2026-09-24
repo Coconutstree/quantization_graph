@@ -82,7 +82,7 @@ def _current_rid() -> str:
 
 def _ours_local_rows() -> pd.DataFrame:
     p = Path(
-        f"results/disk_environment/.formal_runs/runs/{_current_rid()}/05C_disk_system_fair/"
+        f"results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/{_current_rid()}/05C_disk_system_fair/"
         "agnews/artifacts/test/Ours-Disk__hybrid_disk__B2__standard__w32__r0.json"
     )
     if not p.exists():
@@ -121,11 +121,11 @@ def _ours_local_rows() -> pd.DataFrame:
 
 
 def read_rows() -> pd.DataFrame:
-    base = Path("results/disk_environment/03_system_fair/agnews/csv")
+    base = Path("results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv")
     new = pd.read_csv(base / "formal_test_rows.csv")
     new = new[new["method"].isin(["OG-LVQ-DiskPort", "Glass-NSG-DiskPort"])].copy()
     fix_agg = Path(
-        "results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/"
+        "results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/"
         "05C_disk_system_fair/agnews/aggregate/formal_test_rows.csv"
     )
     sym = pd.read_csv(fix_agg)
@@ -168,8 +168,8 @@ def read_rows() -> pd.DataFrame:
 def read_build_stats() -> pd.DataFrame:
     rows = []
     roots = [
-        Path("results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957"),
-        Path(f"results/disk_environment/.formal_runs/runs/{_current_rid()}"),
+        Path("results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957"),
+        Path(f"results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/{_current_rid()}"),
     ]
     for root in roots:
         specs = [
@@ -197,7 +197,7 @@ def read_build_stats() -> pd.DataFrame:
 
 def read_shared_graph_meta() -> dict[str, str]:
     path = Path(
-        "results/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/"
+        "results/archive/legacy_layout_20260918/disk_environment/dataset_artifacts/agnews/indexes/02_diskann_fair/"
         "shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.json"
     )
     meta: dict[str, str] = {}
@@ -457,7 +457,7 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 
 ### Figure 2：05B shared graph Recall-QPS（02 层）
 
-![Figure 2. AGNews 05B Recall-QPS]({"@./" if feishu else ""}results/disk_environment/02_diskann_fair/agnews/figures_w32/disk05b_shared_graph_recall_qps.png)
+![Figure 2. AGNews 05B Recall-QPS]({"@./" if feishu else ""}results/archive/legacy_layout_20260918/disk_environment/02_diskann_fair/agnews/figures_w32/disk05b_shared_graph_recall_qps.png)
 
 图读法：02 层共享图方法（PQ-DiskANN / SQ-DiskANN / SAQ-DiskANN / Ours-Disk）的 Recall@10–QPS。
 
@@ -507,9 +507,9 @@ Ours 磁盘查询使用的 native 图在 02 raw 中的拆分为 graph build 6.77
 
 ## Source Data
 
-- `results/disk_environment/03_system_fair/agnews/csv/formal_test_rows_formal_diskenv_20260826_114755_bc_agnews.csv`
-- `results/disk_environment/03_system_fair/agnews/csv/formal_test_rows.csv`
-- `results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/`
+- `results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv/formal_test_rows_formal_diskenv_20260826_114755_bc_agnews.csv`
+- `results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews/csv/formal_test_rows.csv`
+- `results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/`
 """
 
     (out / "disk_w32_agnews_analysis_report.md").write_text(make_report(feishu=False))

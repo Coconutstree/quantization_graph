@@ -1,0 +1,9 @@
+<pre lang="text"><code>method, protocol_id, experiment_group, dataset, input_hash, index_hash,
+config_id, search_param, search_width, beam_width, workers, repeat_id, run_id,
+recall, qps, latency_mean_us, latency_p50_us, latency_p95_us, latency_p99_us,
+index_size_bytes, memory_limit_bytes, memory_limit_scope, memory_enforcement,
+cgroup_memory_peak_bytes, process_peak_rss_bytes, sampled_vm_peak_bytes,
+resident_index_bytes, worker_scratch_bytes, cache_bytes, query_buffer_bytes,
+swap_peak_bytes, memory_events, elapsed_scope, io_backend, direct_io, page_size,
+io_requests_per_query, bytes_read_per_query, metric_availability,
+run_status, failure_reason, formal_ready</code></pre><p>以上为新版输出契约设计，尚需接入。分类开销用于解释总量，RSS 与 cgroup peak 是不同观测值，不能相加或互相替代；未测得字段为 null。预算失败行保留运行状态和证据，不填写伪造的 QPS=0 或 recall=0。</p>

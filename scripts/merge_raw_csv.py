@@ -10,7 +10,7 @@ from pathlib import Path
 
 if "systemfair" not in sys.modules:
     _pkg = types.ModuleType("systemfair")
-    _pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "experiments" / "03_system_fair")]
+    _pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "legacy" / "03_system_fair")]
     sys.modules["systemfair"] = _pkg
 
 from systemfair.pareto_builder import merge_raw  # noqa: E402
@@ -19,7 +19,7 @@ from systemfair.pareto_builder import merge_raw  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results/disk_environment")
+    ap.add_argument("--out-root", default="results/archive/legacy_layout_20260918/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
     base = Path(args.out_root) / args.suite / args.dataset / "csv"

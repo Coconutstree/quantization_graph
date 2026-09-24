@@ -154,4 +154,4 @@ fi
 
 step "ALL DONE (setup_deps)"
 echo "下一步：bash scripts/build_formal_local.sh"
-echo "05 磁盘实验前再运行：python experiments/05_disk_system_fair/run_disk_suite.py --phase doctor --layer all --disk-root <NVME>"
+echo "05 磁盘实验前再运行：python scripts/run_disk_experiments.py --phase doctor --layers 01,02,03 --disk-root <NVME>"

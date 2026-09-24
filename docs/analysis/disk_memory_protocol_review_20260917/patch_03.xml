@@ -1,0 +1,1 @@
+<p>正式 input manifest 记录 N/D/source_metric/runner_metric/k、输入类型、归一化验证、base/query/GT 路径与 SHA-256。当前统一任务按 squared L2 评估；DBpedia、Deep1B、MSMARCO 若利用 L2 与 cosine/IP 排序等价性，必须先核验所需归一化条件和真值，不能仅凭数据集名称判断。Cohere10M 的原 IP 真值不能直接交给 L2-only 路径，也不能通过单独归一化输入后继续沿用原真值。原生 baseline 是否支持某度量，以固定版本和实际配置为准。</p>

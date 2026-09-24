@@ -1,0 +1,28 @@
+Disk experiments 01/02/03 doctor
+[PASS] tool:cmake: /home/kai3/miniconda3/bin/cmake
+[PASS] tool:ninja: /usr/local/bin/ninja
+[PASS] tool:c++: /usr/bin/c++
+[PASS] tool:fio: /home/kai3/coco/quantization_graph/baselines/tools/fio-package/root/usr/bin/fio
+[PASS] dependency:libaio: /usr/include/libaio.h or baselines/deps/local/usr/include/libaio.h
+[PASS] source:Faiss: /home/kai3/coco/quantization_graph/baselines/faiss/upstream
+[PASS] source:RaBitQ: /home/kai3/coco/quantization_graph/Ours/core/hnswlib/space_rabitq.h
+[PASS] source:SAQ: /home/kai3/coco/quantization_graph/baselines/saq
+[PASS] source:DiskANN: /home/kai3/coco/quantization_graph/baselines/diskann
+[PASS] source:SymphonyQG: /home/kai3/coco/quantization_graph/baselines/symphonyqg
+[PASS] source:SVS: /home/kai3/coco/quantization_graph/baselines/svs
+[PASS] source:Glass: /home/kai3/coco/quantization_graph/baselines/pyglass
+[PASS] source:glog: /home/kai3/coco/quantization_graph/baselines/deps/glog
+[PASS] dependency-lock: /home/kai3/coco/quantization_graph/baselines/DEPENDENCY_LOCK.json
+[PASS] repository-local-symlinks: all baseline symlinks resolve inside quantization_graph
+[PASS] repository-local-saq-runtime: /home/kai3/coco/quantization_graph/baselines/saq/bin/test_fixed_candidates; RUNPATH=/home/kai3/coco/quantization_graph/baselines/deps/local/lib
+[PASS] data:gist:base: /home/kai3/coco/quantization_graph/data/gist/gist_base.fvecs (3844000000 bytes)
+[PASS] data:gist:query: /home/kai3/coco/quantization_graph/data/gist/gist_query.fvecs (3844000 bytes)
+[PASS] data:gist:gt: /home/kai3/coco/quantization_graph/data/gist/gist_groundtruth.ivecs (404000 bytes)
+[PASS] metric:gist: source=squared_l2, runner=squared_l2, unit_normalized=False
+[PASS] dram-budget:gist: resident-code lower bounds fit B=2 GiB
+[PASS] split:gist: /home/kai3/coco/quantization_graph/artifacts/query_splits/gist/shared: validation=200, test=800
+[PASS] shared-graph:gist: /home/kai3/coco/quantization_graph/artifacts/graphs/gist/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin
+[PASS] ours-native-graph:gist: /home/kai3/coco/quantization_graph/artifacts/graphs/gist/Ours/gist_Ours_R64_Lbuild400.graph.bin
+[PASS] native-ports: all required ports are hash-pinned
+[PASS] formal-disk: profile=hdd_raid, root=/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root, rotational=True, odirect=True, free_gib=4297.0
+summary: 26 passed, 0 failed

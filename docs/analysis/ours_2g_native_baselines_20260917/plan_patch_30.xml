@@ -1,0 +1,1 @@
+<p>主组为 Ours 2 GiB、baseline 各自配置、32 workers；补充 budget_scan 仅改变 Ours 的显式限额；同一方法在调参与测试之间保持配置一致。</p>

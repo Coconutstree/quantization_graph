@@ -2,11 +2,12 @@ name: quantization-graph
 channels:
   - conda-forge
 dependencies:
-  - python=3.11
+  - python=3.13.12
   - cmake>=3.20
-  - gxx_linux-64        # g++ for C++17/OpenMP builds
-  - rust                # Rust toolchain for experiments/02_diskann_fair
+  - gxx_linux-64=11        # g++ for C++17/OpenMP builds
+  - rust                # Rust toolchain for src/graph_core
+  - ninja
   - openmp
   - pip
   - pip:
-      - -r requirements.txt
+      - -r requirements-tested.txt

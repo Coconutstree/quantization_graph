@@ -1,0 +1,13 @@
+{
+  "w32_as4g": {
+    "max_distance_error": 3.693370902446702e-07,
+    "valid_ids": true,
+    "unique_top10": true
+  },
+  "w16_as2g": {
+    "max_distance_error": 3.693370902446702e-07,
+    "valid_ids": true,
+    "unique_top10": true
+  },
+  "ordered_ids_equal": true
+}

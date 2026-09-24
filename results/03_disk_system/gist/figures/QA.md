@@ -1,0 +1,1 @@
+Figure regenerated from the current GIST 03 pair reference rows. Ours-Disk and DiskANN-PQ-Disk replaced the previous rows; Glass-NSG-DiskPort and SymphonyQG-DiskPort were preserved. External parity was stopped by user request, so this is a diagnostic figure and not a formal admission.

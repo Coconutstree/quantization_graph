@@ -1,0 +1,59 @@
+{
+  "protocol": "fixed_query_warmup_v1",
+  "warmup_queries": 100,
+  "workers": 32,
+  "cache_mode": "c0",
+  "query_order_sha256": "e8d41290fb3fbc73ee4d94966388ecfecac9c9de4b6fc3834c4ac7d37671e0f6",
+  "cross_query_application_cache": false,
+  "device_cache_controlled": false,
+  "cold_storage_claim": false,
+  "index_snapshot": {
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_query.fvecs": {
+      "size": 3280000,
+      "mtime_ns": 1788829073143497845,
+      "inode": 38656408471
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/_query_splits/test_gt.ivecs": {
+      "size": 323200,
+      "mtime_ns": 1788829073143497845,
+      "inode": 38656445300
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/05_disk_system_fair/single_test_w32_20260911/agnews/order.u32": {
+      "size": 3200,
+      "mtime_ns": 1789118220338628307,
+      "inode": 15033313206
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/disk_03_graph_build_reuse_20260909_agnews/manifests/inputs/05c_agnews.json": {
+      "size": 905,
+      "mtime_ns": 1788931833814668464,
+      "inode": 15032840601
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/OG-LVQ-DiskPort/hybrid_disk/graph.pages": {
+      "size": 210096128,
+      "mtime_ns": 1788931698361752333,
+      "inode": 19540186426
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/OG-LVQ-DiskPort/hybrid_disk/lvq4.pages": {
+      "size": 450199552,
+      "mtime_ns": 1788931699057736481,
+      "inode": 19540186428
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/OG-LVQ-DiskPort/hybrid_disk/centroids.f32": {
+      "size": 4112,
+      "mtime_ns": 1788931700477704142,
+      "inode": 19540314542
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/OG-LVQ-DiskPort/hybrid_disk/index.meta": {
+      "size": 182,
+      "mtime_ns": 1788931700481704051,
+      "inode": 19540188611
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/agnews/OG-LVQ-DiskPort/hybrid_disk/reuse_audit.json": {
+      "size": 2396,
+      "mtime_ns": 1788931700489703869,
+      "inode": 19540314544
+    }
+  },
+  "index_unchanged": true,
+  "other_native_searches_at_end": []
+}

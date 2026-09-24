@@ -1,0 +1,38 @@
+<title>Glass-NSG 磁盘适配逐步拆解：稀疏导航图、SQ4U 与双端整数距离</title>
+<p>第一部分按 SAQ 解读的顺序介绍论文原方法：全流程与符号 → 分步训练/编码 → 索引存储与查询 → 误差与边界。第二部分简述我们的磁盘实验改动和实际执行顺序。2026-09-15 调整结构；实验实现以此前核对的代码快照为依据，本次不运行新实验。</p>
+<h1>第一部分：论文中的 NSG 方法</h1>
+<h2>一、先看全流程与符号</h2>
+<p>NSG（Navigating Spreading-out Graph）的论文主线是构建一个稀疏、可达且便于贪心导航的图：先用近似 kNN 图发现候选，再以几何规则选边，最后修复入口到全图的可达性。Glass 是实现库，SQ4U 是我们选用的量化后端；两者的具体组合放在第二部分，不当作 NSG 原论文的编码方法。</p>
+<table><thead><tr><th><p>符号</p></th><th><p>类型 / 含义</p></th></tr></thead><tbody><tr><td><p>xᵤ,q∈Rᴰ</p></td><td><p>节点向量与 query</p></td></tr><tr><td><p>Gknn,GNSG</p></td><td><p>初始近似 kNN 图与最终 NSG</p></td></tr><tr><td><p>s；R；L</p></td><td><p>导航入口；目标出度预算；候选池宽度</p></td></tr><tr><td><p>Cᵤ,Nᵤ</p></td><td><p>u 的候选邻居集合与已选邻居集合</p></td></tr><tr><td><p>δ(u,v)=‖xᵤ−xᵥ‖</p></td><td><p>原空间欧氏距离</p></td></tr></tbody></table>
+<img path="@./docs/analysis/disk_method_series_20260914/figures/05_glass_nsg_flow.png" caption="论文方法：候选发现、几何选边与可达性修复" width="1400"/>
+<h2>二、步骤 1：建立初始近似 kNN 图</h2>
+<p>输入是原始向量集合。首先用现成近似近邻方法建立 kNN 图，供后续候选发现。这里 kNN 图的作用是提供足够丰富的局部连接；最终 NSG 并不简单照抄全部 kNN 边，而是重新筛选连接，兼顾搜索路径与索引大小。</p>
+<p>与 SAQ 的训练/编码步骤对应，NSG 这一阶段学习的是图连接关系。论文没有要求减均值后量化、PCA 分段或为每点生成低比特码；原向量用于后续距离计算。</p>
+<h2>三、步骤 2：选一个导航入口</h2>
+<p><latex>c=\frac1N\sum_ux_u,\qquad s\approx\arg\min_u\|x_u-c\|_2.</latex></p>
+<p>计算数据中心 c，在初始图上以 c 为 query 搜索，返回接近中心的数据库节点作为 navigating node。入口必须是图中的节点，不能直接把均值向量当作一个天然存在的节点。这里 c 只用于找入口，不是量化参考中心。</p>
+<h2>四、步骤 3：为每个节点收集候选邻居</h2>
+<p>对每个节点 u，以 xᵤ 为 query、从导航入口 s 出发在初始图上搜索。收集搜索期间访问的节点，并与 u 的原 kNN 邻居合并，构成 Cᵤ。这样候选不仅包含局部近邻，还包含从入口接近 u 的路径上的点，有机会保留有用的导航连接。</p>
+<p>输出是每个节点的候选集合及距离。候选搜索仍是有限宽近似过程，因此它是对理论图结构的实用近似，不是枚举全部点对。</p>
+<h2>五、步骤 4：用几何剪枝保留方向差异</h2>
+<p>按距 u 从近到远处理候选。先保留近邻；当更远候选 v 已被某个已选邻居 w 覆盖时，不再加 u→v。MRNG 启发的典型距离比较可以写成：</p>
+<p><latex>\exists w\in N_u:\quad\delta(w,v)&lt;\delta(u,v),\qquad\delta(u,w)\le\delta(u,v).</latex></p>
+<p>第二个条件由处理顺序提供；第一个条件表示已有 w 更靠近 v。直观上，保留到 w 的边可能已经给出了通往 v 所在方向的中继，所以不必把同一方向的近点全部直连。实际构图还受候选集合、出度预算和并列距离规则约束。</p>
+<p>论文先分析具备单调搜索性质的 MRNG，再构造更便宜的近似 NSG。不要把理论 MRNG 的性质不加条件地转述成任何 NSG 实例必然无漏检。</p>
+<h2>六、步骤 5：修复从入口出发的可达性</h2>
+<p>局部选边后，不能仅凭每个节点都有邻居就认为从 s 可以到达全图。论文从 s 做深度优先遍历，检查未覆盖的节点，并添加连接以扩展覆盖范围，继续直到所有节点可从入口到达。这里解决的是有向图的入口可达性。</p>
+<p>可达性是搜索的必要结构基础，但查询只展开有限节点时，仍可能错过近邻。它不是“扩大搜索预算以前，就能精确访问所有需要的点”的承诺。</p>
+<h2>七、步骤 6：索引存储与查询</h2>
+<table><thead><tr><th><p>对象</p></th><th><p>论文中的用途</p></th></tr></thead><tbody><tr><td><p>原向量</p></td><td><p>计算 query 与候选的真实距离</p></td></tr><tr><td><p>稀疏邻接表</p></td><td><p>决定图上可以走向哪些节点</p></td></tr><tr><td><p>导航入口</p></td><td><p>每次搜索的起点</p></td></tr><tr><td><p>有限宽候选池与访问标记</p></td><td><p>控制扩展顺序与工作量</p></td></tr></tbody></table>
+<p><latex>d^2(q,x_v)=\sum_{j=1}^{D}(q_j-x_{v,j})^2.</latex></p>
+<p>查询从入口开始，按距离维护最多 L 个候选，反复展开最近的未处理节点，评估其邻居并更新候选池。没有可继续处理的候选后，从保留的近候选中选 top-k。增大 L 通常增加访问范围与距离计算量。使用平方 L2 排序与欧氏距离一致。</p>
+<h2>八、从误差看方法边界</h2>
+<p>按原始浮点距离查询时，没有本文 SQ4U 所带来的量化误差；主要近似来自图构建和有限预算遍历。MRNG 理论、NSG 实际图、实现库的优化与后续量化版本应分别判断。稀疏图减少邻居评估工作，但过少连接也可能延长路径；内存优势不能自动外推为磁盘 I/O 优势。</p>
+<p>原论文，NSG 构图与 Algorithm 2：<a href="https://arxiv.org/abs/1707.00143v9">Fast Approximate Nearest Neighbor Search with the Navigating Spreading-out Graph</a></p>
+<h1>第二部分：我们的磁盘实验改了什么</h1>
+<p>我们采用 Glass 的 NSG_R64_L400_SQ4U。图由官方 builder 构建，距离后端选用共享标量范围的 SQ4U；数据库和 query 都被量化为 4 bit，再调用 u4×u4 整数 L2 内核。这是所选实现配置，不是 NSG 原论文的量化步骤。</p>
+<p><latex>k_j(x)=\operatorname{round}\!\left(15\operatorname{clip}\left(\frac{x_j-a}{b-a},0,1\right)\right),\quad s(q,x)=\sum_j[k_j(q)-k_j(x)]^2.</latex></p>
+<p>非退化范围下，共享步长 Δ=(b−a)/15；Δ²s 是双端重建空间的平方 L2。min/dif 来自共享校准，保留官方截断和对齐规则。图行与码行分别写入 graph.pages、sq4u_codes.pages，用 O_DIRECT/libaio 按 4 KiB 读取。</p>
+<img src="W22lbEFLGoNOOOx58qbc9wHBnjg" caption="我们的磁盘实验：存储边界与读取顺序" width="1400"/>
+<p>实际顺序：编码 query → 读取入口码并评分 → 选 u 读取图行 → 对尚未 seen 的邻居读取 SQ4U 码并评分入池 → 按整数分数返回 top-10，无 FP32 最终重排。查询级页缓存复用图页/码页；控制流为本地磁盘循环。误差由图搜索与双端量化共同决定。</p>
+<p>实现定位：experiments/05_disk_system_fair/native/glass_disk_port.cpp；baselines/pyglass/glass/quant/sq4u_quant.hpp、calibrator.hpp。</p>

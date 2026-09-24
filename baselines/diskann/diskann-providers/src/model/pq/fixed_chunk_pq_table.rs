@@ -635,17 +635,11 @@ fn aggregate_coords(
         .chunks_mut(num_pq_chunks)
         .enumerate()
         .for_each(|(index, chunk)| {
-            let start = ids[index] as usize * num_pq_chunks;
-            let end = start + num_pq_chunks;
-            if end <= all_coords.len() {
-                let id_compressed_pivot = &all_coords[start..end];
-                let temp_slice = unsafe {
-                    std::slice::from_raw_parts(id_compressed_pivot.as_ptr(), num_pq_chunks)
-                };
-                chunk.copy_from_slice(temp_slice);
-            } else {
-                chunk.fill(0);
-            }
+            let id_compressed_pivot = &all_coords[(ids[index] as usize * num_pq_chunks)
+                ..(ids[index] as usize * num_pq_chunks + num_pq_chunks)];
+            let temp_slice =
+                unsafe { std::slice::from_raw_parts(id_compressed_pivot.as_ptr(), num_pq_chunks) };
+            chunk.copy_from_slice(temp_slice);
         });
 
     Ok(())
@@ -671,7 +665,6 @@ pub fn compute_pq_distance(
         query_centroid_l2_distance,
         pq_distance_scratch,
     )?;
-
 
     Ok(())
 }

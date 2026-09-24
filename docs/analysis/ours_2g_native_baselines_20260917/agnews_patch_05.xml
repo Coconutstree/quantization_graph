@@ -1,0 +1,1 @@
+<p>上一轮核验（2026-09-17）：资源与配置检查 14 项通过、真实 cgroup OOM 检查 1 项跳过；Glass/Symphony 极小查询 2 项通过。另发现 Ours/共享图 PQ 与 DiskANN 的 Rust 查询入口仍把 Recall 评估纳入批次 QPS 时间，已移到搜索批次结束后，两个 release 二进制编译通过。三条 Rust 路径在 512 向量、64 查询、32 workers、打乱查询顺序的诊断中核对 Recall 通过；DiskANN 因沙箱禁止 io_uring，改在宿主环境验证通过。以上只证明对应检查通过，不是原生算法等价、Ours 2 GiB 合规或全量性能验收。</p>

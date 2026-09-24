@@ -1,0 +1,87 @@
+diff --git a/tests/search_disk_index.cpp b/tests/search_disk_index.cpp
+index 03f62aa..c636f03 100644
+--- a/tests/search_disk_index.cpp
++++ b/tests/search_disk_index.cpp
+@@ -1,3 +1,4 @@
++#include <cstdlib>
+ // Copyright (c) Microsoft Corporation. All rights reserved.
+ // Licensed under the MIT license.
+ 
+@@ -238,6 +239,45 @@ int search_disk_index(
+     auto stats = new diskann::QueryStats[query_num];
+ 
+     std::vector<uint64_t> query_result_ids_64(recall_at * query_num);
++    // Optional common-protocol warmup. Keep official search calls unchanged and
++    // exclude these queries and their counters from the timed measurement.
++    uint64_t protocol_warmup = 0;
++    if (const char* value = std::getenv("QG05_WARMUP_QUERIES")) {
++      if (std::getenv("QG03_WARMUP_BIN")) throw std::runtime_error("conflicting warmup protocols");
++      protocol_warmup = std::stoull(value);
++      if (protocol_warmup > query_num || !use_page_search || use_sq)
++        throw std::runtime_error("protocol warmup requires FP32 page search and count <= query count");
++      std::vector<uint64_t> warm_ids(protocol_warmup * recall_at);
++      std::vector<float> warm_dists(protocol_warmup * recall_at);
++#pragma omp parallel for schedule(dynamic, 1)
++      for (int64_t i = 0; i < static_cast<int64_t>(protocol_warmup); ++i) {
++        _pFlashIndex->page_search(
++            query + i * query_aligned_dim, recall_at, mem_L, L,
++            warm_ids.data() + i * recall_at, warm_dists.data() + i * recall_at,
++            optimized_beamwidth, search_io_limit, use_reorder_data, use_ratio);
++      }
++    }
++    // 03 protocol: external validation queries, never a measured-query prefix.
++    if (const char* warm_file = std::getenv("QG03_WARMUP_BIN")) {
++      T* independent_warm = nullptr;
++      size_t independent_n = 0, independent_d = 0, independent_aligned = 0;
++      diskann::load_aligned_bin<T>(warm_file, independent_warm, independent_n,
++                                  independent_d, independent_aligned);
++      const char* count_text = std::getenv("QG03_WARMUP_COUNT");
++      const size_t independent_count = count_text ? std::stoull(count_text) : 100;
++      if (!independent_count || independent_count > independent_n || independent_d != query_dim)
++        throw std::runtime_error("independent warmup dimensions/count mismatch");
++      std::vector<uint64_t> independent_ids(independent_count * recall_at);
++      std::vector<float> independent_dists(independent_count * recall_at);
++#pragma omp parallel for schedule(dynamic, 1)
++      for (int64_t i = 0; i < static_cast<int64_t>(independent_count); ++i) {
++        _pFlashIndex->page_search(
++            independent_warm + i * independent_aligned, recall_at, mem_L, L,
++            independent_ids.data() + i * recall_at, independent_dists.data() + i * recall_at,
++            optimized_beamwidth, search_io_limit, use_reorder_data, use_ratio);
++      }
++      diskann::aligned_free(independent_warm);
++    }
+     auto                  s = std::chrono::high_resolution_clock::now();
+ 
+     // Using branching outside the for loop instead of inside and 
+@@ -318,7 +358,30 @@ int search_disk_index(
+       diskann::cout << std::setw(16) << recall << std::endl;
+     } else
+       diskann::cout << std::endl;
+-    delete[] stats;
++    // Optional evidence export, strictly after the timed search loop.
++        if (const char* trace_prefix = std::getenv("QG05_OFFICIAL_TRACE_PREFIX")) {
++            std::ofstream trace(std::string(trace_prefix) + "_" + std::to_string(L) + ".jsonl");
++            trace << std::setprecision(17);
++            for (size_t qi = 0; qi < query_num; ++qi) {
++                const auto& qs = stats[qi];
++                trace << "{\"query_id\":" << qi << ",\"search_width\":" << L
++                      << ",\"warmup_queries\":" << protocol_warmup
++                      << ",\"search_wall_seconds\":" << diff.count()
++                      << ",\"latency_us\":" << qs.total_us
++                      << ",\"io_wait_us\":" << qs.io_us
++                      << ",\"io_requests\":" << qs.n_ios
++                      << ",\"native_n_4k\":" << qs.n_4k
++                      << ",\"native_n_8k\":" << qs.n_8k
++                      << ",\"native_n_12k\":" << qs.n_12k
++                      << ",\"native_read_size\":" << qs.read_size
++                      << ",\"distance_evaluations\":" << qs.n_cmps
++                      << ",\"search_hops\":" << qs.n_hops
++                      << ",\"cache_hits\":" << qs.n_cache_hits << "}\n";
++            }
++            trace.flush();
++            if (!trace) throw std::runtime_error("failed to write per-query search evidence");
++        }
++        delete[] stats;
+   }
+ 
+   diskann::cout << "Done searching. Now saving results " << std::endl;

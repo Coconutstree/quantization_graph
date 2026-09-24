@@ -1,0 +1,1 @@
+<p>历史索引口径：4-bit/8-bit payload 是逻辑字节数；实际页文件还包含对齐和空槽。裸 1-bit 约 93.9 MiB，裸 4-bit 约 375.7 MiB。旧 resident_bytes=1,019,435,246 混入 full4-resident 消融的最大常驻估计，不是当前 DB1 配置的独立实测内存，也不代表新版 locality 布局。不得用 2 GiB 减去该值推算可用缓存。新版同时保存进程生命周期峰值 RSS、cgroup 总峰值、事件与分类说明。</p>

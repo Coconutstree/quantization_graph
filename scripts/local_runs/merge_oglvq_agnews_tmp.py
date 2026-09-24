@@ -7,7 +7,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 RUN_ROOT = (
     REPO
-    / "results/disk_environment/.formal_runs/runs/formal_diskenv_20260826_114755_bc_agnews"
+    / "results/archive/legacy_layout_20260918/disk_environment/.formal_runs/runs/formal_diskenv_20260826_114755_bc_agnews"
     / "05C_disk_system_fair/agnews/artifacts/test"
 )
 BASE = "OG-LVQ-DiskPort__hybrid_disk__B2__standard__w32__r0"
@@ -50,7 +50,7 @@ def main() -> int:
             if data and not data.endswith(b"\n"):
                 out.write(b"\n")
 
-    native = REPO / "build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port"
+    native = REPO / "build/disk/native/qgraph05_og_lvq_disk_port"
     final_doc["summary_rows"] = rows
     final_doc["query_trace_path"] = str(final_trace.resolve())
     final_doc["query_trace_sha256"] = sha256(final_trace)

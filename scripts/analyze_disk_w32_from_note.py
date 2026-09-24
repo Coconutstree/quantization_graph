@@ -912,13 +912,13 @@ def main() -> int:
         "--run-root",
         type=Path,
         default=Path(
-            "results/disk_environment/.test_runs/gist/gist_test_20260829_204245/runs/gist_test_20260829_204245"
+            "results/archive/legacy_layout_20260918/disk_environment/.test_runs/gist/gist_test_20260829_204245/runs/gist_test_20260829_204245"
         ),
     )
     parser.add_argument(
         "--round-dir",
         type=Path,
-        default=Path("results/disk_environment/.test_runs/gist/gist_test_20260829_204245/rounds/round_w32"),
+        default=Path("results/archive/legacy_layout_20260918/disk_environment/.test_runs/gist/gist_test_20260829_204245/rounds/round_w32"),
     )
     parser.add_argument("--out-dir", type=Path, default=Path("docs/analysis"))
     args = parser.parse_args()
@@ -926,7 +926,7 @@ def main() -> int:
     configure_matplotlib()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     rows = read_rows(args.round_dir)
-    formal_path = Path("results/disk_environment/03_system_fair/gist/csv/formal_test_rows.csv")
+    formal_path = Path("results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist/csv/formal_test_rows.csv")
     if formal_path.exists():
         formal = pd.read_csv(formal_path)
         sym = formal[

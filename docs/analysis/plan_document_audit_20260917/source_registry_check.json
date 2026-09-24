@@ -1,0 +1,52 @@
+{
+  "aisaq": {
+    "source_check": "passed",
+    "commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac",
+    "patches": [
+      {
+        "path": "baselines/patches/aisaq-logical-block-size-sysfs.patch",
+        "sha256": "e4760a3fa868bb91babd4625e7288f51d8e7b3b51fd8e9184cd7b8f38fbbea55",
+        "scope": "Storage metadata only: query the same kernel logical block size via sysfs if /dev/block is unavailable."
+      }
+    ]
+  },
+  "starling": {
+    "source_check": "passed",
+    "commit": "17dc3e8a011533a62374445f53963e951b72883a",
+    "patches": []
+  },
+  "Ours-Disk": {
+    "registry_status": "ready",
+    "command": [
+      "experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port"
+    ],
+    "registered_sha256": "8cce59ffbf99af47f75af0025ecb0a814c02081685580dbda1a9d40b5e6a7f89",
+    "actual_sha256": "43d4a19257124a47e46fb339b5839732fc34da1e5cfaae0405f4b9f1d9d10fbd",
+    "hash_matches": false
+  },
+  "DiskANN-PQ-Disk": {
+    "registry_status": "ready",
+    "command": [
+      "baselines/diskann/target/release/qgraph05_diskann_port"
+    ],
+    "registered_sha256": "10e7eab13ce9023665fb2314cf2d3b8c0aa502addbecd2a28d61cf94c35c729b",
+    "actual_sha256": "10b547cf081388e851db5987669e11e3eac6bc84a9ebc59296b1efb5b5593e31",
+    "hash_matches": false
+  },
+  "AiSAQ-Disk": {
+    "registry_status": "pending",
+    "command": [
+      "experiments/05_disk_system_fair/run_official_disk_baseline.py",
+      "--method",
+      "AiSAQ-Disk"
+    ]
+  },
+  "Starling-Disk": {
+    "registry_status": "pending",
+    "command": [
+      "experiments/05_disk_system_fair/run_official_disk_baseline.py",
+      "--method",
+      "Starling-Disk"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+<p>Ours 接入 2 GiB cgroup 与峰值/events；所有方法接入真实进程峰值 RSS。baseline 默认只观察，不施加共同硬限额。</p>

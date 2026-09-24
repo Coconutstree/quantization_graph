@@ -1,0 +1,11 @@
+{
+  "Ours/core/hnswlib/space_rabitq.h": "0f944979146f293317a35e92b3d6744364aef2764b8eba409391ff6e9e7158f8",
+  "Ours/core/hnswlib/vamana_index.h": "483a4bc10c4b2961a7aaf91f4d979a6c86fc26bf34144c56216fe56b56c3f821",
+  "experiments/02_diskann_fair/native/rabitq_bridge.cpp": "33a9f0bfa6b5b2b67db480fe1136ce557c06a42d9b5bdbe3a2c1b3c1a9f24f46",
+  "experiments/02_diskann_fair/src/ours_diskann.rs": "6c0c52c5f480e647019deea5dcc2d7606f6b2637facb3b839e767851406f94cf",
+  "experiments/02_diskann_fair/src/diskann_runner.rs": "5f984e8a72bddec4c5ec2dc435c839dd7e6b584a4de2b4a839f58f1de76e2bdf",
+  "experiments/05_disk_system_fair/native_rust/src/ours_port.rs": "552efa2349c91d41c3c901e2b10244fd5219f067d38096130ae426e38580d1a4",
+  "experiments/05_disk_system_fair/native/query_page_cache.hpp": "bae42ac9341e2db0db2a07139b8c56800f6fd5c3eedd70e40e6cba2b6436ebb5",
+  "Ours/config.json": "9a2b02a49babcc446454f52fc3d4c73d5ea745a00ca61f329673fd0e50358b40",
+  "results/disk_environment/05_disk_system_fair/single_test_w32_20260911/agnews/Ours-Disk/result.json": "625f80a17fab6bec21338ae9b473a15bd774f4e2f6d7fe01bcf2d290795d509c"
+}

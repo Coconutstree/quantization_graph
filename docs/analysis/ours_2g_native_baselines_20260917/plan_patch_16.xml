@@ -1,0 +1,1 @@
+<p>12.2 Ours 的磁盘测量在 exec/加载索引之前进入独立 cgroup，主实验设置 memory.max=2147483648 B（2 GiB）、memory.swap.max=0，记录父组约束、峰值和 OOM 事件。缺少委派时阻塞 Ours，不以 RSS 采样代替硬限额。baseline 使用各自原生设置，默认不新增 OS 硬限额，记录 memory_enforcement=none、memory_limit_bytes=null 和真实峰值 RSS；若另做显式限额补充实验，单独记录其限额。</p>

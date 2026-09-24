@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 #include <cerrno>
@@ -3699,8 +3700,10 @@ class RaBitQSpace : public SpaceInterface<float> {
 
     const void *prepare_query(const void *query_data) override {
         const float *raw_query = static_cast<const float *>(query_data);
-        thread_local PreparedQuery prepared_storage;
-        PreparedQuery *prepared = &prepared_storage;
+        // PCA routing and full-dimensional verification coexist on each worker.
+        // Preparing one quantizer must not overwrite the other's query context.
+        thread_local std::unordered_map<const RaBitQSpace *, PreparedQuery> prepared_storage_by_space;
+        PreparedQuery *prepared = &prepared_storage_by_space[this];
         initializePreparedQuery(*prepared, raw_query, true);
         return prepared;
     }
@@ -5343,6 +5346,27 @@ class RaBitQSpace : public SpaceInterface<float> {
             if (query.rotated_residual[dim] >= 0.0f) code |= (uint32_t{1} << bit);
         }
         *route_code = code;
+        return true;
+    }
+
+    bool compute_query_adaptive_route(
+        const void *prepared_query,
+        const float *projection_mean,
+        const float *projection_components,
+        size_t input_dim,
+        size_t route_dim,
+        std::vector<float> *projected_query) const override {
+        if (!prepared_query || !projection_mean || !projection_components ||
+            !projected_query || input_dim != dim_ || route_dim == 0) return false;
+        const PreparedQuery &prepared = *static_cast<const PreparedQuery *>(prepared_query);
+        projected_query->assign(route_dim, 0.0f);
+        for (size_t r = 0; r < route_dim; ++r) {
+            const float *row = projection_components + r * input_dim;
+            float value = 0.0f;
+            for (size_t c = 0; c < input_dim; ++c)
+                value += (prepared.raw_query[c] - projection_mean[c]) * row[c];
+            (*projected_query)[r] = value;
+        }
         return true;
     }
 

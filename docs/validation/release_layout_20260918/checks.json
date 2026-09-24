@@ -1,0 +1,8 @@
+{
+  "snapshot_files_sha256_checked": 48,
+  "snapshot_errors": [],
+  "hdf5_chunked_conversion": "passed_exact_values_and_headers",
+  "shell_syntax": "passed",
+  "provenance_paths": "passed",
+  "scope": "No dataset downloads or formal measurements performed."
+}

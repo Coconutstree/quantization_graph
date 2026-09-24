@@ -1,0 +1,1 @@
+<p>按用户最新要求，每个 operating point 只运行一次，直接报告 QPS、Recall 与该次查询的延迟分位数，不计算跨运行中位数、IQR、CV 或置信区间。AGNews/GIST 当前 800 条 test query，p99 仅作诊断；只有原生提供且查询样本量足以解释的延迟分位数才进入主表。增加重复 query epoch 可延长吞吐测量，但不会增加独立查询数量，不能据此宣称 p99 代表性提高。MSMARCO 等 extension 的尾延迟需求在运行前另行确定，不能看过 test 后再调整划分。</p>

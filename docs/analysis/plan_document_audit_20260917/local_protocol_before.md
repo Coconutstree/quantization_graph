@@ -1,0 +1,462 @@
+# 32 线程磁盘实验方案
+
+来源：[用户指定飞书原文](https://my.feishu.cn/docx/BpvBdhAILonRVkxT0Jicnwf4nfH)。基于 revision 52 核验修订，初次核验同步至 revision 78，单次运行要求同步至 revision 104。本轮 Ours 2 GiB、baseline 各自配置规则已同步至 revision 138 并逐段回读验证，见 [最新核验记录](../analysis/ours_2g_native_baselines_20260917/verification.json)。
+
+## 1. 实验目标
+
+本实验在相同硬件、数据和查询负载下比较 Ours 与 ANN 方法，固定 32 个查询 worker，每个配置只运行一次。按用户最新决定：Ours 主实验强制 2 GiB 内存上限；其他方法保留各自原生内存、量化和缓存配置，不要求与 Ours 预算或用量相等。所有方法报告实际峰值 RSS、磁盘开销和匹配 Recall@10 的性能。05A/05B/05C 结构保持；05A resident 作为单列计算参考。内存扫描仅为单独的补充实验，不是主对比的统一预算要求。
+
+2026-09-17 最新规则：Ours=2 GiB，baseline 各自配置，每个正式配置只跑一次。此前统一 4 GiB 方案已被本规则取代。Ours 需以 cgroup 验证真实限额；baseline 默认只记录系统实测峰值 RSS，不新增统一硬限额。缺少 cgroup 委派只阻塞需要限额的运行，不作为 baseline 内存不同的失效理由。旧 RLIMIT_AS、对象求和和来源不明结果仍不能改标签充当新测量。第 10—11 节中的审计记录按原时点理解，不覆盖本规则。
+
+所有正式结果统一存放在：
+
+```text
+results/disk_environment
+```
+
+本轮实验包含三类：
+
+| 实验 | 核心问题 | 主要用途 |
+| --- | --- | --- |
+| 05A Quantizer Fair | 比较 nominal 4-bit 量化器的精度、计算和物理 I/O 开销 | 支撑量化方法有效性 |
+| 05B Controlled Graph & Storage | PQ/SQ/SAQ 共用 baseline 图；Ours 在自有图上做存储机制消融 | 分析 payload、DB1 gate、I/O 合并和 page reuse |
+| 05C System Fair | 比较完整磁盘 ANN 系统 | 正式报告主表和主图 |
+
+## 2. 数据集
+
+实验保留 3 个 core 目标数据集和 5 个 extension 候选。core 表示计划的验收范围，不表示当前已全部 formal。按“数据集 × 实验层 × 方法 × 配置 × 预算”逐项准入：输入与真值匹配、划分有效、原生路径支持、实际预算满足。05A/05B 检查各自需要的 fixed candidates、量化产物和图；05C 检查 Ours、DiskANN、AiSAQ、Starling 的各自原生索引，不再要求旧五系统或不相关的 SAQ 产物全部齐备。
+
+Cohere10M 对当前 L2-only 路径仍因 metric 不匹配而阻塞。MSMARCO 的 Ours DB1 位面按当前 N、d=1024 估算已约 13.53 GiB，尚未计因子和工作区，在本次 1—8 GiB 范围内不可行；这不能推导其他方法也不可行。扩展集记录每种方法的支持情况，允许缺失项，不强行补齐曲线。
+
+| 数据集 | 范围 | base N | D | query 条数 | base 文件 GiB | 用途 |
+| --- | --- | --- | --- | --- | --- | --- |
+| agnews | core 目标 | 769,382 | 1024 | 1,000 | 2.938 | 文本 embedding |
+| dbpedia | core 目标 | 990,000 | 1536 | 10,000 | 5.669 | 高维文本 embedding |
+| gist | core 目标 | 1,000,000 | 960 | 1,000 | 3.580 | 视觉检索 |
+| sift10m | extension | 10,000,000 | 128 | 10,000 | 4.806 | UCI SIFT10M 派生划分 |
+| deep1B | extension | 9,990,000 | 96 | 10,000 | 3.610 | Deep1B 约 10M 子集 |
+| msmarco | extension | 113,520,750 | 1024 | 1,677 | 433.470 | 大规模文本 embedding |
+| bigann10m | extension | 10,000,000 | 128 | 10,000 | 4.806 | BIGANN/SIFT 10M |
+| cohere10m | extension | 10,000,000 | 768 | 10,000 | 28.647 | 官方真值按 inner product |
+
+2026-09-17 通过本地 fvecs/ivecs 头部和文件长度核对上述 N/D/query 条数；大小统一为 base 文件字节数，包含每行维度头，不再混用目录、缓存与三件套大小。本次没有对全部大文件重新计算 SHA-256，也没有重算所有真值；来源、归一化和真值正确性仍由正式运行清单及验证证据确认。
+
+UCI SIFT10M 上游只提供 11,164,866 条描述子，没有官方 ANN query/ground-truth 划分。本项目固定按上游 HDF5 行号划分：`[0, 10,000,000)` 为 base，`[11,154,866, 11,164,866)` 为 query，中间 1,154,866 行保留不用；base/query 不重叠。对应真值必须针对这 10M base 重新精确计算 squared L2 top-1000，不能复用 BIGANN 真值。
+
+正式 input manifest 记录 N/D/source_metric/runner_metric/k、输入类型、归一化验证、base/query/GT 路径与 SHA-256。当前统一任务按 squared L2 评估；DBpedia、Deep1B、MSMARCO 若利用 L2 与 cosine/IP 排序等价性，必须先核验所需归一化条件和真值，不能仅凭数据集名称判断。Cohere10M 的原 IP 真值不能直接交给 L2-only 路径，也不能通过单独归一化输入后继续沿用原真值。原生 baseline 是否支持某度量，以固定版本和实际配置为准。
+
+## 3. 统一实验设置
+
+| 参数 | 新版设置 |
+| --- | --- |
+| workers | 32 个实际查询 worker；核查 OpenMP/MKL 等隐藏线程。GIST 1/4/8/16/32 scaling 为独立补充组。 |
+| 磁盘主实验预算 | Ours 磁盘主实验为 cgroup memory.max=2147483648 B（2 GiB）、swap=0；baseline 各自配置，不新增共同硬限额。 |
+| 预算范围 | 从原生搜索进程启动、索引加载、工作区初始化到预热和查询结束；包含所有线程、查询缓冲、缓存及 cgroup 计入的其他内存。建索引另测。 |
+| 05A resident | 计算参考，预算标签为 unconstrained_reference；报告实际驻留/峰值，不并入受限磁盘系统主图。 |
+| Ours 内存扫描（补充） | Ours 可单独扫描 1/2/4/8 GiB，固定 32 线程；baseline 各自配置不随之强制变更。 |
+| query split | 保留策略默认值：AGNews/GIST/SIFT10M/MSMARCO 为 200 validation，其他为 1000；强制 0<validation<total，记录实际划分和 SHA-256。 |
+| 实际内存指标 | 所有方法报告系统测得的峰值 RSS；Ours 另报 cgroup 峰值/events；可测分类单列，VmPeak 仅作地址空间诊断。 |
+| repeats | pilot=1；formal=1，repeat_id=0。 |
+| seed | 外层查询顺序/运行调度 seed=20260813；各原生训练/建图 seed 单独记录，不强制改源码统一。 |
+| page size | 4096 B 作为页数统计单位；同时记录实际请求字节和原生布局，不假定一节点一页。 |
+| disk profile | auto 仅用于发现设备，正式运行冻结目标 SSD、挂载、文件系统和 I/O 后端。 |
+| disk root / output root | 保留 work/05_disk_system_fair/disk_root 与 results/disk_environment；不同协议/预算/运行 ID 分目录。 |
+| run order | 来源和数据核验 → 布局与预算预检 → 导出/复用索引 → 正确性与计时核验 → validation 调参 → 冻结配置 → formal → 验收与绘图。 |
+
+05A/05B 的受控 I/O 实验保留经核验的 direct I/O 端口和已登记调度参数。05C 保留各原生方法的读取层、缓存和 I/O 调度；不得为了统一最大 128 个 in-flight I/O 而改写官方代码。记录实际 direct/buffered 模式、请求粒度、队列深度和后端，主对比要求可比的缓存条件。节点可跨多页；缺失的逐查询计数写 null 并标明 availability，不用批量均值伪造逐查询记录。当前 DiskANN Rust 接入的读取层差异仍需核验，不能仅因调用官方路径就称为无修改原版。
+
+每个数据集分两轮运行：
+
+| 阶段 | repeats | 作用 | 是否进入正式结果 |
+| --- | --- | --- | --- |
+| pilot | 1 | 检查数据、端口、I/O 和参数范围 | 否 |
+| formal | 1 | 记录一次正式实测结果 | 是 |
+
+run id 命名格式：
+
+```text
+disk_<dataset>_<layer>_w32_ours2g_native_pilot_<timestamp>
+disk_<dataset>_<layer>_w32_ours2g_native_formal_<timestamp>
+disk_<dataset>_05c_w32_cg{1,2,4,8}g_scan_<timestamp>
+旧地址空间诊断保留 as2g/as4g 标记；不改名为 cg2g/cg4g。
+```
+
+## 4. 数据存放方式
+
+保留原始输入、磁盘索引、运行产物、发布结果四类目录。正式报告只引用通过新版验收且可回溯原始 artifact 的 CSV 与图；位于 results/disk_environment 或文件名包含 formal 本身不代表正式结果。下列目录为发布组织约定，已有 test_L_400_w_32 历史目录保持原样。
+
+| 类型 | 存放位置 | 内容 / 使用约定 |
+| --- | --- | --- |
+| 原始输入 | data/<dataset>/ | base、query、GT；各方法保持相同向量值和 ID。 |
+| 磁盘索引 | work/05_disk_system_fair/disk_root/<dataset>/<method>/<index-id>/ | 原生索引/受控端口产物，记录实际设备；已构建索引可按哈希引用复用。 |
+| 每次运行 | results/disk_environment/.formal_runs/runs/<run-id>/ | 原生输出、日志、结果 ID、资源记录、manifest；外层执行器已接入，资源 sidecar 与原生输出一同保存。 |
+| 发布结果 | results/disk_environment/disk_ours2g_native_baselines_20260917/<run-id>/{01_quantizer_fair,02_diskann_fair,03_system_fair}/<dataset>/ | csv、logs、figures、manifests；协议标识含线程数、预算和控制机制，避免覆盖旧结果。 |
+
+每个数据集的输入文件约定为：
+
+| 文件 | 含义 |
+| --- | --- |
+| data/<dataset>/<dataset>_base.fvecs | base vectors |
+| data/<dataset>/<dataset>_query.fvecs | query vectors |
+| data/<dataset>/<dataset>_groundtruth.ivecs | ground truth nearest neighbors |
+
+正式发布目录结构：
+
+```text
+results/disk_environment/
+  disk_ours2g_native_baselines_20260917/<run-id>/01_quantizer_fair/<dataset>/{csv,logs,figures,manifests}/
+  disk_ours2g_native_baselines_20260917/<run-id>/02_diskann_fair/<dataset>/{csv,logs,figures,manifests}/
+  disk_ours2g_native_baselines_20260917/<run-id>/03_system_fair/<dataset>/{csv,logs,figures,manifests}/
+  .formal_runs/runs/<run-id>/
+  05_disk_system_fair/test_L_400_w_32/  # 保留历史诊断，不自动迁移
+```
+
+后文 05A/05B/05C 输出表中的路径为旧相对命名，执行新版时统一在 results/disk_environment 下先加入 disk_ours2g_native_baselines_20260917/<run-id>，再使用该相对路径。原始日志和失败记录均保留；旧宽度点不能与新预算点拼成一条曲线。
+
+其中：
+
+| 子目录 | 内容 |
+| --- | --- |
+| csv/ | 聚合后的实验结果表 |
+| logs/ | native port 的终端日志 |
+| figures/ | 由正式结果生成的图 |
+| manifests/ | 输入 hash、binary hash、run id、preflight 和完整性检查记录 |
+
+## 5. 05A: Quantizer Fair
+
+05A 只比较量化器本身，不比较完整图搜索系统。所有方法使用同一数据集、查询、fixed candidate IDs/顺序和 nominal 4-bit 设置。不同编码的 factor、scale、残差和对齐填充会导致实际 bytes/vector 不同，因此必须同时报告 effective bits/dim 和 read amplification，不宣称物理存储预算完全相同。
+
+| 项目 | 内容 |
+| --- | --- |
+| Ours | Ours_RaBitQ_K1 |
+| Baselines | PQ_4bit, SQ_4bit, SAQ_B4 |
+| 主结果模式 | payload_on_ssd，payload 放在 SSD 上并按需读取 |
+| 参考模式 | resident，payload 常驻内存，只用于检查量化误差，不进入主表 |
+| 扫描参数 | fixed-candidate rerank/search width |
+| 比较指标 | fixed-candidate Recall@10、QPS、量化误差、code bytes/vector、effective bits/dim、index size、resident bytes、bytes/query、read amplification |
+
+05A 用来回答：
+
+```text
+在相同 nominal 4-bit 设置下，Ours 的距离估计是否更准确？
+当 payload 放在磁盘上时，Ours 是否仍能保持更高 QPS 和更低 I/O 开销？
+```
+
+05A 输出：
+
+| 输出 | 路径 | 说明 |
+| --- | --- | --- |
+| 原始结果 CSV | 01_quantizer_fair/<dataset>/csv/formal_test_rows.csv | 每个方法、搜索宽度、repeat 的完整结果 |
+| Pareto CSV | 01_quantizer_fair/<dataset>/csv/formal_test_frontier.csv | Recall-QPS Pareto frontier，用于画曲线 |
+| 日志 | 01_quantizer_fair/<dataset>/logs/*.terminal.log | native 量化器端口运行日志 |
+| 元数据 | 01_quantizer_fair/<dataset>/manifests/*.json | 输入、run id、hash、preflight 等记录 |
+| 图 | 01_quantizer_fair/<dataset>/figures/disk05a_quantizer_fair_summary.* | 量化器 QPS 与误差汇总图 |
+
+05A CSV 重点字段：
+
+```text
+method, storage_mode, search_width, recall, qps,
+mean_relative_error, p95_relative_error, pairwise_flip_rate,
+code_bytes_per_vector, effective_bits_per_dim, read_amplification,
+index_size_mb, resident_bytes, bytes_read_per_query,
+workers, repeat_id, run_id
+```
+
+## 6. 05B: Controlled Graph and Storage Ablation
+
+05B 保留 PQ/SQ/SAQ 共用 float32 baseline Vamana 图、Ours 使用 ExRaBitQ4 对称距离构建自有图的安排。Ours 内部消融固定自己的图、输入、物理布局和可控制的查询条件；跨方法差异包含构图与搜索差异。既有 full4-resident/no-gate 分支还可能改变 query codec，必须逐项披露，不能只按名称把差值归因于 gate。当前 locality 读取器要求 coalescing+reuse，不能直接用它跑关闭二者的四级消融；完整四级机制实验先固定支持各状态的普通布局，locality 另作明确的布局实验。
+
+| 项目 | 内容 |
+| --- | --- |
+| Ours | Ours-Disk |
+| Baselines | PQ-DiskANN-Disk、SQ-DiskANN-Disk、SAQ-DiskANN-Disk（受控机制版本） |
+| 控制变量 | PQ/SQ/SAQ 同一图哈希；Ours 各消融同一 Ours 图哈希；同一查询集、32 worker、Ours 2 GiB 与各 baseline 冻结配置、明确 I/O 口径。 |
+| 主结果模式 | hybrid_disk；记录普通/locality 等实际布局，不能只靠标签判断。 |
+| 参考模式 | disk_payload 与 full4-resident/no-gate 的用途、实际驻留、预算及 query codec 单独披露，不作为严格性能上界。 |
+| 扫描参数 | search width；参数实义和生效值写入清单。 |
+| 指标 | Recall@10、QPS、可测延迟、visited、距离计算、请求数与字节数；阶段计数仅比较同定义的测量。 |
+
+05B 用来回答：
+
+```text
+PQ/SQ/SAQ 在 shared baseline graph 上的 payload 编码差异如何？
+Ours 在自己的固定图上，DB1 gate、coalescing 和 reuse 是否逐步减少磁盘读取？
+Ours 的 DB1 gate 是否减少 full 4-bit payload 访问？
+```
+
+Ours ablation 含义：
+
+| ablation | 真实含义 | 解释边界 |
+| --- | --- | --- |
+| full4-resident/no-gate | 完整主码/payload 驻留；关闭 gate。 | 驻留量和 query codec 一并变化时，属于组合参考，不是 gate 单因素对照或严格上界。 |
+| db1-resident/full4-on-ssd | DB1 与因子驻留，筛后读完整主码。 | 披露残差是否随主码同读、是否仍有查询内缓存。 |
+| db1+coalescing | 同一读取批次按页号排序、去重。 | 不等于整个 query 的页只读一次，也不等于 BFS 重布局。 |
+| db1+coalescing+reuse | 在上述基础上复用仍在有界缓存中的页。 | 缓存驱逐后仍可重复读；报告缓存容量、生命周期与元数据。 |
+
+05B 的四级消融应使用同一、支持各开关的物理布局。05C Ours 则冻结当前 locality 配置：图与主码共页、独立 residual.pages、BFS 物理排列和 ID→slot 映射；DB1 筛选后按需取主码，最终用浮点 query 加 residual4 重排。若研究 locality 收益，单列普通布局与 locality 的对照，注明排列、共置、残差分离同时变化，不把全部收益归给单一因素。
+
+05B 输出：
+
+| 输出 | 路径 | 说明 |
+| --- | --- | --- |
+| 原始结果 CSV | 02_diskann_fair/<dataset>/csv/formal_test_rows.csv | 每个方法、ablation、搜索宽度、repeat 的完整结果 |
+| Pareto CSV | 02_diskann_fair/<dataset>/csv/formal_test_frontier.csv | Shared graph 下的 Recall-QPS Pareto frontier |
+| 日志 | 02_diskann_fair/<dataset>/logs/*.terminal.log | 05B native shared-graph 端口运行日志 |
+| 元数据 | 02_diskann_fair/<dataset>/manifests/*.json | graph、输入、artifact hash、完整性检查记录 |
+| 图 | 02_diskann_fair/<dataset>/figures/disk05b_shared_graph_recall_qps.* | baseline shared-graph 与 Ours fixed-native-graph Recall-QPS 曲线；文件名为兼容旧结果保留 |
+
+05B CSV 重点字段：
+
+```text
+method, ablation, storage_mode, search_width, recall, qps,
+latency_p50_us, latency_p95_us, latency_p99_us,
+visited_nodes, distance_evaluations,
+db1_checks, db1_survivors, full4_page_reads,
+io_requests_per_query, bytes_read_per_query,
+index_size_mb, peak_rss_bytes,
+workers, repeat_id, run_id
+```
+
+## 7. 05C: System Fair
+
+05C 主方法更新为 Ours、DiskANN、AiSAQ、Starling 的完整磁盘系统。baseline 优先固定无补丁官方版本，保留原生建图、量化、搜索、重排、缓存与 I/O 调度，只使用官方暴露参数调优。Ours 冻结本次源码、图、编码、locality 布局与查询配置。Glass/Symphony 磁盘移植版仅作单列补充；OG-LVQ 未通过原方法一致性核验前不进入主对比。已有 DiskANN/AiSAQ 兼容补丁路径需披露，不能直接标为无修改原版。
+
+| 项目 | 内容 |
+| --- | --- |
+| 主方法 | Ours-Disk、DiskANN-PQ-Disk、AiSAQ-Disk、Starling-Disk |
+| 控制条件 | 同一数据、查询/GT、设备与 32 worker；Ours 限额 2 GiB，baseline 保留各自原生内存与缓存设置，并报告实测峰值。 |
+| 主实验 | Ours 2 GiB 待验证；baseline 各自配置；同 Recall@10 比较 QPS、实际内存和磁盘开销。 |
+| 预算实验 | 固定 32 worker，1/2/4/8 GiB；记录方法/配置可运行范围与目标召回率下的性能。 |
+| 参数选择 | validation 中选择官方图度数、PQ 码长、导航/缓存/搜索参数；正式测试前冻结。不同系统同名 L/beam 不自动等价。 |
+| 可测指标 | Recall@10、QPS、峰值内存、索引大小；延迟分位数和内部 I/O 计数按原生可获得性报告。 |
+| Starling 支持范围 | GIST R48 已有索引与诊断；当前固定版本 FP32 路径的 AGNews/DBpedia 跨页限制独立记录，增加内存不能解决。 |
+
+05C 用来回答：
+
+```text
+在完整系统对比中，Ours 是否能在相同 Recall@10 下达到更高 QPS？
+Ours 是否降低尾延迟、磁盘读取量和内存占用？
+Ours 的索引大小是否具备优势或竞争力？
+```
+
+05C 输出：
+
+| 输出 | 路径 | 说明 |
+| --- | --- | --- |
+| 原始结果 CSV | 03_system_fair/<dataset>/csv/formal_test_rows.csv | 每个系统、搜索参数、repeat 的完整结果 |
+| Pareto CSV | 03_system_fair/<dataset>/csv/formal_test_frontier.csv | 完整系统 Recall-QPS Pareto frontier |
+| 日志 | 03_system_fair/<dataset>/logs/*.terminal.log | 05C 各系统 native port 运行日志 |
+| 元数据 | 03_system_fair/<dataset>/manifests/*.json | binary hash、实现指纹、输入 hash、preflight 等记录 |
+| 图 | 03_system_fair/<dataset>/figures/disk05c_system_recall_qps.* | 完整系统 Recall-QPS 曲线，作为正式报告主图 |
+
+05C CSV 重点字段：
+
+```text
+method, protocol_id, experiment_group, dataset, input_hash, index_hash,
+config_id, search_param, search_width, beam_width, workers, repeat_id, run_id,
+recall, qps, latency_mean_us, latency_p50_us, latency_p95_us, latency_p99_us,
+index_size_bytes, memory_limit_bytes, memory_limit_scope, memory_enforcement,
+cgroup_memory_peak_bytes, process_peak_rss_bytes, sampled_vm_peak_bytes,
+resident_index_bytes, worker_scratch_bytes, cache_bytes, query_buffer_bytes,
+swap_peak_bytes, memory_events, elapsed_scope, io_backend, direct_io, page_size,
+io_requests_per_query, bytes_read_per_query, metric_availability,
+run_status, failure_reason, formal_ready
+```
+
+资源 sidecar、真实进程峰值、单次实测结果及原始行已接入外层执行器；原生 CLI 到完整正式 artifact 的接入与各端口验收仍分别进行。分类开销用于解释总量，RSS 与 cgroup peak 是不同观测值，不能相加或互相替代；未测得字段为 null。预算失败行保留运行状态和证据，不填写伪造的 QPS=0 或 recall=0。
+
+## 8. 搜索参数
+
+先在独立 validation 集中调参，再固定配置测 test。05A/05B 保留既定候选/搜索宽度扫描；05C 为每个方法登记官方参数空间与可比调参投入，不能只扫同一个 L 就认定公平。预算扫描允许在各预算内重新选择官方配置，但必须保存完整配置与索引哈希，图注明“各预算调参后的系统表现”；若只改预算、不改任何参数，则另标“固定配置敏感性”，两种解释不混用。
+
+| 参数 | 设置 |
+| --- | --- |
+| workers | 主实验与预算扫描均为 32；线程 scaling 单独分组。 |
+| 内存 | Ours 主实验 2 GiB；baseline 不要求预算相同，报告各自配置与实测峰值。预算扫描作为补充，05A resident 单列。 |
+| 05A candidate width | 沿用 10..30 step 1；40..100 step 10；140..580 step 40，并记录实际生效候选数。 |
+| 05B search width | 沿用现有扫描范围，检查至少满足 k=10 等约束；区分请求值与生效值。 |
+| 05C search 参数 | 按原生能力在 validation 中选取范围；不把不同方法的 L/ef/beam 当成同一控制变量。 |
+| 05A/05B/05C 模式 | payload_on_ssd / hybrid_disk / 原生磁盘路径；另记录准确物理布局与常驻对象。 |
+| 目标 Recall@10 | 预登记 0.90、0.95、0.99；未达到的目标写未达到，不外推；报告完整实测曲线和实际 recall。 |
+
+## 9. 结果使用规则
+
+| 用途 | 文件 |
+| --- | --- |
+| 正式报告主表 | formal_test_rows.csv（repeat_id=0 的单次实测值） |
+| Recall-QPS 曲线 | formal_test_frontier.csv |
+| 单次运行排查 | formal_test_rows.csv |
+| 运行日志 | logs/*.terminal.log |
+| 实验审计 | manifests/*.json |
+| 正式报告图 | figures/*.svg, figures/*.pdf, figures/*.png, figures/*.tiff |
+
+正式结果必须满足：
+
+```text
+主实验 workers = 32；预算扫描 workers = 32
+formal repeats = 1，repeat_id = 0
+input/metric/query split verified = true
+native source, index and config fingerprints verified = true
+config frozen before test = true
+memory_enforcement = cgroup_v2 (Ours disk) / none (native baseline observation)
+Ours: memory.max = 2147483648 bytes; memory.swap.max = 0; native baseline: no added cap
+resource scope includes search startup, loading, scratch, warmup and queries
+process peak RSS recorded for every method; cgroup peaks/events required for capped Ours; no failure
+search wall-clock scope, query count and warmup verified = true
+I/O and cache conditions audited = true
+required metrics available; missing optional metrics explicitly null
+formal_ready = true only after all applicable checks pass
+05A resident: unconstrained_reference, io_backend=resident, direct_io=false
+```
+
+memory.max 为内核强制预算，并非“任意瞬时观测绝不超过”的数学保证。保存峰值和 events；出现超额或内存压力事件时核验是否完成回收、是否 OOM、统计范围是否正确，异常点先保持诊断状态。不得仅检查自报的几类字节之和就给出正式验收。
+
+每个 operating point 只运行一次，repeat_id=0；formal_test_rows.csv 直接保存这次实测值。相同配置的重复行拒绝验收，不生成 formal_test_median.csv，也不计算跨运行 IQR/CV。
+
+按用户最新要求，每个 operating point 只运行一次，直接报告 QPS、Recall 与该次查询的延迟分位数，不计算跨运行中位数、IQR、CV 或置信区间。AGNews/GIST 当前 800 条 test query，p99 仅作诊断；只有原生提供且查询样本量足以解释的延迟分位数才进入主表。增加重复 query epoch 可延长吞吐测量，但不会增加独立查询数量，不能据此宣称 p99 代表性提高。MSMARCO 等 extension 的尾延迟需求在运行前另行确定，不能看过 test 后再调整划分。
+
+未满足新版约束的运行保留诊断用途。旧 RLIMIT_AS、来源/计时/资源不明的结果均不追认；单次运行本身不再是失效理由。正式结果按新 run ID 完成一次测量；输入、图和编码配置未变时可复用核验过的索引。不可运行的方法保留在支持矩阵，其他通过验收的方法可以独立完成实验；只在实际共同支持的数据集和 recall 范围内比较，同时披露各自内存设置与实测用量。
+
+## 10. Revision 审计与修复记录
+
+本节保留 revision 36/41/45 至 revision 52 的历史审计，表中的“当前状态”“正在后台运行”均指原记录时点，不作为 2026-09-17 的实时状态。历史 2 GiB、旧五方法和构建命令不覆盖新版第 1—9、11—14 节。此次只复核与新协议有关的代码、目标文件头和已存诊断；未逐项重跑 R01—R16 的所有验证。
+
+| 编号 | 审计问题与风险 | 修复方式 | 当前状态 |
+| --- | --- | --- | --- |
+| R01 | 早期 bigann10m 曾硬链接复用 sift10m，不能证明是独立官方 BIGANN 输入。 | 从 TexMex BIGANN/SIFT1B 官方 base/query/idx_10M 重新转换，保留独立文件并在 formal manifest 固定 SHA-256。 | 已修复；当前 base 与 SIFT10M inode 不同。 |
+| R02 | 早期 cohere10m 曾从本地 MSMARCO/Cohere 数据派生，不是官方 benchmark。 | 从 OpenSearch Benchmark 官方 documents-10m.hdf5 的 train/test/neighbors 生成三件套，保留下载缓存和转换脚本。 | 已修复数据来源。 |
+| R03 | Cohere10M 表中维度曾写错。 | 以官方 HDF5 shape 和 fvecs header 为准，固定为 D=768。 | Revision 36 已修复。 |
+| R04 | 文档曾暗示 05B 四种方法完全共享图，掩盖 Ours 的构图语义差异。 | 明确 PQ/SQ/SAQ 共用 float32 baseline Vamana graph；Ours 使用独立 ExRaBitQ4-symmetric graph，Ours ablation 仅在自己的固定图内比较。 | Revision 36 已修复。 |
+| R05 | Cohere10M 官方 ground truth 按 inner product 排序，L2/cosine 对抽查 top-100 均有 49 次顺序违例。L2 runner 直接运行会产生无效 Recall。 | formal admission 检查 source_metric/runner_metric/normalized；当前阻止 Cohere10M。后续必须实现并验证 IP/MIPS native ports，不能简单归一化后沿用官方真值。 | 门禁已修复；IP/MIPS 能力待实现。 |
+| R06 | 旧默认 --val-queries=1000 会把 AGNews/GIST 的 1000 条 query 全部分给 validation，得到空 test。 | 使用数据集策略自动选择 validation 数量，强制 0 < validation < total 并校验 query/GT 行数；AGNews/GIST 为 200+800，DBpedia 为 1000+9000。 | 已修复并已生成 core split。 |
+| R07 | 2 GiB 被机械套到不可能的数据集：MSMARCO DB1 下界约 13.53 GiB，Cohere full4-resident 下界约 3.58 GiB。 | 在 fio/export 前计算不可避免的 resident-code 下界；超预算立即拒绝。05B/05C 主结果固定 2 GiB，05A resident 仅作无预算纯计算参考。 | 门禁已修复；MSMARCO 05B/05C 当前禁止。 |
+| R08 | Doctor 查 results/03_system_fair/...，split helper 写 results/disk_environment/03_system_fair/...，导致同一产物被误报缺失。 | Doctor 与 helper 共用 query_split_candidates()，canonical 路径统一到 results/disk_environment/03_system_fair/<dataset>/csv/_query_splits，并验证完整性与条数。 | 已修复。 |
+| R09 | Core formal 缺少三套 shared graph 和三套 Ours graph，Doctor 无法放行。 | 用固定 R=64/Lbuild=400/alpha=1.2/seed=20260813 在仓库内重建；先写 staging，完整后再安装到 results/<dataset>/indexes/02_diskann_fair/。 | 进行中；截至 2026-09-08 已完成 5/6，DBpedia Ours 后台构建中。 |
+| R10 | 旧验收条件无条件要求 direct_io=true/native_aio=true，会错误拒绝合法的 05A resident 行。 | 改为条件契约：disk-backed 必须 direct_io=true 且 backend 经审计；05A resident 必须 io_backend=resident/direct_io=false。 | 已修复并有 contract test。 |
+| R11 | 文档定义 pilot=1 和 pilot run ID，但 CLI 没有独立 pilot phase。 | 二选一：正式定义 QG05_FAST=1 + repeats=1 + diagnostic output 为 pilot，或增加显式 pilot phase；在实现前不得把普通 run 称为 pilot。 | 待实现。 |
+| R12 | 固定 32 workers 与 GIST 自动运行 1/4/8/16/32 不一致。 | 明确 w32 是主结果，GIST 的 1/4/8/16/32 仅为额外 scaling；完整性检查按主结果和诊断矩阵分别处理。 | 文档已修复，代码行为保留。 |
+| R13 | SIFT10M 表曾把正式输入、下载缓存和错误复用的 legacy SymphonyQG 索引混在一起。 | 分开记录 UCI 官方 ZIP/MAT 下载缓存、正式 base/query/GT 三件套和 exact-GT uint8 辅助输入；图索引只放在 results/，不放进 data/。 | 旧 SIFT 别名和 manifest 已归档；新 UCI 产物正在后台重建。 |
+| R14 | 旧 dataset/formal manifest 没有完整记录 metric、归一化状态和输入 SHA-256。 | 新 input manifest 使用 schema 2，记录 N/D/source_metric/runner_metric/k、归一化状态及 base/query/GT 的 size 和 SHA-256；旧 manifest 继续标记 legacy。 | 新 formal run 已实现；旧文件不追认。 |
+| R15 | 统计规则只对 QPS 和 p95 latency 实现部分 IQR/CV，尚未覆盖所有指标或 bootstrap 95% CI；AGNews/GIST 800 条 test query 在 w32 下也不足以稳定解释 p99。 | p95 作为主要尾延迟；p99 暂作诊断。增加最短测量时长或重复 query epoch，并为主表指标统一输出 IQR 或 bootstrap 95% CI，禁止挑选性保留低波动批次。 | 待实现。 |
+
+**R16：旧本地 SIFT10M 实际是 BIGANN/SIFT1B 别名**
+
+历史 R16 发现旧 sift10m 为 BIGANN/SIFT1B 别名，随后按 UCI 数据的固定区间重建。2026-09-17 本次读取 data/sift10m/dataset_manifest.json，并核对到 10M×128 的 base、10,000 条 query 和每 query 1000 个 GT ID 的文件；manifest 声明独立划分与 squared L2 真值。此次未重算全量哈希、GT，也未核验其全部 SAQ/图索引产物，故不再沿用“流水线正在后台运行”作为当前状态，亦不自动升格为 formal。
+
+放行按方法、实验层、配置和预算分别判定。metric 不兼容、布局不支持、预算不足、运行错误、未验收分别记录；文档更新不等于程序能力或正式结果已经具备。
+
+## 11. 2026-09-17 核验结论与待修复项
+
+| 问题 | 本次证据 | 处理 / 状态 |
+| --- | --- | --- |
+| 内存口径混用 | 原文称 search-index DRAM，现有 Starling runner 使用 resource.RLIMIT_AS；native_contract 对几类自报字节求和。 | 方案改为总 cgroup 预算 + 实测峰值 + 分类解释；执行器待接入。 |
+| 入口硬编码 2 GiB | orchestrator.py 拒绝 search_dram_budget_gib!=2.0；native_contract 的完整性检查含 2.0 与旧矩阵。 | 按显式 protocol/matrix 配置验收；不能只把参数改成 4 就宣称完成。 |
+| 32 线程的实际开销 | GIST Starling 每线程坐标缓冲 60 MiB，32 线程合计 1920 MiB；已存诊断峰值 RSS 约 2.01 GiB。 | 4 GiB 是预检起点；2 GiB 失败有实现资源原因；从 AS 改成 cgroup 也不保证 2 GiB 能跑。 |
+| Starling 布局限制 | R64 在三个目标维度小样本构建失败；GIST R48 完成索引；AGNews/DBpedia 当前 FP32 跨页路径阻塞。 | 独立标记 unsupported_layout；不改页长、维度或算法补齐。 |
+| 05C 方法过期 | revision 52 仍含旧四 baseline；本地已确认原生 DiskANN、AiSAQ、Starling。 | 更新本篇主方法集合；移植版单列补充。 |
+| 消融并非全部单因素 | ours_port.rs 的 locality 要求 coalescing+reuse；resident/no-gate 还需核对 query codec。 | 固定支持各开关的布局做消融；完整 locality 系统另测。 |
+| 数据大小混用 | 头部 N/D 与主要表项一致；旧大小列混用了目录和输入文件。 | 新版统一列 base 文件 GiB，保存头部核验；全量输入哈希运行前再确认。 |
+| 旧通过标记不能复用 | 官方 CLI 接入与新资源/计时契约不是同一件事。 | 来源、支持性、资源和计时均通过后才设置 formal_ready。 |
+
+## 12. 内存预算如何执行与比较
+
+12.1 三种量分开：常驻索引字节解释算法规模；进程峰值 RSS 解释实际驻留；cgroup memory.peak 解释资源组总占用。VmPeak/虚拟地址空间只作诊断。GiB 固定为 2^30 B，论文中的 GB/MB 保留原单位，不擅自视为完全相同。
+
+12.2 Ours 的磁盘测量在 exec/加载索引之前进入独立 cgroup，主实验设置 memory.max=2147483648 B（2 GiB）、memory.swap.max=0，记录父组约束、峰值和 OOM 事件。缺少委派时阻塞 Ours，不以 RSS 采样代替硬限额。baseline 使用各自原生设置，默认不新增 OS 硬限额，记录 memory_enforcement=none、memory_limit_bytes=null 和真实峰值 RSS；若另做显式限额补充实验，单独记录其限额。
+
+12.3 Ours 的 2 GiB 限额覆盖整个搜索进程生命周期及组内子进程，包括索引、码本、全部 worker、缓存、查询缓冲、运行时和 cgroup 计入的文件缓存/内核内存。baseline 的实际峰值和可测分类如实报告，不要求小于 2 GiB。建索引另测，加载计入生命周期内存，Recall/GT 评估排除在 QPS 计时之外；已加载 GT 所占内存不得事后扣除。
+
+12.4 Ours 保存 cgroup memory.peak/current/stat/events 与 swap 记录；所有方法同时保存系统测得的进程峰值 RSS。baseline 未使用 cgroup 时相关字段为 null，不伪造零值。RSS 与资源组峰值不是相同范围，不能相加；原生进程扫描多个宽度时明确共享生命周期峰值，不假称逐点查询峰值。
+
+12.5 固定目标设备、CPU/NUMA、查询顺序与预热协议，查询时隔离构建/fio 等干扰。各方法可以有不同原生缓存容量和生命周期：Ours 计入自己的 2 GiB 限额，baseline 如实报告用量，不强制等额缓存或总内存。O_DIRECT 不消除设备缓存；buffered/mmap 的页缓存和预热条件需单独记录。
+
+| 实验组 | 固定条件 | 变化量 | 允许的结果 |
+| --- | --- | --- | --- |
+| 05C 主性能 | 32 线程；Ours 2 GiB，baseline 各自配置；输入、设备、预热和统计协议一致 | 各方法冻结的官方配置与搜索强度 | 共同 recall 下的性能和实际用量；支持缺失明确列出。 |
+| Ours 预算扫描（补充） | 32 线程；同一任务与硬件 | 1/2/4/8 GiB；各预算仅通过官方参数调优 | 可运行/预算不足/未达到目标 recall，及实际 QPS、内存、磁盘成本。 |
+| 05A/05B 机制实验 | 保留原候选或图控制关系；Ours 限额与 baseline 各自配置明确报告 | 编码或已披露的机制状态 | 解释组件贡献，不能冒充全部同图的完整系统比较。 |
+| 线程 scaling（补充） | 固定一个预算与同一数据任务 | 1/4/8/16/32 worker，所有方法同组 | 单独画并发曲线，不与 w32 预算曲线混合。 |
+
+Ours 按 2 GiB 预检并固定主配置；baseline 按各自原生配置预检，不为对齐 Ours 而减少 PQ、导航图、线程或缓存。只在独立 validation 上选择参数，不能用测试集挑预算。某个方法不支持当前数据时单独记录，其他方法可继续。补充内存扫描与主结果分开，不把它变成所有方法的统一门槛。
+
+当前 core 数据的原始向量约为几 GiB，4/8 GiB 预算可能容纳其中一些完整 base。仍需验证被测路径确实按声明从 SSD 读取索引；此时结果只能支持当前数据规模上的磁盘系统表现，不能据此声称数据量必然大于内存或证明十亿规模扩展性。MSMARCO 的 DB1 下界超过本轮最高预算，报告 Ours 的限制，不伪造完整扫描曲线。
+
+## 13. 执行顺序、输出和验收
+
+| 步骤 | 工作 | 完成标准 |
+| --- | --- | --- |
+| 1 冻结来源 | 固定 baseline commit、子模块、编译参数、二进制哈希及实际差异；Ours 保存源码快照。 | 官方原生/兼容诊断版本明确区分。 |
+| 2 核验输入 | base/query/GT 一致；验证向量值、ID、度量和划分；完整哈希写入 run manifest。 | 每方法读到同一任务；已有测试若用于调参需标探索性或另立未使用测试集。 |
+| 3 复用或导出索引 | 先核验已有图、码本、布局与参数哈希；变化才重建对应产物。 | 完整原生路径正确、支持当前维度；无需全部重新建图。 |
+| 4 接入资源控制 | 外层实现 cgroup launcher、字节预算、环境预检、峰值/events 采集及状态分类。 | 以独立小程序验证组内执行和限制生效；不修改被测搜索算法。 |
+| 5 更新契约 | 替换硬编码 2 GiB、旧五方法、隐含缓存/计数要求；新增 protocol_id 与预算矩阵。 | 缺失可选指标可如实表示，必需资源与计时证据不放宽。 |
+| 6 validation 调参 | 每方法、每预算登记合理候选范围和计算/建索引投入；达到目标 recall 的配置在测试前冻结。 | 保留所有尝试和配置，不能逐条测试结果择优回填调参。 |
+| 7 正式运行 | 每点只运行一次；固定方法执行顺序、相同预热，隔离后台干扰。 | 纯搜索批次计时已核验；输入数量和顺序相同；失败记录保留。 |
+| 8 聚合与绘图 | 按 dataset/protocol/threads/budget/method/config 分组。 | 每点直接引用一次原始测量；不计算跨运行中位数/IQR/CV；各预算分开，缺失和失败有矩阵。 |
+
+QPS 定义为计时区间内实际完成查询数除以查询批次墙钟时间，排除建索引、加载、预热、GT 评估与结果文件写出。不能把 /usr/bin/time 的整个程序耗时直接当作纯搜索时间；原生计时范围未核验则 throughput_comparable=false。若短查询批次需要重复 epoch，应冻结 epoch 数和缓存策略，在每方法相同条件下测量，并单独注明重复查询负载。
+
+主要图表：① Ours 2 GiB 与 baseline 各自配置的 Recall@10–QPS 曲线；② 同 Recall 下实际峰值 RSS、磁盘索引和延迟；③ 单独的内存敏感性补充实验；④ 05A/05B 组件证据。图表必须明确各自内存设置，不称同内存预算比较。不能覆盖的 Recall 区间留空，不外推加速比；缺少逐查询数据时不伪造尾延迟。
+
+| 状态 | 判定依据 | 报告方式 |
+| --- | --- | --- |
+| passed | 来源、输入、正确性、资源、计时与单次配置验收全部通过 | 可进入对应正式图表。 |
+| budget_exceeded | 已证明不可避免的驻留下界超限，或实际分配失败/OOM 且有资源证据 | 报告具体预算/线程/配置；不据一次配置失败宣称该算法全部配置都不可能。 |
+| unsupported_layout / metric | 固定原生版本不支持当前输入布局或度量 | 保留支持范围说明，不改算法补齐。 |
+| runtime_error | 运行失败但尚无充分内存证据 | 保存日志与退出码，不能把所有 SIGSEGV 归为 OOM。 |
+| pending / blocked_environment | 尚未完成或控制器/运行环境不足 | 不进入正式性能比较。 |
+
+2026-09-17 后续修复已实现 cgroup 外层 runner、严格资源证据检查、配置隔离及单次结果验收，并修正三个 C++ 补充端口的计时字段。未运行全量实验、未把旧记录升级为 formal。Ours 限额运行仍需可写委派 cgroup；所有方法均需核验 CPU/NUMA、版本与原生端口准入；已有 AS=4 GiB Starling 诊断保持原标签。
+
+## 14. 三篇论文与内存限制的依据
+
+DiskANN 原论文 §3—4 以 64 GB RAM 单机为容量与性能背景，内存保存 PQ 码和缓存，SSD 保存图与原向量；这不是 RLIMIT_AS=64 GB 的证据。Starling §6.1、附录 N 默认每 segment 2 GB 内存/10 GB 磁盘、8 查询线程，调导航图等配置满足预算；原文不足以确认它完整计入线程工作区或用哪种 OS 限额。AiSAQ §4.2 用 /usr/bin/time 测查询峰值内存，仅加载 10 条 query、不加载 GT；约 11—14 MB 不能直接与 32 线程、整批查询配置比较。
+
+[DiskANN 原论文](https://harsha-simhadri.org/pubs/DiskANN19.pdf)
+
+[Starling 原论文 §6.1 与附录 N](https://arxiv.org/html/2401.02116v3)
+
+[AiSAQ 原论文 §4.2—4.3](https://arxiv.org/html/2404.06004v2)
+
+本方案借鉴固定资源条件和实际内存测量，但 32 线程、Ours 2 GiB 与 baseline 各自配置属于本项目协议。Linux RLIMIT_AS 限制虚拟地址空间；cgroup v2 memory.max 约束资源组所计入内存，memory.swap.max=0 禁止该组使用 swap。cgroup 用量可包含文件缓存、内核内存，且内核允许某些场景短暂超过 memory.max，所以应同时保存统计与事件，避免将其简化成进程 RSS 的绝对上限。
+
+[Linux getrlimit：RLIMIT_AS 定义](https://man7.org/linux/man-pages/man2/getrlimit.2.html)
+
+[Linux cgroup v2 内存控制文档](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+
+本地实现证据：experiments/05_disk_system_fair/orchestrator.py、native_contract.py、run_starling_existing_layout.py、native_rust/src/ours_port.rs；诊断证据 docs/analysis/starling_memory_recovery_20260917/README.md；输入头部核验保存在 docs/analysis/disk_memory_protocol_review_20260917/input_header_check.json。
+
+## 15. AGNews 历史实验核验补充
+
+2026-09-17 通过飞书 CLI 读取 AGNews 分析 revision 316，并核对其 CSV、artifact 与 preflight。四种旧方法各 40 个 w32 宽度点，全部只有 repeat=0；Ours cache_bytes=26259456，其他三个为 0。OG-LVQ/Symphony 的 peak_rss_bytes 分别为 12304/12288，恰为 resident+scratch 求和，不能作为真实进程峰值；因此原分析“还剩约 1 GiB 可做缓存”缺少实际内存依据。
+
+两个 run 的 preflight 均标记 hdd_raid/rotational=true，不能作为已验证 NVMe SSD 条件。各方法最高 QPS 对应不同 recall；文中平均 latency 是跨 40 个宽度点的平均，不能用于同 recall 排名。Symphony 使用已撤回的 neighborfetch 旧端口，parity 标签不足以证明原生等价。原文已有撤回提示，但后续“为什么快”和优化收益排序仍需一并限制为历史假设。
+
+这些问题通过 Ours 限额、各方法实测内存、原生实现准入、固定设备与预热、同 recall 比较及单次结果的严格溯源分别处理，不能仅靠把 2 GiB 改成 4 GiB 解决。AGNews 当前 Starling 页容量支持问题仍单独记录。详细本地核验：docs/analysis/disk_memory_protocol_review_20260917/AGNEWS_CONFIG_AUDIT.md。用户随后授权修代码与文档，已对 AGNews 原文逐块更正，保留三张历史图片；写入证据见 docs/analysis/disk_protocol_fix_20260917/。
+
+[AGNews 磁盘环境 32 线程实验分析（本次读取核验对象）](https://my.feishu.cn/docx/AhoKdQxEBogmWoxfk6xcxHKjnsg)
+
+
+## 16. 2026-09-17 代码修复与验证状态
+
+本次只修代码与文档、运行小型检查，没有启动全量实验。入口为 `experiments/05_disk_system_fair/run_disk_suite.py`，新协议 ID 为 `disk_ours2g_native_baselines_20260917`。按用户最新决定，正式 repeats=1，直接报告一次测量，不计算跨运行中位数/IQR/CV。
+
+| 问题 | 修复后行为 |
+|---|---|
+| 声明 2 GiB、AS/RSS/对象求和混用 | Ours 磁盘查询在加载前进入 2 GiB cgroup，保存限额与峰值/events；baseline 默认不加统一限额。两者均以 wait4 获取真实生命周期峰值 RSS，VmPeak 只作采样诊断。 |
+| 配置写死旧预算、缺少资源限制 | 主组为 Ours 2 GiB、baseline 各自配置、32 workers；补充 budget_scan 仅改变 Ours 的显式限额；同一方法在调参与测试之间保持配置一致。 |
+| 验证集只用 1 worker、测试偷偷增加线程组 | 验证、调参与测试使用同一预算/线程/缓存配置；GIST 不再隐式添加其他条件。05A 测试使用独立 test 划分。 |
+| CPU/NUMA 口径不一致 | 从 export 阶段起显式登记 `--cpu-affinity` 与 `--numa-node`，在测量子进程执行 sched_setaffinity 和 numactl membind；OMP 使用目标 workers，MKL/OpenBLAS 设为 1。配置变动须另开 run-id。 |
+| 缓存被强制等额或 C0 | 05A 固定 C0；完整系统默认 standard，保留原生缓存语义；C0 另列。取消新协议统一“缓存节点≤10%”验收，不替原生方法增加缓存算法。 |
+| 重复次数与结果选择 | 正式只跑一次，每点保存 repeat_id=0 的原始结果；不生成中位数、IQR、CV。重复配置、失配二进制/索引/查询划分时拒绝。 |
+| 假 RSS、计时重复归因 | 外部实测 RSS 与 native_reported_peak_rss 分开保存。Glass/Symphony/OG-LVQ 的 Recall 计算移出 QPS 计时；distance/queue 未独立计量，写 null；整段遍历另报 traversal_wall_us。 |
+| 筛选方法绕过绘图验收、旧结果覆盖 | 绘图核查协议、源 artifact、资源 sidecar、CSV 哈希与单次配置后才筛方法。发布到 `results/disk_environment/disk_ours2g_native_baselines_20260917/<run-id>/`。 |
+| Ours 的内存下界阻塞其他方法 | 显式只选 AiSAQ 等其他方法时，不再用 Ours DB1 下界拒绝该方法；不自动宣称其可运行。 |
+
+原生 CLI 的 `run_official_disk_baseline.py --execute` 默认保留 AiSAQ/Starling 自身的 PQ、导航和缓存配置，只测真实峰值 RSS，不要求 cgroup 或统一 4 GiB。只有显式传入 `--search-memory-gib` 才启用该方法的 cgroup 限额。该入口仍为诊断，`formal_ready=false`，正式 artifact、计时与原生一致性验收继续保留。
+
+资源 sidecar 覆盖整个 native 进程生命周期；同一进程扫描多个 width 时各点共享生命周期峰值，不能标成逐点内存。已有端口的 `memory_accounting_complete`、cache protocol、算法等价验收要求没有被资源 wrapper 自动豁免。待验收或不支持的项保持 blocked/pending。
+
+小型检查和源码记录见 docs/analysis/ours_2g_native_baselines_20260917/。当前缺少 cgroup 委派会阻塞 Ours 2 GiB 的真实限额检查；baseline 原生配置的 RSS 观测不依赖该委派。CPU/NUMA 工具、二进制版本、原生一致性和计时验收仍分别检查，不能把内存政策放宽当作这些项目已通过。
+
+后续核验确认当前宿主账号没有可写 cgroup 委派，且缺少 numactl；因此 Ours 2 GiB 尚未验证。五个二进制与登记哈希不一致，AiSAQ/Starling 的正式接入仍 pending。Rust 计时已补修，32 workers 极小查询检查通过；这些不是全量性能或受限内存验收。最新实施记录见 docs/analysis/ours_2g_native_baselines_20260917/README.md。

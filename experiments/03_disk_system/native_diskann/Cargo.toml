@@ -1,0 +1,29 @@
+[package]
+name = "qgraph05-diskann-port"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate lives outside baselines/diskann on purpose: the vendored DiskANN tree
+# stays byte-identical to its pinned upstream commit, and the port consumes only
+# public official APIs through path dependencies.
+[[bin]]
+name = "qgraph05_diskann_port"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+diskann = { path = "../../../baselines/diskann/diskann" }
+diskann-disk = { path = "../../../baselines/diskann/diskann-disk" }
+diskann-providers = { path = "../../../baselines/diskann/diskann-providers" }
+diskann-vector = { path = "../../../baselines/diskann/diskann-vector" }
+rayon = "1"
+serde_json = "1"
+
+# Keep code generation identical to the profile the vendored DiskANN workspace
+# uses, so moving the port out of that workspace does not change its performance.
+[profile.release]
+opt-level = 3
+codegen-units = 1
+debug = true
+split-debuginfo = "packed"

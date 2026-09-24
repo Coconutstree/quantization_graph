@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "run_id": "agnews_aligned_20260921_03_ram4",
+  "layer": "05c",
+  "dataset": "agnews",
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "formal_ready": true,
+  "experiment": "03_disk_system",
+  "search_dram_budget_gib": 4.0,
+  "memory_comparison": "shared_ram_budget_rss",
+  "cache_mode": "standard",
+  "storage_modes": [
+    "hybrid_disk"
+  ],
+  "raw_csv_sha256": "4a3a41f4a5145ff5e9f88df327a40e3f43d02c1a297f7f1272c7057c601db76d",
+  "statistic": "single_run",
+  "rows": 36,
+  "methods": [
+    "Ours-Disk",
+    "DiskANN-PQ-Disk",
+    "Glass-NSG-DiskPort",
+    "SymphonyQG-DiskPort"
+  ],
+  "workers": [
+    32
+  ],
+  "repeats": 1,
+  "frontier_csv": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_ram4/tables/formal_test_frontier.csv",
+  "frontier_csv_sha256": "9dae153a6786040e2f6cbfd985d1cee4169a9ec6d59a7056345dabd8e4148293",
+  "source_artifacts": [
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_pair/raw/Ours-Disk/test/Ours-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "40258f6ca033830d51bdc736ed84c26c6aa66c1e2339d6567c1ed5248e9f178b"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_pair/raw/DiskANN-PQ-Disk/test/DiskANN-PQ-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "aed35b3bbff61b8244510b29deb8b87afff78282c88050e0f0b7924e1420cf02"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_ram4/raw/Glass-NSG-DiskPort/test/Glass-NSG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "f20a738c98808d7f7978f2a7fb2007fb6aec5c7dfe2110f19797c1980f62088e"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_ram4/raw/SymphonyQG-DiskPort/test/SymphonyQG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "24cc0d8b97de0ac85fd9fa66ef691223f8bf618b499c9ca09a4333beb5b8fc76"
+    }
+  ],
+  "reused_artifacts": [
+    {
+      "method": "Glass-NSG-DiskPort",
+      "artifact": "results/03_disk_system/agnews/agnews_aligned_20260921_03_ram4/raw/Glass-NSG-DiskPort/test/Glass-NSG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "f20a738c98808d7f7978f2a7fb2007fb6aec5c7dfe2110f19797c1980f62088e",
+      "note": "binary sha256 and search configuration unchanged; the port records but never reads --tuning-lock, so the Ours-driven lock rewrite cannot affect this row set"
+    },
+    {
+      "method": "SymphonyQG-DiskPort",
+      "artifact": "results/03_disk_system/agnews/agnews_aligned_20260921_03_ram4/raw/SymphonyQG-DiskPort/test/SymphonyQG-DiskPort__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "24cc0d8b97de0ac85fd9fa66ef691223f8bf618b499c9ca09a4333beb5b8fc76",
+      "note": "binary sha256 and search configuration unchanged; the port records but never reads --tuning-lock, so the Ours-driven lock rewrite cannot affect this row set"
+    }
+  ],
+  "assembly_note": "Assembled by scripts/assemble_reused_03_table.py on 2026-09-22: Ours-Disk and DiskANN-PQ-Disk rows come from the current measurement; Glass-NSG-DiskPort and SymphonyQG-DiskPort rows are their previously admitted measurements, restored because their binaries/configuration are unchanged and their ports never read the shared fixed_parameters.lock.json that the Ours re-preparation rewrote.",
+  "pair_run_id": "agnews_aligned_20260921_03_pair"
+}

@@ -1,0 +1,12 @@
+{
+  "url": "https://my.feishu.cn/docx/Pp4XdtcIronEIvxXDTDcJPhPnRe",
+  "document_id": "Pp4XdtcIronEIvxXDTDcJPhPnRe",
+  "revision_id": 10,
+  "draft_profile": "passed",
+  "figure_revision": "nature-figure / matplotlib",
+  "figures": [
+    "fig01_encoding_storage",
+    "fig02_query_flow",
+    "fig03_page_reuse"
+  ]
+}

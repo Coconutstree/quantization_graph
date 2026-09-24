@@ -1,0 +1,38 @@
+[
+  {
+    "key": "02_diskann",
+    "headings": [
+      "第一部分：论文中的 DiskANN 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "images": 2,
+    "equations": 5
+  },
+  {
+    "key": "03_symphonyqg",
+    "headings": [
+      "第一部分：论文中的 SymphonyQG 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "images": 2,
+    "equations": 6
+  },
+  {
+    "key": "04_og_lvq",
+    "headings": [
+      "第一部分：论文中的 LVQ 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "images": 2,
+    "equations": 7
+  },
+  {
+    "key": "05_glass_nsg",
+    "headings": [
+      "第一部分：论文中的 NSG 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "images": 2,
+    "equations": 4
+  }
+]

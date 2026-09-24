@@ -1,0 +1,1 @@
+<p>主结果展示每方法两个工作点的 Recall@10–QPS 散点图及表格，不再称为完整性能曲线；报告每点实际 Recall、QPS、峰值 RSS、swap、运行所需磁盘索引大小及 I/O。两个点之间不插值或外推性能。Recall 不匹配时，不直接将 QPS 比值解释为同等精度加速比；目标 Recall 未达到就如实标记。结论限定为所列 HDD/RAID、4 GiB 峰值 RSS、32 workers、beam=4、width=40/240 与指定官方配置下的单轮实测，不推广为 SSD/NVMe 上的性能优势。</p>

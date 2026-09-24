@@ -1,0 +1,14 @@
+{
+  "acceptance": "passed",
+  "dataset": "agnews",
+  "experiment": "03_disk_system",
+  "formal_ready": true,
+  "layout_version": "paper-results-v2",
+  "note": "Acceptance refers to source protocol checks, not directory placement.",
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "protocol_sha256": "00ca5ae1e4cf85365f2a0633d92a2643fdd7a74e225a6c4537429b5a52bf2627",
+  "run_id": "agnews_aligned_20260921_03_ram4",
+  "run_metadata_relative": "../../../manifests/agnews_aligned_20260921_03_ram4",
+  "schema_version": 1,
+  "tables_manifest": "tables/formal_test_rows.manifest.json"
+}

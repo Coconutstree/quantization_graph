@@ -1,0 +1,21 @@
+PASS test_nibble_roundtrip 
+PASS test_3bit_roundtrip 
+PASS test_db1_roundtrip 
+PASS test_page_layout_packed 
+PASS test_page_layout_aligned 
+PASS test_pages_and_extract 
+PASS test_cache_is_namespaced_by_file 
+PASS test_buffered_reader_not_reported_as_direct 
+PASS test_packed_records_do_not_straddle_pages 
+PASS test_pages_aligned_writer 
+PASS test_plan_reads_coalescing 
+PASS test_index_builder_verify 
+PASS test_quantizer_sizes_and_parity PQQuantizer4
+PASS test_quantizer_sizes_and_parity SQQuantizer4
+PASS test_quantizer_sizes_and_parity SAQQuantizer4
+PASS test_ours_quantizer_sizes_and_parity 
+PASS test_odirect_reader_if_supported 
+PASS test_repo_relative_resolution_from_other_cwd 
+PASS test_dataset_policy_splits_and_metrics 
+PASS test_dataset_policy_budget_lower_bounds 
+20/20 passed

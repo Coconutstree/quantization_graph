@@ -1,0 +1,1 @@
+<ul><li>I/O 比较：旧表 requests/query 与 bytes/query 是不同 width 点的均值，不是同 Recall 的测量。撤回“Ours 同 Recall 下 I/O 明显更低”的结论；候选额外读取、缓存策略及磁盘布局均会影响这些数值。</li></ul>

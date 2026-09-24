@@ -22,7 +22,7 @@ log() { echo "[$(date '+%F %T')] $*"; }
 
 for DS in ${DATASETS}; do
   log "===== dataset ${DS}: 05a plot ====="
-  QG05_FAST_WIDTHS="${W_05A}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+  QG05_FAST_WIDTHS="${W_05A}" python3 src/disk_bench/run_disk_suite.py \
     --phase plot --run-id "${RID_05A}" --layers 05a --datasets "${DS}" \
     --out-root "${OUT_ROOT}" --methods "${METHODS_05A}" || log "WARN: 05a plot failed for ${DS}"
 done
@@ -32,19 +32,19 @@ for WK in ${WORKERS}; do
   for DS in ${DATASETS}; do
     RID="${RUN_ID_BASE}_w${WK}_bc_${DS}"
     log "===== worker ${WK} dataset ${DS}: 05b/05c run-id=${RID} ====="
-    QG05_FAST_WIDTHS="${W_BC}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    QG05_FAST_WIDTHS="${W_BC}" python3 src/disk_bench/run_disk_suite.py \
       --phase export --run-id "${RID}" --layers 05b,05c --datasets "${DS}" \
       --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
       --workers "${WK}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
-    QG05_FAST_WIDTHS="${W_BC}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    QG05_FAST_WIDTHS="${W_BC}" python3 src/disk_bench/run_disk_suite.py \
       --phase validate --run-id "${RID}" --layers 05b,05c --datasets "${DS}" \
       --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
       --workers "${WK}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
-    QG05_FAST_WIDTHS="${W_BC}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    QG05_FAST_WIDTHS="${W_BC}" python3 src/disk_bench/run_disk_suite.py \
       --phase run --run-id "${RID}" --layers 05b,05c --datasets "${DS}" \
       --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
       --workers "${WK}" --repeats 1 --seed 20260813 --search-dram-budget-gib 2.0
-    QG05_FAST_WIDTHS="${W_BC}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+    QG05_FAST_WIDTHS="${W_BC}" python3 src/disk_bench/run_disk_suite.py \
       --phase plot --run-id "${RID}" --layers 05b,05c --datasets "${DS}" \
       --out-root "${OUT_ROOT}" --methods "${METHODS_BC}"
     log "===== worker ${WK} dataset ${DS} 05b/05c done ====="

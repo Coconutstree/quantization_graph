@@ -1,0 +1,13 @@
+{
+  "source": "results/03_disk_system/agnews/tables/recall_qps_summary.csv",
+  "sha256": "5f8d72d1e8ccfd0cfd86ea9c4339398c05429b756d84d36bb7fcb75dfca15223",
+  "input_rows": 36,
+  "plotted_rows": 36,
+  "excluded_rows": 0,
+  "backend": "matplotlib",
+  "size_mm": [
+    89,
+    78
+  ],
+  "script": "scripts/plot_gist_formal_recall_qps.py"
+}

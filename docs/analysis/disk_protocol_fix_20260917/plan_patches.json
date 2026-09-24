@@ -1,0 +1,42 @@
+[
+  {
+    "command": "block_replace",
+    "block_id": "doxcnE8BwcqfU6ZcmzihAmb8Kgd",
+    "file": "plan_patch_00.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnschjLcPd1IHiQKhlTtOxgd",
+    "file": "plan_patch_01.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnp3aA5LFevfy6i22sXnanKc",
+    "file": "plan_patch_02.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnhQSZSX5IBR5szivdeJXPRg",
+    "file": "plan_patch_03.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnBtpXxK5tuo1EQdTHB3Ubnc",
+    "file": "plan_patch_04.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnKhSMsqoE2Q38zU1d704Moc",
+    "file": "plan_patch_05.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnwJy0h9QD7fAqcwxazA3nOc",
+    "file": "plan_patch_06.xml"
+  },
+  {
+    "command": "append",
+    "block_id": null,
+    "file": "plan_patch_07.xml"
+  }
+]

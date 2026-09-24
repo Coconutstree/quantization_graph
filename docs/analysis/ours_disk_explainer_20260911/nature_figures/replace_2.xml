@@ -1,0 +1,1 @@
+<img path="@./docs/analysis/ours_disk_explainer_20260911/nature_figures/fig02_query_flow.png" width="1600" caption="图 2：查询主循环。丢弃是候选级操作；若一批全部被筛掉，继续处理后续扩展。"/>

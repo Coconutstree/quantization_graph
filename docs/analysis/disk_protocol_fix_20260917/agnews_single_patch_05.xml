@@ -1,0 +1,1 @@
+<ul><li>历史配置声明：search_dram_budget_gib=2.0；四种旧方法均 workers=32、repeat=0。该字段本身不证明内存硬限制生效。新的正式验收要求 cgroup v2 证据、repeat_id=0 的一次真实运行，旧 formal_ready=true 标签不自动继承。</li></ul>

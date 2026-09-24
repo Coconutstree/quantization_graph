@@ -1,0 +1,40 @@
+{
+  "baseline_native_budgets": {},
+  "cache_mode": "standard",
+  "dataset": "agnews",
+  "experiment": "03_disk_system",
+  "experiment_group": "primary",
+  "formal_ready": true,
+  "frontier_csv": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_pair/tables/formal_test_frontier.csv",
+  "frontier_csv_sha256": "7c7622cd97403245502dbbce6aa4f413aa3f19d3803458028e82e888ce660ce9",
+  "layer": "05c",
+  "memory_comparison": "shared_ram_budget_rss",
+  "methods": [
+    "Ours-Disk",
+    "DiskANN-PQ-Disk"
+  ],
+  "protocol_id": "disk_ram_budget_rss_20260921",
+  "raw_csv_sha256": "dddcccc7b6a01ef2bc36cfd9853c627b3caa47684a088ca68293d57b7ab2c815",
+  "repeats": 1,
+  "rows": 18,
+  "run_id": "agnews_aligned_20260921_03_pair",
+  "schema_version": 2,
+  "search_dram_budget_gib": 4.0,
+  "source_artifacts": [
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_pair/raw/Ours-Disk/test/Ours-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "40258f6ca033830d51bdc736ed84c26c6aa66c1e2339d6567c1ed5248e9f178b"
+    },
+    {
+      "path": "/home/kai3/coco/quantization_graph/results/03_disk_system/agnews/agnews_aligned_20260921_03_pair/raw/DiskANN-PQ-Disk/test/DiskANN-PQ-Disk__hybrid_disk__B4__standard__w32__r0.json",
+      "sha256": "aed35b3bbff61b8244510b29deb8b87afff78282c88050e0f0b7924e1420cf02"
+    }
+  ],
+  "statistic": "single_run",
+  "storage_modes": [
+    "hybrid_disk"
+  ],
+  "workers": [
+    32
+  ]
+}

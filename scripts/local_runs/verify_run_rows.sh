@@ -22,7 +22,7 @@ case "${LAYER}" in
   *) echo "ERROR: unknown layer ${LAYER}"; exit 2 ;;
 esac
 
-OUT_ROOT="${OUT_ROOT:-${ROOT}/results/disk_environment/.formal_runs}"
+OUT_ROOT="${OUT_ROOT:-${ROOT}/results/archive/legacy_layout_20260918/disk_environment/.formal_runs}"
 FAIL=0
 for ds in ${DATASETS//,/ }; do
   CSV="${OUT_ROOT}/runs/${RUN_ID}/${LAYER_DIR}/${ds}/aggregate/formal_test_rows.csv"

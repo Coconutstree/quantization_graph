@@ -1,0 +1,10 @@
+# Local TeX build intermediates; retain main.pdf as the viewable deliverable.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.xdv

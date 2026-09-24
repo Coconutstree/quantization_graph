@@ -1,0 +1,112 @@
+-- Configuring done (0.2s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/kai3/coco/quantization_graph/build/disk/01_disk_quantizer
+ninja: no work to do.
+-- Configuring done (0.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/kai3/coco/quantization_graph/build/disk/native
+ninja: no work to do.
+   Compiling diskann-fair v0.1.0 (/home/kai3/coco/quantization_graph/src/graph_core)
+warning: methods `paper_estimate` and `paper_estimate_batch` are never used
+    --> src/ours_diskann.rs:1019:8
+     |
+ 957 | impl QueryComputer {
+     | ------------------ methods in this implementation
+...
+1019 |     fn paper_estimate(&self, encoded: &[u8], epsilon0: f32) -> RabitqPaperEstimate {
+     |        ^^^^^^^^^^^^^^
+...
+1082 |     fn paper_estimate_batch(
+     |        ^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `rabitq_paper_estimate` is never used
+   --> src/ours_diskann.rs:156:8
+    |
+156 |     fn rabitq_paper_estimate(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `rabitq_paper_estimate_batch` is never used
+   --> src/ours_diskann.rs:188:8
+    |
+188 |     fn rabitq_paper_estimate_batch(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `diskann-fair` (lib) generated 3 warnings
+warning: field `centroid_count` is never read
+   --> src/ours_diskann.rs:249:5
+    |
+246 | pub struct RabitqSpace {
+    |            ----------- field in this struct
+...
+249 |     centroid_count: usize,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated items `new_dbpedia_default`, `dim`, `centroid_count`, `encode_parts`, `export_sidecar`, and `prepare_query` are never used
+   --> src/ours_diskann.rs:262:12
+    |
+261 | impl RabitqSpace {
+    | ---------------- associated items in this implementation
+262 |     pub fn new_dbpedia_default(dim: usize, seed: u32, center: &[f32]) -> Result<Arc<Self>, String> {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+372 |     pub fn dim(&self) -> usize {
+    |            ^^^
+...
+376 |     pub fn centroid_count(&self) -> usize {
+    |            ^^^^^^^^^^^^^^
+...
+383 |     pub fn encode_parts(&self, raw: &[f32]) -> ANNResult<(Vec<u8>, Vec<u8>)> {
+    |            ^^^^^^^^^^^^
+...
+395 |     pub fn export_sidecar(
+    |            ^^^^^^^^^^^^^^
+...
+430 |     pub fn prepare_query(self: &Arc<Self>, query: &[f32]) -> ANNResult<QueryComputer> {
+    |            ^^^^^^^^^^^^^
+
+warning: field `norms` is never read
+   --> src/ours_diskann.rs:542:5
+    |
+541 | pub(crate) struct AdaptiveRoute {
+    |                   ------------- field in this struct
+542 |     norms: Vec<f32>,
+    |     ^^^^^
+
+warning: methods `load_norms`, `resident_bytes`, `project`, and `score` are never used
+   --> src/ours_diskann.rs:552:19
+    |
+551 | impl AdaptiveRoute {
+    | ------------------ methods in this implementation
+552 |     pub(crate) fn load_norms(&mut self, path: &Path, calibrate: bool) -> ANNResult<()> {
+    |                   ^^^^^^^^^^
+...
+573 |     pub(crate) fn resident_bytes(&self) -> usize {
+    |                   ^^^^^^^^^^^^^^
+...
+576 |     pub(crate) fn project(&self, query: &[f32]) -> Vec<f32> {
+    |                   ^^^^^^^
+...
+581 |     pub(crate) fn score(&self, id: usize, projected: &[f32]) -> f32 {
+    |                   ^^^^^
+
+warning: methods `paper_estimate` and `paper_estimate_batch` are never used
+    --> src/ours_diskann.rs:1019:8
+     |
+ 957 | impl QueryComputer {
+     | ------------------ methods in this implementation
+...
+1019 |     fn paper_estimate(&self, encoded: &[u8], epsilon0: f32) -> RabitqPaperEstimate {
+     |        ^^^^^^^^^^^^^^
+...
+1082 |     fn paper_estimate_batch(
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: `diskann-fair` (bin "run_diskann_fair") generated 7 warnings (2 duplicates)
+    Finished `release` profile [optimized] target(s) in 18.66s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
+PASS qgraph05_direct_io_test
+Disk experiment builds completed under /home/kai3/coco/quantization_graph/build/disk

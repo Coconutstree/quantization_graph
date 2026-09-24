@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "query_comparisons": 32000,
+  "reference_artifact_sha256": "e1d8e888d753ea38466645c3d4ba738ce0c765425df1b0bd81f49395690b33f7",
+  "disk_artifact_sha256": "1cd532f1dee4df7c95229289447fa69b21df6ec13727ba487e18ce6ae6d5d7f4",
+  "compared_fields": [
+    "result_ids",
+    "recall_at_10",
+    "visited_nodes",
+    "distance_evaluations"
+  ],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "scope": "disk_run_reproducibility_plus_native_memory_parity",
+  "native_reference_evidence": {
+    "direct_backend": "official LinuxAlignedFileReader(O_DIRECT+io_uring)",
+    "max_recall_delta": 0.0,
+    "mean_distance_count_relative_delta": 0.0,
+    "mean_top10_overlap": 1.0,
+    "mean_visited_count_relative_delta": 0.0,
+    "memory_backend": "official DiskANN StorageProviderAlignedFileReader-equivalent over identical exported disk-index bytes",
+    "method": "DiskANN-PQ-Disk",
+    "query_comparisons": 32000,
+    "schema_version": 1
+  }
+}

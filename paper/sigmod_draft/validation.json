@@ -1,0 +1,44 @@
+{
+  "citation_keys": [
+    "diskann",
+    "exrabitq",
+    "lvq",
+    "nsg",
+    "pq",
+    "rabitq",
+    "saq",
+    "symphonyqg"
+  ],
+  "citation_consistency": "passed",
+  "latex_environment_balance": "passed",
+  "display_equations": 17,
+  "algebra_trials": 512,
+  "max_symmetric_identity_abs_error": 1.1013412404281553e-13,
+  "algebra_check_scope": "float64 identity and inequality sanity checks; not native search validation",
+  "section_token_like_word_counts": {
+    "Abstract": 189,
+    "1 Introduction": 573,
+    "2 Problem and Design Rationale": 460,
+    "3 ExRaBitQ-Disk": 1931,
+    "4 Analysis": 551,
+    "5 Experimental Methodology": 1250,
+    "6 Results and Evidence Status": 609,
+    "7 Related Work": 216,
+    "8 Discussion and Conclusion": 207
+  },
+  "total_token_like_word_count": 5986,
+  "evidence_placeholders": [
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5"
+  ],
+  "pdf_compiled": true,
+  "page_count_verified": true,
+  "manuscript_sha256": "3b3b225862d89270da072713402dda1c461628d33fb4ca45d872fb771afe1883",
+  "pdf_pages": 10,
+  "pdf_bytes": 244041,
+  "pdf_sha256": "39f4f8fe254d60b47b174e310cd6439d34da7b0f62a93a9c672fac651125eb68",
+  "pdf_check_scope": "Parsed pages and text; not a visual submission-readiness review"
+}

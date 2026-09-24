@@ -1,0 +1,1 @@
+<p>内存环境实测：沙箱 cgroup 只读；宿主机当前账号创建子组返回 Permission denied，70 个可见目录无可写委派，用户 systemd 总线不可用，numactl 未安装。按最新规则，该 cgroup 问题只阻塞 Ours 2 GiB 或另行明确要求限额的运行；baseline 原生配置的峰值 RSS 观测不依赖 cgroup。Ours 限额尚未验证，CPU/NUMA、二进制与原生方法准入仍分别检查。</p>

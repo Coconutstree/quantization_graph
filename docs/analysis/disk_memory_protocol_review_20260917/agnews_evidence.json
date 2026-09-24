@@ -1,0 +1,654 @@
+[
+  {
+    "method": "Glass-NSG-DiskPort",
+    "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/Glass-NSG-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+    "fields": {
+      "cache_bytes": 0,
+      "cache_nodes": 0,
+      "resident_bytes": 4196,
+      "worker_scratch_bytes": 3276800,
+      "peak_rss_bytes": 3280996,
+      "cpu_affinity": "uncontrolled",
+      "numa_node": 0,
+      "implementation_parity": "passed",
+      "parity": {
+        "reference_artifact_sha256": "fa4c61b3728475ad1ff429504140c54cf5c8756ef533c1deff4b2621a16faacd",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 1.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0
+      },
+      "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1"
+    },
+    "preflight": {
+      "disk_profile": "hdd_raid",
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_manifest": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/manifests/fio_preflight.json",
+      "fio_manifest_sha256": "6df855840cbc74093df6f857f668aa76e255b2194d00f13d24af0dabf31ac87b",
+      "formal_ready": true,
+      "free_gib": 4490.147216796875,
+      "fs": {
+        "block_size": 4096,
+        "free_bytes": 4821258862592,
+        "path": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "total_bytes": 23951960965120
+      },
+      "hardware": {
+        "cpu": "x86_64",
+        "cpu_count": 160,
+        "hostname": "zxcpu11",
+        "numpy": "2.4.4",
+        "platform": "Linux-5.15.0-142-generic-x86_64-with-glibc2.35",
+        "python": "3.13.12",
+        "ram_total_bytes": null,
+        "timestamp": "2026-09-01T15:39:51+0800"
+      },
+      "odirect": true,
+      "required_io_backend": "O_DIRECT + native asynchronous I/O",
+      "rotational": true,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "storage_medium": "rotational_hdd_or_hardware_raid",
+      "sufficient_space_200gib": true
+    },
+    "fio": {
+      "block_size": 4096,
+      "direct": true,
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_executable": "/home/kai3/coco/quantization_graph/baselines/tools/fio-package/root/usr/bin/fio",
+      "ioengine": "libaio",
+      "results": [
+        {
+          "bandwidth_kib_s": 1594.0,
+          "iops": 398.541313,
+          "latency_mean_us": 2492.74026172,
+          "latency_p95_us": 9371.648,
+          "latency_p99_us": 25296.896,
+          "queue_depth": 1
+        },
+        {
+          "bandwidth_kib_s": 6554.0,
+          "iops": 1638.397762,
+          "latency_mean_us": 2425.711500091,
+          "latency_p95_us": 9764.864,
+          "latency_p99_us": 14221.312,
+          "queue_depth": 4
+        },
+        {
+          "bandwidth_kib_s": 18025.0,
+          "iops": 4504.790419,
+          "latency_mean_us": 3537.985441255,
+          "latency_p95_us": 15138.816,
+          "latency_p99_us": 24248.32,
+          "queue_depth": 16
+        },
+        {
+          "bandwidth_kib_s": 26032.0,
+          "iops": 6504.987034,
+          "latency_mean_us": 4906.870878268,
+          "latency_p95_us": 20840.448,
+          "latency_p99_us": 38010.88,
+          "queue_depth": 32
+        },
+        {
+          "bandwidth_kib_s": 36088.0,
+          "iops": 9015.955325,
+          "latency_mean_us": 7094.577381354001,
+          "latency_p95_us": 31588.352,
+          "latency_p99_us": 68681.728,
+          "queue_depth": 64
+        },
+        {
+          "bandwidth_kib_s": 46203.0,
+          "iops": 11538.293217,
+          "latency_mean_us": 11101.372370412,
+          "latency_p95_us": 52690.944,
+          "latency_p99_us": 139460.608,
+          "queue_depth": 128
+        }
+      ],
+      "runtime_s": 10,
+      "schema_version": 1,
+      "size_gib": 8,
+      "status": "passed"
+    },
+    "invocation_run": {
+      "argv": [
+        "experiments/05_disk_system_fair/run_disk_suite.py",
+        "--layers",
+        "05c",
+        "--datasets",
+        "agnews",
+        "--methods",
+        "Ours-Disk,OG-LVQ-DiskPort,Glass-NSG-DiskPort",
+        "--run-id",
+        "agnews_05c_rerun_20260901_152210",
+        "--out-root",
+        "results/disk_environment/.formal_runs",
+        "--disk-root",
+        "work/05_disk_system_fair/disk_root",
+        "--disk-profile",
+        "auto",
+        "--ports",
+        "experiments/05_disk_system_fair/ports.local.json",
+        "--storage-modes",
+        "hybrid_disk",
+        "--workers",
+        "32",
+        "--repeats",
+        "1",
+        "--seed",
+        "20260813",
+        "--search-dram-budget-gib",
+        "2.0",
+        "--phase",
+        "run"
+      ],
+      "datasets": [
+        "agnews"
+      ],
+      "disk_profile": "hdd_raid",
+      "layers": [
+        "05c"
+      ],
+      "ports_registry": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/ports.local.json",
+      "ports_registry_sha256": "e29ad8dedfb44fe6e7e8cd68588e8ebe349312093e24b66106c5000c25e91351",
+      "repeats": 1,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "schema_version": 2,
+      "search_dram_budget_gib": 2.0,
+      "seed": 20260813,
+      "workers": [
+        32
+      ]
+    }
+  },
+  {
+    "method": "OG-LVQ-DiskPort",
+    "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/OG-LVQ-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+    "fields": {
+      "cache_bytes": 0,
+      "cache_nodes": 0,
+      "resident_bytes": 8208,
+      "worker_scratch_bytes": 4096,
+      "peak_rss_bytes": 12304,
+      "cpu_affinity": "uncontrolled",
+      "numa_node": 0,
+      "implementation_parity": "passed",
+      "parity": {
+        "reference_artifact_sha256": "7b41f41c83f779854b41e89b6f5dc3ec6baae2d9c30100edf78d128c7efa183a",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 1.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0
+      },
+      "implementation_fingerprint": "05c-og-lvq-svs-layout-native-odirect-v1"
+    },
+    "preflight": {
+      "disk_profile": "hdd_raid",
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_manifest": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/manifests/fio_preflight.json",
+      "fio_manifest_sha256": "6df855840cbc74093df6f857f668aa76e255b2194d00f13d24af0dabf31ac87b",
+      "formal_ready": true,
+      "free_gib": 4490.147216796875,
+      "fs": {
+        "block_size": 4096,
+        "free_bytes": 4821258862592,
+        "path": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "total_bytes": 23951960965120
+      },
+      "hardware": {
+        "cpu": "x86_64",
+        "cpu_count": 160,
+        "hostname": "zxcpu11",
+        "numpy": "2.4.4",
+        "platform": "Linux-5.15.0-142-generic-x86_64-with-glibc2.35",
+        "python": "3.13.12",
+        "ram_total_bytes": null,
+        "timestamp": "2026-09-01T15:39:51+0800"
+      },
+      "odirect": true,
+      "required_io_backend": "O_DIRECT + native asynchronous I/O",
+      "rotational": true,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "storage_medium": "rotational_hdd_or_hardware_raid",
+      "sufficient_space_200gib": true
+    },
+    "fio": {
+      "block_size": 4096,
+      "direct": true,
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_executable": "/home/kai3/coco/quantization_graph/baselines/tools/fio-package/root/usr/bin/fio",
+      "ioengine": "libaio",
+      "results": [
+        {
+          "bandwidth_kib_s": 1594.0,
+          "iops": 398.541313,
+          "latency_mean_us": 2492.74026172,
+          "latency_p95_us": 9371.648,
+          "latency_p99_us": 25296.896,
+          "queue_depth": 1
+        },
+        {
+          "bandwidth_kib_s": 6554.0,
+          "iops": 1638.397762,
+          "latency_mean_us": 2425.711500091,
+          "latency_p95_us": 9764.864,
+          "latency_p99_us": 14221.312,
+          "queue_depth": 4
+        },
+        {
+          "bandwidth_kib_s": 18025.0,
+          "iops": 4504.790419,
+          "latency_mean_us": 3537.985441255,
+          "latency_p95_us": 15138.816,
+          "latency_p99_us": 24248.32,
+          "queue_depth": 16
+        },
+        {
+          "bandwidth_kib_s": 26032.0,
+          "iops": 6504.987034,
+          "latency_mean_us": 4906.870878268,
+          "latency_p95_us": 20840.448,
+          "latency_p99_us": 38010.88,
+          "queue_depth": 32
+        },
+        {
+          "bandwidth_kib_s": 36088.0,
+          "iops": 9015.955325,
+          "latency_mean_us": 7094.577381354001,
+          "latency_p95_us": 31588.352,
+          "latency_p99_us": 68681.728,
+          "queue_depth": 64
+        },
+        {
+          "bandwidth_kib_s": 46203.0,
+          "iops": 11538.293217,
+          "latency_mean_us": 11101.372370412,
+          "latency_p95_us": 52690.944,
+          "latency_p99_us": 139460.608,
+          "queue_depth": 128
+        }
+      ],
+      "runtime_s": 10,
+      "schema_version": 1,
+      "size_gib": 8,
+      "status": "passed"
+    },
+    "invocation_run": {
+      "argv": [
+        "experiments/05_disk_system_fair/run_disk_suite.py",
+        "--layers",
+        "05c",
+        "--datasets",
+        "agnews",
+        "--methods",
+        "Ours-Disk,OG-LVQ-DiskPort,Glass-NSG-DiskPort",
+        "--run-id",
+        "agnews_05c_rerun_20260901_152210",
+        "--out-root",
+        "results/disk_environment/.formal_runs",
+        "--disk-root",
+        "work/05_disk_system_fair/disk_root",
+        "--disk-profile",
+        "auto",
+        "--ports",
+        "experiments/05_disk_system_fair/ports.local.json",
+        "--storage-modes",
+        "hybrid_disk",
+        "--workers",
+        "32",
+        "--repeats",
+        "1",
+        "--seed",
+        "20260813",
+        "--search-dram-budget-gib",
+        "2.0",
+        "--phase",
+        "run"
+      ],
+      "datasets": [
+        "agnews"
+      ],
+      "disk_profile": "hdd_raid",
+      "layers": [
+        "05c"
+      ],
+      "ports_registry": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/ports.local.json",
+      "ports_registry_sha256": "e29ad8dedfb44fe6e7e8cd68588e8ebe349312093e24b66106c5000c25e91351",
+      "repeats": 1,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "schema_version": 2,
+      "search_dram_budget_gib": 2.0,
+      "seed": 20260813,
+      "workers": [
+        32
+      ]
+    }
+  },
+  {
+    "method": "Ours-Disk",
+    "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/Ours-Disk__hybrid_disk__B2__standard__w32__r0.json",
+    "fields": {
+      "cache_bytes": 26259456,
+      "cache_nodes": 76932,
+      "resident_bytes": 1019435246,
+      "worker_scratch_bytes": 268435456,
+      "peak_rss_bytes": 818089984,
+      "cpu_affinity": "0-159",
+      "numa_node": "0-3",
+      "implementation_parity": "passed",
+      "parity": {
+        "reference_artifact_sha256": "f467e2346e5bb60759ee86f542323cb9d863f503799f01374351123da5d2e0dc",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 0.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0
+      },
+      "implementation_fingerprint": "05c-ours-release-native-odirect-v2"
+    },
+    "preflight": {
+      "disk_profile": "hdd_raid",
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_manifest": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/manifests/fio_preflight.json",
+      "fio_manifest_sha256": "6df855840cbc74093df6f857f668aa76e255b2194d00f13d24af0dabf31ac87b",
+      "formal_ready": true,
+      "free_gib": 4490.147216796875,
+      "fs": {
+        "block_size": 4096,
+        "free_bytes": 4821258862592,
+        "path": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "total_bytes": 23951960965120
+      },
+      "hardware": {
+        "cpu": "x86_64",
+        "cpu_count": 160,
+        "hostname": "zxcpu11",
+        "numpy": "2.4.4",
+        "platform": "Linux-5.15.0-142-generic-x86_64-with-glibc2.35",
+        "python": "3.13.12",
+        "ram_total_bytes": null,
+        "timestamp": "2026-09-01T15:39:51+0800"
+      },
+      "odirect": true,
+      "required_io_backend": "O_DIRECT + native asynchronous I/O",
+      "rotational": true,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "storage_medium": "rotational_hdd_or_hardware_raid",
+      "sufficient_space_200gib": true
+    },
+    "fio": {
+      "block_size": 4096,
+      "direct": true,
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_executable": "/home/kai3/coco/quantization_graph/baselines/tools/fio-package/root/usr/bin/fio",
+      "ioengine": "libaio",
+      "results": [
+        {
+          "bandwidth_kib_s": 1594.0,
+          "iops": 398.541313,
+          "latency_mean_us": 2492.74026172,
+          "latency_p95_us": 9371.648,
+          "latency_p99_us": 25296.896,
+          "queue_depth": 1
+        },
+        {
+          "bandwidth_kib_s": 6554.0,
+          "iops": 1638.397762,
+          "latency_mean_us": 2425.711500091,
+          "latency_p95_us": 9764.864,
+          "latency_p99_us": 14221.312,
+          "queue_depth": 4
+        },
+        {
+          "bandwidth_kib_s": 18025.0,
+          "iops": 4504.790419,
+          "latency_mean_us": 3537.985441255,
+          "latency_p95_us": 15138.816,
+          "latency_p99_us": 24248.32,
+          "queue_depth": 16
+        },
+        {
+          "bandwidth_kib_s": 26032.0,
+          "iops": 6504.987034,
+          "latency_mean_us": 4906.870878268,
+          "latency_p95_us": 20840.448,
+          "latency_p99_us": 38010.88,
+          "queue_depth": 32
+        },
+        {
+          "bandwidth_kib_s": 36088.0,
+          "iops": 9015.955325,
+          "latency_mean_us": 7094.577381354001,
+          "latency_p95_us": 31588.352,
+          "latency_p99_us": 68681.728,
+          "queue_depth": 64
+        },
+        {
+          "bandwidth_kib_s": 46203.0,
+          "iops": 11538.293217,
+          "latency_mean_us": 11101.372370412,
+          "latency_p95_us": 52690.944,
+          "latency_p99_us": 139460.608,
+          "queue_depth": 128
+        }
+      ],
+      "runtime_s": 10,
+      "schema_version": 1,
+      "size_gib": 8,
+      "status": "passed"
+    },
+    "invocation_run": {
+      "argv": [
+        "experiments/05_disk_system_fair/run_disk_suite.py",
+        "--layers",
+        "05c",
+        "--datasets",
+        "agnews",
+        "--methods",
+        "Ours-Disk,OG-LVQ-DiskPort,Glass-NSG-DiskPort",
+        "--run-id",
+        "agnews_05c_rerun_20260901_152210",
+        "--out-root",
+        "results/disk_environment/.formal_runs",
+        "--disk-root",
+        "work/05_disk_system_fair/disk_root",
+        "--disk-profile",
+        "auto",
+        "--ports",
+        "experiments/05_disk_system_fair/ports.local.json",
+        "--storage-modes",
+        "hybrid_disk",
+        "--workers",
+        "32",
+        "--repeats",
+        "1",
+        "--seed",
+        "20260813",
+        "--search-dram-budget-gib",
+        "2.0",
+        "--phase",
+        "run"
+      ],
+      "datasets": [
+        "agnews"
+      ],
+      "disk_profile": "hdd_raid",
+      "layers": [
+        "05c"
+      ],
+      "ports_registry": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/ports.local.json",
+      "ports_registry_sha256": "e29ad8dedfb44fe6e7e8cd68588e8ebe349312093e24b66106c5000c25e91351",
+      "repeats": 1,
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "schema_version": 2,
+      "search_dram_budget_gib": 2.0,
+      "seed": 20260813,
+      "workers": [
+        32
+      ]
+    }
+  },
+  {
+    "method": "SymphonyQG-DiskPort",
+    "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/05C_disk_system_fair/agnews/artifacts/test/SymphonyQG-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+    "fields": {
+      "cache_bytes": 0,
+      "cache_nodes": 0,
+      "resident_bytes": 8192,
+      "worker_scratch_bytes": 4096,
+      "peak_rss_bytes": 12288,
+      "cpu_affinity": "uncontrolled",
+      "numa_node": 0,
+      "implementation_parity": "passed",
+      "parity": {
+        "reference_artifact_sha256": "18fd9285943166643f61b7c7786380b9c7ff3e3c34b49c24302dc490940be708",
+        "max_recall_delta": 0.0,
+        "mean_top10_overlap": 1.0,
+        "mean_visited_count_relative_delta": 0.0,
+        "mean_distance_count_relative_delta": 0.0
+      },
+      "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-neighborfetch-v2"
+    },
+    "preflight": {
+      "disk_profile": "hdd_raid",
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_manifest": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/manifests/fio_preflight.json",
+      "fio_manifest_sha256": "57c713fcf45bf903ed0325d5a1a164e5f2496a232fa9ba4cf0779613fd0a76e2",
+      "formal_ready": true,
+      "free_gib": 4489.965724945068,
+      "fs": {
+        "block_size": 4096,
+        "free_bytes": 4821063987200,
+        "path": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "total_bytes": 23951960965120
+      },
+      "hardware": {
+        "cpu": "x86_64",
+        "cpu_count": 160,
+        "hostname": "zxcpu11",
+        "numpy": "2.4.4",
+        "platform": "Linux-5.15.0-142-generic-x86_64-with-glibc2.35",
+        "python": "3.13.12",
+        "ram_total_bytes": null,
+        "timestamp": "2026-09-01T17:04:18+0800"
+      },
+      "odirect": true,
+      "required_io_backend": "O_DIRECT + native asynchronous I/O",
+      "rotational": true,
+      "run_id": "fix_w32_diskpayload_symphony_20260831_140957",
+      "storage_medium": "rotational_hdd_or_hardware_raid",
+      "sufficient_space_200gib": true
+    },
+    "fio": {
+      "block_size": 4096,
+      "direct": true,
+      "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+      "fio_executable": "/home/kai3/coco/quantization_graph/baselines/tools/fio-package/root/usr/bin/fio",
+      "ioengine": "libaio",
+      "results": [
+        {
+          "bandwidth_kib_s": 1396.0,
+          "iops": 349.130174,
+          "latency_mean_us": 2848.575,
+          "latency_p95_us": 10158.08,
+          "latency_p99_us": 23986.176,
+          "queue_depth": 1
+        },
+        {
+          "bandwidth_kib_s": 4458.0,
+          "iops": 1114.208633,
+          "latency_mean_us": 3573.2057478029997,
+          "latency_p95_us": 10944.512,
+          "latency_p99_us": 16908.288,
+          "queue_depth": 4
+        },
+        {
+          "bandwidth_kib_s": 15096.0,
+          "iops": 3772.709124,
+          "latency_mean_us": 4230.44537416,
+          "latency_p95_us": 16711.68,
+          "latency_p99_us": 25559.04,
+          "queue_depth": 16
+        },
+        {
+          "bandwidth_kib_s": 21022.0,
+          "iops": 5252.494014,
+          "latency_mean_us": 6080.262883945001,
+          "latency_p95_us": 24510.464,
+          "latency_p99_us": 38535.168,
+          "queue_depth": 32
+        },
+        {
+          "bandwidth_kib_s": 30167.0,
+          "iops": 7535.632413,
+          "latency_mean_us": 8488.387609677,
+          "latency_p95_us": 36438.016,
+          "latency_p99_us": 58458.112,
+          "queue_depth": 64
+        },
+        {
+          "bandwidth_kib_s": 40559.0,
+          "iops": 10127.260083,
+          "latency_mean_us": 12643.747093761001,
+          "latency_p95_us": 58458.112,
+          "latency_p99_us": 94896.128,
+          "queue_depth": 128
+        }
+      ],
+      "runtime_s": 10,
+      "schema_version": 1,
+      "size_gib": 8,
+      "status": "passed"
+    },
+    "invocation_run": {
+      "argv": [
+        "experiments/05_disk_system_fair/run_disk_suite.py",
+        "--phase",
+        "run",
+        "--run-id",
+        "fix_w32_diskpayload_symphony_20260831_140957",
+        "--layers",
+        "05c",
+        "--datasets",
+        "agnews",
+        "--methods",
+        "SymphonyQG-DiskPort",
+        "--storage-modes",
+        "hybrid_disk",
+        "--ports",
+        "experiments/05_disk_system_fair/ports.local.json",
+        "--disk-root",
+        "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "--disk-profile",
+        "auto",
+        "--out-root",
+        "results/disk_environment/.formal_runs",
+        "--workers",
+        "16",
+        "--repeats",
+        "1",
+        "--seed",
+        "20260813",
+        "--search-dram-budget-gib",
+        "2.0"
+      ],
+      "datasets": [
+        "agnews"
+      ],
+      "disk_profile": "hdd_raid",
+      "layers": [
+        "05c"
+      ],
+      "ports_registry": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/ports.local.json",
+      "ports_registry_sha256": "e29ad8dedfb44fe6e7e8cd68588e8ebe349312093e24b66106c5000c25e91351",
+      "repeats": 1,
+      "run_id": "fix_w32_diskpayload_symphony_20260831_140957",
+      "schema_version": 2,
+      "search_dram_budget_gib": 2.0,
+      "seed": 20260813,
+      "workers": [
+        16
+      ]
+    }
+  }
+]

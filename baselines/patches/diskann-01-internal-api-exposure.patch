@@ -1,0 +1,163 @@
+--- a/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/mod.rs
++++ b/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/mod.rs
+@@ -10,7 +10,7 @@
+ 
+ // Extensions
+ mod scalar;
+-pub use scalar::{SQError, SQStore, WithBits};
++pub use scalar::{QueryComputer as SQQueryComputer, SQError, SQStore, WithBits};
+ 
+ #[cfg(not(test))]
+ mod product;
+--- a/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/scalar.rs
++++ b/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/scalar.rs
+@@ -135,11 +135,17 @@
+         diskann_vector::prefetch_hint_max::<4, _>(data);
+     }
+ 
+-    pub(super) fn dim(&self) -> usize {
++    pub fn dim(&self) -> usize {
+         self.quantizer.dim()
+     }
+ 
+-    pub(super) fn get_vector(&self, i: usize) -> Result<CVRef<'_, NBITS>, SQError> {
++    /// Return the scalar quantizer parameters (the disk-payload variant keeps
++    /// only these resident instead of the whole code array).
++    pub fn quantizer(&self) -> &ScalarQuantizer {
++        &self.quantizer
++    }
++
++    pub fn get_vector(&self, i: usize) -> Result<CVRef<'_, NBITS>, SQError> {
+         self.num_get_calls.increment();
+         Ok(CVRef::from_canonical_front(
+             unsafe { self.data.get_slice(i) },
+@@ -224,7 +230,7 @@
+         })
+     }
+ 
+-    pub(super) fn query_computer<T>(
++    pub fn query_computer<T>(
+         &self,
+         query: &[T],
+         allow_rescale: bool,
+--- a/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/spherical.rs
++++ b/baselines/diskann/diskann-providers/src/model/graph/provider/async_/inmem/spherical.rs
+@@ -135,9 +135,8 @@
+         diskann_vector::prefetch_hint_max::<4, _>(data);
+     }
+ 
+-    #[cfg(test)]
+-    pub(super) fn input_dim(&self) -> usize {
+-        self.plan.dim()
++    pub fn input_dim(&self) -> usize {
++        self.plan.full_dim()
+     }
+ 
+     pub fn bytes(&self) -> usize {
+@@ -148,13 +147,41 @@
+         self.plan.dim()
+     }
+ 
+-    pub(super) fn get_vector(&self, i: usize) -> Result<spherical::iface::Opaque<'_>, RQError> {
++    pub fn get_vector(&self, i: usize) -> Result<spherical::iface::Opaque<'_>, RQError> {
+         self.num_get_calls.increment();
+         // SAFETY: We can tolerate some racing behavior on the data behind this slice.
+         let data = unsafe { self.data.get_slice(i) };
+         Ok(spherical::iface::Opaque::new(data))
+     }
+ 
++    /// Return the canonical compressed bytes for persistence by an
++    /// algorithm-preserving external storage adapter.
++    pub fn compressed_vector(&self, i: usize) -> ANNResult<&[u8]> {
++        if i >= self.data.max_vectors() {
++            return Err(ANNError::message(format!(
++                "spherical vector id {i} exceeds {}",
++                self.data.max_vectors()
++            )));
++        }
++        Ok(unsafe { self.data.get_slice(i) })
++    }
++
++    /// Restore one canonical compressed vector.  The caller must provide the
++    /// exact byte layout reported by [`Self::bytes`].
++    pub fn set_compressed_vector(&self, i: usize, value: &[u8]) -> ANNResult<()> {
++        if i >= self.data.max_vectors() || value.len() != self.bytes() {
++            return Err(ANNError::message(format!(
++                "invalid spherical vector slot/length: id={i}, bytes={}, expected_count={}, expected_bytes={}",
++                value.len(),
++                self.data.max_vectors(),
++                self.bytes()
++            )));
++        }
++        let _guard = self.write_locks[i / WRITE_LOCK_GRANULARITY].lock_or_panic();
++        unsafe { self.data.get_mut_slice(i) }.copy_from_slice(value);
++        Ok(())
++    }
++
+     pub(super) fn set_vector<T>(&self, i: usize, v: &[T]) -> Result<(), RQError>
+     where
+         T: VectorRepr,
+@@ -180,7 +207,7 @@
+         Ok(self.plan.distance_computer(GlobalAllocator)?)
+     }
+ 
+-    pub(super) fn query_computer<T>(
++    pub fn query_computer<T>(
+         &self,
+         query: &[T],
+         layout: spherical::iface::QueryLayout,
+--- a/baselines/diskann/diskann-providers/src/model/graph/provider/async_/fast_memory_quant_vector_provider.rs
++++ b/baselines/diskann/diskann-providers/src/model/graph/provider/async_/fast_memory_quant_vector_provider.rs
+@@ -131,7 +131,7 @@
+     ///
+     /// 2. Be okay with racey data.
+     #[inline(always)]
+-    pub(crate) unsafe fn get_vector_sync(&self, i: usize) -> &[u8] {
++    pub unsafe fn get_vector_sync(&self, i: usize) -> &[u8] {
+         self.num_get_calls.increment();
+         // SAFETY: The function called here has the same pre and post-conditions as the caller.
+         unsafe { self.quant_vectors.get_slice(i) }
+--- a/baselines/diskann/diskann-quantization/src/spherical/quantizer.rs
++++ b/baselines/diskann/diskann-quantization/src/spherical/quantizer.rs
+@@ -203,6 +203,41 @@
+         })
+     }
+ 
++    /// Restore a quantizer from its already pre-scaled shift vector and a
++    /// deterministically regenerated transform.
++    ///
++    /// This is the inverse companion of [`Self::generate`] for storage
++    /// adapters that persist the final shift and the transform RNG seed.  In
++    /// contrast to `generate`, this function deliberately does not multiply
++    /// `shift` by `pre_scale` a second time.
++    pub fn restore_from_scaled_shift(
++        shift: Poly<[f32], A>,
++        mean_norm: f32,
++        transform: TransformKind,
++        metric: SupportedMetric,
++        pre_scale: f32,
++        rng: &mut dyn RngCore,
++        allocator: A,
++    ) -> Result<Self, TrainError> {
++        let pre_scale = Positive::new(pre_scale).map_err(|_| TrainError::PrescaleNotPositive)?;
++        let mean_norm = Positive::new(mean_norm).map_err(|_| TrainError::NormNotPositive)?;
++        let dim = NonZeroUsize::new(shift.len()).ok_or(TrainError::DimCannotBeZero)?;
++        let transform = match Transform::new(transform, dim, Some(rng), allocator) {
++            Ok(value) => value,
++            Err(NewTransformError::RngMissing(_)) => unreachable!("an RNG was provided"),
++            Err(NewTransformError::AllocatorError(error)) => {
++                return Err(TrainError::AllocatorError(error));
++            }
++        };
++        Ok(Self {
++            shift,
++            transform,
++            metric,
++            mean_norm,
++            pre_scale,
++        })
++    }
++
+     /// Return the metric used by this quantizer.
+     pub fn metric(&self) -> SupportedMetric {
+         self.metric

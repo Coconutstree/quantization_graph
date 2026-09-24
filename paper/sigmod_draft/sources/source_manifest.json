@@ -1,0 +1,80 @@
+{
+  "date": "2026-09-14",
+  "feishu_url": "https://my.feishu.cn/docx/AQTId8oojo5RvWxLlpScirfHnue",
+  "feishu_revision": 148,
+  "git_commit": "7b8e792ecdf2965903bc55b4d892f76cac825306",
+  "working_tree_modified": true,
+  "source_precedence": "Current experiments.md for evaluation; current source for execution; Feishu revision 148 for naming and argument; older summaries are not formal performance evidence.",
+  "files": [
+    {
+      "path": "experiments.md",
+      "bytes": 25813,
+      "sha256": "b79248df8cb97d7ced5032eef381fa971e5894edf4606c7506d9429b76289296"
+    },
+    {
+      "path": "Ours/core/hnswlib/space_rabitq.h",
+      "bytes": 278398,
+      "sha256": "0f944979146f293317a35e92b3d6744364aef2764b8eba409391ff6e9e7158f8"
+    },
+    {
+      "path": "Ours/core/hnswlib/vamana_index.h",
+      "bytes": 46061,
+      "sha256": "483a4bc10c4b2961a7aaf91f4d979a6c86fc26bf34144c56216fe56b56c3f821"
+    },
+    {
+      "path": "Ours/core/hnswlib/vamana_prune.h",
+      "bytes": 5051,
+      "sha256": "e6768da16d286464ab8f04942164e74cf4967b5a167ea6f6509f4819bebf7a41"
+    },
+    {
+      "path": "experiments/02_diskann_fair/native/rabitq_bridge.cpp",
+      "bytes": 40227,
+      "sha256": "33a9f0bfa6b5b2b67db480fe1136ce557c06a42d9b5bdbe3a2c1b3c1a9f24f46"
+    },
+    {
+      "path": "experiments/02_diskann_fair/src/ours_diskann.rs",
+      "bytes": 94484,
+      "sha256": "9f86624d74caa91ca5ac14d1a257475827d6102d7799d3a54ad08121ed5eeebf"
+    },
+    {
+      "path": "experiments/02_diskann_fair/src/diskann_runner.rs",
+      "bytes": 81967,
+      "sha256": "5f984e8a72bddec4c5ec2dc435c839dd7e6b584a4de2b4a839f58f1de76e2bdf"
+    },
+    {
+      "path": "experiments/05_disk_system_fair/native_rust/src/ours_port.rs",
+      "bytes": 45837,
+      "sha256": "c7211851a2be08bf1614982e06e0bf4be4a91e23daa5c433f26593c05a9084be"
+    },
+    {
+      "path": "experiments/05_disk_system_fair/native_rust/src/main.rs",
+      "bytes": 103683,
+      "sha256": "ab5191ed4373e792986a8ff1e0f11443279eea85824ec91f0164401d0a1f4398"
+    },
+    {
+      "path": "experiments/05_disk_system_fair/native/query_page_cache.hpp",
+      "bytes": 5340,
+      "sha256": "bae42ac9341e2db0db2a07139b8c56800f6fd5c3eedd70e40e6cba2b6436ebb5"
+    },
+    {
+      "path": "experiments/05_disk_system_fair/native/direct_io.cpp",
+      "bytes": 10360,
+      "sha256": "548a615a9634db115ecc73f3412b6748e40fe03db2d9088d4539149e4b5de65b"
+    },
+    {
+      "path": "docs/analysis/ours_disk_explainer_20260911/ours_disk_method.md",
+      "bytes": 20665,
+      "sha256": "c5e84c58f8da1a7cbc06428daa75ad36f4e51928530208d00237a276250b29d4"
+    },
+    {
+      "path": "docs/analysis/ours_query_path_audit_20260911.md",
+      "bytes": 7255,
+      "sha256": "1f1d50845e060f9d5a183b37b066e159167d52e3ea441ab5ce30593df971bcdf"
+    },
+    {
+      "path": "docs/analysis/ours_locality_query_v1.md",
+      "bytes": 4185,
+      "sha256": "c4978bda2e1d04e54d880fc7828544207e1ccdcde2a130d13914b6fe95660545"
+    }
+  ]
+}

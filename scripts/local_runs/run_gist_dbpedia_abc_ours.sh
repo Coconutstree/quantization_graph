@@ -10,7 +10,7 @@ qg05_setup_diskenv
 
 GDB_DATASETS="${GDB_DATASETS:-gist,dbpedia}"
 SEED="${SEED:-20260813}"
-PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/disk_environment}"
+PUBLISH_ROOT="${PUBLISH_ROOT:-${ROOT}/results/archive/legacy_layout_20260918/disk_environment}"
 
 export QG05_FAST=1
 export QG05_CAPTURE_BUILD_STATS="${QG05_CAPTURE_BUILD_STATS:-1}"
@@ -116,13 +116,13 @@ GDB_RUN_BASE="fix_gist_dbpedia_ours_w32_$(date +%Y%m%d_%H%M%S)"
 log "gist/dbpedia ABC (with Ours-Disk) run base: ${GDB_RUN_BASE}"
 
 log "=== gist/dbpedia 05A export+run (workers=32) ==="
-QG05_FAST_WIDTHS="${W_05A}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_05A}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05a" --layers 05a --datasets "${GDB_DATASETS}" \
   --methods PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1 \
   --storage-modes resident,payload_on_ssd --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
   --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
   --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_05A}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_05A}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05a" --layers 05a --datasets "${GDB_DATASETS}" \
   --methods PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1 \
   --storage-modes resident,payload_on_ssd --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -132,13 +132,13 @@ scripts/local_runs/verify_run_rows.sh "${GDB_RUN_BASE}_05a" 05a "${GDB_DATASETS}
   "PQ_4bit,SQ_4bit,SAQ_B4,Ours_RaBitQ_K1"
 
 log "=== gist/dbpedia 05B export+run (workers=32, incl Ours-Disk) ==="
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05b" --layers 05b --datasets "${GDB_DATASETS}" \
   --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk \
   --storage-modes disk_payload,hybrid_disk --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
   --disk-profile "${DISK_PROFILE}" --out-root "${OUT_ROOT}" \
   --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05b" --layers 05b --datasets "${GDB_DATASETS}" \
   --methods PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk \
   --storage-modes disk_payload,hybrid_disk --ports "${PORTS}" --disk-root "${DISK_ROOT}" \
@@ -148,12 +148,12 @@ scripts/local_runs/verify_run_rows.sh "${GDB_RUN_BASE}_05b" 05b "${GDB_DATASETS}
   "PQ-DiskANN-Disk,SQ-DiskANN-Disk,SAQ-DiskANN-Disk,Ours-Disk"
 
 log "=== gist/dbpedia 05C export+run (workers=32, incl Ours-Disk) ==="
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase export --run-id "${GDB_RUN_BASE}_05c" --layers 05c --datasets "${GDB_DATASETS}" \
   --methods SymphonyQG-DiskPort,Ours-Disk --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
   --out-root "${OUT_ROOT}" --workers 32 --repeats 1 --seed "${SEED}" --search-dram-budget-gib 2.0
-QG05_FAST_WIDTHS="${W_BASE}" python3 experiments/05_disk_system_fair/run_disk_suite.py \
+QG05_FAST_WIDTHS="${W_BASE}" python3 src/disk_bench/run_disk_suite.py \
   --phase run --run-id "${GDB_RUN_BASE}_05c" --layers 05c --datasets "${GDB_DATASETS}" \
   --methods SymphonyQG-DiskPort,Ours-Disk --storage-modes hybrid_disk \
   --ports "${PORTS}" --disk-root "${DISK_ROOT}" --disk-profile "${DISK_PROFILE}" \
@@ -165,7 +165,7 @@ log "=== gist/dbpedia merge + plot (workers=32) ==="
 merge_run_rows "${GDB_RUN_BASE}_05a"
 merge_run_rows "${GDB_RUN_BASE}_05b"
 merge_run_rows "${GDB_RUN_BASE}_05c"
-python3 experiments/05_disk_system_fair/plot_05_disk_suite.py \
+python3 src/disk_bench/plot_05_disk_suite.py \
   --public-root "${PUBLISH_ROOT}" --layers 05a,05b,05c --datasets "${GDB_DATASETS}" --workers 32
 
 log "ALL DONE"

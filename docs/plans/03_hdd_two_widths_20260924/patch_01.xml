@@ -1,0 +1,1 @@
+<p>比较 Ours、DiskANN、Starling、AiSAQ 在同一经过核验的 HDD/RAID、同一文件系统与挂载位置、32 workers 和 4 GiB 全进程峰值 RSS 上限下的 Recall@10–QPS。统一实际运行内存上限，不统一图、图度、编码长度、缓存或内存组成。SymphonyQG、Glass、OG-LVQ、PipeANN 不参与本轮。4 GiB 为进程 RSS 口径，不等于包含操作系统页缓存的整机内存硬上限。</p>

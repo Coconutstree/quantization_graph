@@ -202,6 +202,9 @@ struct GraphTurboConfig {
     GraphTurboMode mode{GraphTurboMode::Baseline};
     RouteCodeStrategy route_strategy{RouteCodeStrategy::EqualInterval};
     uint32_t route_bits{8};
+    // Adaptive projected route codes may use more than 32 bits.  When set,
+    // route_bits is ignored and route_dim selects the packed-code dimension.
+    uint32_t route_dim{0};
     uint32_t top_p{4};
     uint32_t prefetch_distance{8};
     bool remaining_in_route_order{false};
@@ -219,6 +222,11 @@ class RouteCodeStorage {
     virtual ~RouteCodeStorage() = default;
     virtual size_t size() const = 0;
     virtual uint32_t code(size_t internal_id) const = 0;
+    virtual bool isAdaptive() const { return false; }
+    virtual float asymmetricScore(size_t internal_id, const float *query, size_t dim) const {
+        (void) internal_id; (void) query; (void) dim;
+        return 0.0f;
+    }
 };
 
 class ContiguousRouteCodeStorage final : public RouteCodeStorage {
@@ -229,6 +237,43 @@ class ContiguousRouteCodeStorage final : public RouteCodeStorage {
     size_t size() const override { return codes_.size(); }
     uint32_t code(size_t internal_id) const override { return codes_.at(internal_id); }
     const std::vector<uint32_t> &codes() const { return codes_; }
+};
+
+// Packed sign codes plus one FP16 scale per vector.  This is deliberately a
+// small in-memory view; the disk/mmap loader lives in the experiment adapter.
+class AdaptiveRouteCodeStorage final : public RouteCodeStorage {
+    std::vector<uint8_t> codes_;
+    std::vector<float> scales_;
+    size_t route_dim_{0};
+    size_t bytes_per_row_{0};
+ public:
+    AdaptiveRouteCodeStorage(std::vector<uint8_t> codes, std::vector<float> scales,
+                             size_t rows, size_t route_dim)
+        : codes_(std::move(codes)), scales_(std::move(scales)), route_dim_(route_dim),
+          bytes_per_row_((route_dim + 7U) / 8U) {
+        if (route_dim_ == 0 || scales_.size() != rows || codes_.size() != rows * bytes_per_row_)
+            throw std::invalid_argument("invalid adaptive route storage shape");
+    }
+    size_t size() const override { return scales_.size(); }
+    uint32_t code(size_t internal_id) const override {
+        if (internal_id >= size() || bytes_per_row_ > sizeof(uint32_t))
+            throw std::out_of_range("adaptive route code cannot be represented as uint32");
+        uint32_t value = 0;
+        for (size_t i = 0; i < bytes_per_row_; ++i)
+            value |= static_cast<uint32_t>(codes_[internal_id * bytes_per_row_ + i]) << (8U * i);
+        return value;
+    }
+    bool isAdaptive() const override { return true; }
+    float asymmetricScore(size_t internal_id, const float *query, size_t dim) const override {
+        if (internal_id >= size() || dim != route_dim_ || query == nullptr)
+            throw std::invalid_argument("adaptive route query shape mismatch");
+        const float scale = scales_[internal_id];
+        float dot = 0.0f;
+        const uint8_t *row = codes_.data() + internal_id * bytes_per_row_;
+        for (size_t i = 0; i < route_dim_; ++i)
+            dot += query[i] * ((row[i >> 3U] & (uint8_t{1} << (i & 7U))) ? scale : -scale);
+        return static_cast<float>(route_dim_) * scale * scale - 2.0f * dot;
+    }
 };
 
 struct RaBitQSearchMetrics {
@@ -405,6 +450,18 @@ class SpaceInterface {
         (void) prepared_query;
         (void) route_dims;
         (void) route_code;
+        return false;
+    }
+
+    virtual bool compute_query_adaptive_route(
+        const void *prepared_query,
+        const float *projection_mean,
+        const float *projection_components,
+        size_t input_dim,
+        size_t route_dim,
+        std::vector<float> *projected_query) const {
+        (void) prepared_query; (void) projection_mean; (void) projection_components;
+        (void) input_dim; (void) route_dim; (void) projected_query;
         return false;
     }
 

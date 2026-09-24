@@ -1,0 +1,18 @@
+{
+  "experiments/05_disk_system_fair/native/glass_disk_port.cpp": "e136c0aa4c7083b624f78b2820450cef70784f9512b7dea0c1971a2e5d8d7ef3",
+  "baselines/pyglass/glass/neighbor.hpp": "4b7682f2413368b1673a397e5f3fc901c7c03644c235d2cd851762a975cdcfd7",
+  "baselines/pyglass/glass/searcher/graph_searcher.hpp": "1e2b5351487356ff9dac655daa2274acfbea4a930ea828b6591c1ea7c65ee97e",
+  "experiments/05_disk_system_fair/native/symphonyqg_disk_port.cpp": "1827adbca75ce21e04afa425e037d11896dbe38e5b1078cfb52495c328fd81d7",
+  "baselines/symphonyqg/symqglib/qg/qg.hpp": "6d13e185540e49f726ad34cdf644b1534a9c8ca24e54e956d58f5c9ce202fa83",
+  "experiments/05_disk_system_fair/native/symphonyqg_search_test.cpp": "a5740075497c19f928597a5fc897884b2d9bad44b3fd0d0ebd4a58ae2cd582b9",
+  "experiments/05_disk_system_fair/tests/audit_glass_official_search.cpp": "b9ffbda0d7c77479ede56fddfec59d5a263c302c98e369fa6345c2b6b7e9c02b",
+  "experiments/05_disk_system_fair/native_diskann/src/main.rs": "db3954fef89360e2b1f26b5c41a01556a39c8b9f46ee6569e2a5a89376160732",
+  "experiments/05_disk_system_fair/native_diskann/src/cached_reader.rs": "2fd3b374b647c4b136bb1998925ac4b9d231862635c5057becff605f21f05c33",
+  "experiments/05_disk_system_fair/native_rust/src/ours_port.rs": "c7211851a2be08bf1614982e06e0bf4be4a91e23daa5c433f26593c05a9084be",
+  "experiments/02_diskann_fair/src/ours_diskann.rs": "9f86624d74caa91ca5ac14d1a257475827d6102d7799d3a54ad08121ed5eeebf",
+  "experiments/05_disk_system_fair/native_rust/src/locality.rs": "5b1dfb3db7cbe4c0dfff5a71a6dec4d11996d77d5bca893b9e82a07907a02806",
+  "experiments/02_diskann_fair/target/release/deps/diskann_fair-9f27774bdaacf203": "3b06aab93456d17e9d5113b4b18fc64ab157fa88dcf4879c4970b74641333fe0",
+  "baselines/diskann/target/release/deps/io_completion_regression-35e5293392a91a3f": "ea7a678b71c601497f2e7e9b8ea71446b9b76e9cde2ca40a9efeccb2ea05b398",
+  "build/formal_single_run_gcc11/05_disk_system_fair/qgraph05_symphonyqg_search_test": "f118d476710477a421b2ae488f6c506fd0215ceb40ce6a49a2148f268ceaf7cc",
+  "/tmp/qgraph05_glass_official_audit": "c5032bdc298983552da3cef78460309c70fe9461f017adf375702b97ac7342a3"
+}

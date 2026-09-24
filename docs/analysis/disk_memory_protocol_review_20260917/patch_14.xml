@@ -1,0 +1,1 @@
+<p>05C 主方法更新为 Ours、DiskANN、AiSAQ、Starling 的完整磁盘系统。baseline 优先固定无补丁官方版本，保留原生建图、量化、搜索、重排、缓存与 I/O 调度，只使用官方暴露参数调优。Ours 冻结本次源码、图、编码、locality 布局与查询配置。Glass/Symphony 磁盘移植版仅作单列补充；OG-LVQ 未通过原方法一致性核验前不进入主对比。已有 DiskANN/AiSAQ 兼容补丁路径需披露，不能直接标为无修改原版。</p>

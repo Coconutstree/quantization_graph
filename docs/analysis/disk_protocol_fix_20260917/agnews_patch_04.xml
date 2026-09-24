@@ -1,0 +1,1 @@
+<p>上表全部是历史诊断统计。最高 QPS 对应各自不同 Recall；平均 latency、I/O 为多个 width 点的汇总，不能称为同 Recall 比较。旧 distance/queue 计时包含遍历与 I/O，且部分端口把 Recall 计算记入 rerank；这些时间不能当作互斥分项相加或用于比较 CPU 成本。修复源码已将 Recall 计算移出吞吐计时，无法独立测量的 distance/queue 写为 null。</p>

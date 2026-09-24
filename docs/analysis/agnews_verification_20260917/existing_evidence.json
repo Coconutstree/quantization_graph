@@ -1,0 +1,271 @@
+{
+  "time_unix": 1789638515.1082277,
+  "mode": "existing",
+  "full_experiments_run": false,
+  "historical": [
+    {
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "method": "Glass-NSG-DiskPort",
+      "csv_path": "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/formal_test_rows_agnews_05c_rerun_20260901_152210.csv",
+      "csv_sha256": "3f7587b16a631fef9dbdbd3dc69436ca510e727cace55d04b8dd9c6497c99771",
+      "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/Glass-NSG-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+      "artifact_sha256": "6bcd030c9f97300d1f795cabc6707fb3af3422cb4510865b049dccbf55b41df1",
+      "row_count": 40,
+      "workers": [
+        "32"
+      ],
+      "repeat_ids": [
+        "0"
+      ],
+      "best_qps": 135.547,
+      "recall_at_best_qps": 0.90875,
+      "metadata": {
+        "search_dram_budget_gib": 2.0,
+        "resident_bytes": 4196,
+        "codebook_bytes": 8,
+        "worker_scratch_bytes": 3276800,
+        "cache_bytes": 0,
+        "peak_rss_bytes": 3280996,
+        "cpu_affinity": "uncontrolled",
+        "numa_node": 0,
+        "measurement_scope": null,
+        "storage_cache_protocol": null,
+        "memory_accounting_complete": null,
+        "memory_enforcement": null,
+        "implementation_fingerprint": "05c-glass-nsg-sq4u-native-odirect-v1",
+        "native_binary_sha256": "c6954872331b14342ffdfa2b6ca592903af41c83dc1c07c01b9ae41e978d138c",
+        "source_index_manifest_sha256": "fa4c61b3728475ad1ff429504140c54cf5c8756ef533c1deff4b2621a16faacd"
+      },
+      "preflight": {
+        "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "disk_profile": "hdd_raid",
+        "rotational": true,
+        "storage_medium": "rotational_hdd_or_hardware_raid"
+      }
+    },
+    {
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "method": "OG-LVQ-DiskPort",
+      "csv_path": "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/formal_test_rows_agnews_05c_rerun_20260901_152210.csv",
+      "csv_sha256": "3f7587b16a631fef9dbdbd3dc69436ca510e727cace55d04b8dd9c6497c99771",
+      "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/OG-LVQ-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+      "artifact_sha256": "88c7d751e003dd9f4c1ebc71db833af0d4c65770a2825ba0755fc16b97388503",
+      "row_count": 40,
+      "workers": [
+        "32"
+      ],
+      "repeat_ids": [
+        "0"
+      ],
+      "best_qps": 56.7189,
+      "recall_at_best_qps": 0.924875,
+      "metadata": {
+        "search_dram_budget_gib": 2.0,
+        "resident_bytes": 8208,
+        "codebook_bytes": 4112,
+        "worker_scratch_bytes": 4096,
+        "cache_bytes": 0,
+        "peak_rss_bytes": 12304,
+        "cpu_affinity": "uncontrolled",
+        "numa_node": 0,
+        "measurement_scope": null,
+        "storage_cache_protocol": null,
+        "memory_accounting_complete": null,
+        "memory_enforcement": null,
+        "implementation_fingerprint": "05c-og-lvq-svs-layout-native-odirect-v1",
+        "native_binary_sha256": "c5ae806ecc0b843514ced45ee2b2507e8a03956707086140d22939ddac12d7c6",
+        "source_index_manifest_sha256": "7b41f41c83f779854b41e89b6f5dc3ec6baae2d9c30100edf78d128c7efa183a"
+      },
+      "preflight": {
+        "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "disk_profile": "hdd_raid",
+        "rotational": true,
+        "storage_medium": "rotational_hdd_or_hardware_raid"
+      }
+    },
+    {
+      "run_id": "agnews_05c_rerun_20260901_152210",
+      "method": "Ours-Disk",
+      "csv_path": "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/formal_test_rows_agnews_05c_rerun_20260901_152210.csv",
+      "csv_sha256": "3f7587b16a631fef9dbdbd3dc69436ca510e727cace55d04b8dd9c6497c99771",
+      "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/agnews_05c_rerun_20260901_152210/05C_disk_system_fair/agnews/artifacts/test/Ours-Disk__hybrid_disk__B2__standard__w32__r0.json",
+      "artifact_sha256": "3bab1a64b93cef49f928045cf77fecdcef77466b09a13db2ef6746e5de0a47b6",
+      "row_count": 40,
+      "workers": [
+        "32"
+      ],
+      "repeat_ids": [
+        "0"
+      ],
+      "best_qps": 202.133917611,
+      "recall_at_best_qps": 0.946625,
+      "metadata": {
+        "search_dram_budget_gib": 2.0,
+        "resident_bytes": 1019435246,
+        "codebook_bytes": 0,
+        "worker_scratch_bytes": 268435456,
+        "cache_bytes": 26259456,
+        "peak_rss_bytes": 818089984,
+        "cpu_affinity": "0-159",
+        "numa_node": "0-3",
+        "measurement_scope": null,
+        "storage_cache_protocol": null,
+        "memory_accounting_complete": null,
+        "memory_enforcement": null,
+        "implementation_fingerprint": "05c-ours-release-native-odirect-v2",
+        "native_binary_sha256": "f5ebd2d2efdc6cdc5f2c89a49becdc1a165c3a48caa8cadf9ce92881e7115da4",
+        "source_index_manifest_sha256": "6bc23a881f288f9d1467b06e5501e67415ffba2d76cacaf99b1b0ade7ad2f48c"
+      },
+      "preflight": {
+        "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "disk_profile": "hdd_raid",
+        "rotational": true,
+        "storage_medium": "rotational_hdd_or_hardware_raid"
+      }
+    },
+    {
+      "run_id": "fix_w32_diskpayload_symphony_20260831_140957",
+      "method": "SymphonyQG-DiskPort",
+      "csv_path": "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/agnews/csv/formal_test_rows_fix_w32_diskpayload_symphony_20260831_140957.csv",
+      "csv_sha256": "e8a83a59c5b98dbf495b1ac8c4f4fa2f23990f735243b8e3352a123929b56996",
+      "artifact_path": "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/fix_w32_diskpayload_symphony_20260831_140957/05C_disk_system_fair/agnews/artifacts/test/SymphonyQG-DiskPort__hybrid_disk__B2__standard__w32__r0.json",
+      "artifact_sha256": "06102889a9594ac746a34e1449ed53b3127e2855349f1cacc18bd06323530248",
+      "row_count": 40,
+      "workers": [
+        "32"
+      ],
+      "repeat_ids": [
+        "0"
+      ],
+      "best_qps": 5.18181,
+      "recall_at_best_qps": 0.876375,
+      "metadata": {
+        "search_dram_budget_gib": 2.0,
+        "resident_bytes": 8192,
+        "codebook_bytes": 0,
+        "worker_scratch_bytes": 4096,
+        "cache_bytes": 0,
+        "peak_rss_bytes": 12288,
+        "cpu_affinity": "uncontrolled",
+        "numa_node": 0,
+        "measurement_scope": null,
+        "storage_cache_protocol": null,
+        "memory_accounting_complete": null,
+        "memory_enforcement": null,
+        "implementation_fingerprint": "05c-symphonyqg-fastscan-native-odirect-neighborfetch-v2",
+        "native_binary_sha256": "20bc2362d4ef9fee92e447f417c2a652c0b0405ebf39ea4a8061c822b9d9fef4",
+        "source_index_manifest_sha256": "18fd9285943166643f61b7c7786380b9c7ff3e3c34b49c24302dc490940be708"
+      },
+      "preflight": {
+        "disk_root": "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root",
+        "disk_profile": "hdd_raid",
+        "rotational": true,
+        "storage_medium": "rotational_hdd_or_hardware_raid"
+      }
+    }
+  ],
+  "sources": {
+    "memory_runner.py": {
+      "sha256": "80146a95436f6bb29a1d1e2dc98221671b1c321de8053597082a9053af7785b0",
+      "matches_previous_verification": true
+    },
+    "protocol.py": {
+      "sha256": "fc786299e1024cf5eb2626ecbf53a311c550858ee5e3f0968cbdfc321ddc0bde",
+      "matches_previous_verification": true
+    },
+    "native_contract.py": {
+      "sha256": "711bd6fc937eed4bd52f6813d0e3ce17130b992ff25f2968afdff3cbb8ebc89c",
+      "matches_previous_verification": true
+    },
+    "orchestrator.py": {
+      "sha256": "7eb559d6b76b1de576145135767ac356be85ec6394dac651d778020e7302af57",
+      "matches_previous_verification": true
+    },
+    "plot_05_disk_suite.py": {
+      "sha256": "92878fbc7880e80e6c008b86ab319d5359fc0790e839be2f8b7fdf1751cdf51a",
+      "matches_previous_verification": true
+    },
+    "run_official_disk_baseline.py": {
+      "sha256": "1cb4dffd042642a34f43f7d489bf4063a4e951960dfc862054a233951aad2d4b",
+      "matches_previous_verification": true
+    },
+    "native/glass_disk_port.cpp": {
+      "sha256": "7d0e9f11afacbb6f23e804e896def640e5d493ff34c7cfb2c9923f603e743fb7",
+      "matches_previous_verification": true
+    },
+    "native/symphonyqg_disk_port.cpp": {
+      "sha256": "9cc7152c055651710842eca812a80735dfeda7377da529a86578f3973a00aae8",
+      "matches_previous_verification": true
+    },
+    "native/og_lvq_disk_port.cpp": {
+      "sha256": "e50da344c2c1a5d57e85755b697fe06d46f98dd9aa4cce795b1554fa39623aac",
+      "matches_previous_verification": true
+    },
+    "tests/test_measured_protocol.py": {
+      "sha256": "192883d3e114dad01f1ddbebd96427e118e7e5499f8c6e5d960a302cac597791",
+      "matches_previous_verification": true
+    },
+    "tests/test_native_timing.py": {
+      "sha256": "76061ea97a219c929703ee75ea3cdd0ac6ffbe58fd7f367c47f4b4dcd6e4607f",
+      "matches_previous_verification": true
+    }
+  },
+  "registry": {
+    "05c:Ours-Disk": {
+      "status": "ready",
+      "binary_path": "/home/kai3/coco/quantization_graph/experiments/02_diskann_fair/target/release/qgraph05_shared_graph_port",
+      "actual_sha256": "a64dfc64e5f351aa48e5d929d8413143935aa0b6079046402d3a04a2f826c92c",
+      "pinned_sha256": "8cce59ffbf99af47f75af0025ecb0a814c02081685580dbda1a9d40b5e6a7f89",
+      "pin_matches": false,
+      "blocked_reason": null
+    },
+    "05c:SymphonyQG-DiskPort": {
+      "status": "ready",
+      "binary_path": "/home/kai3/coco/quantization_graph/build/formal_local/05_disk_system_fair/qgraph05_symphonyqg_disk_port",
+      "actual_sha256": "2ca7232ca2e55dc40ae2cfe9ff187a7be6e98d3464a0eb7a5a53f2b30499f24b",
+      "pinned_sha256": "37840a730b2d530436f0ac39fb4c927463878102b34561ef1a4bc4839cbe12cd",
+      "pin_matches": false,
+      "blocked_reason": null
+    },
+    "05c:OG-LVQ-DiskPort": {
+      "status": "blocked",
+      "binary_path": "/home/kai3/coco/quantization_graph/build/formal_local/05_disk_system_fair/qgraph05_og_lvq_disk_port",
+      "actual_sha256": "32719b6c0cb9ebeae468136332863a063ea6113d5ed5dd86241940a71dac17ee",
+      "pinned_sha256": "3a83965d60237af47aa998512545428890c57575a960d10b5a75051172cd0a7f",
+      "pin_matches": false,
+      "blocked_reason": "Official LVQ distance implementation unavailable; local scalar decoder is not an approved baseline."
+    },
+    "05c:Glass-NSG-DiskPort": {
+      "status": "blocked",
+      "binary_path": "/home/kai3/coco/quantization_graph/build/formal_local/05_disk_system_fair/qgraph05_glass_disk_port",
+      "actual_sha256": "ee2cd5c0006e1c24e91c9cf0921eabed440ef8f425aa02b30a6db8b7383d6295",
+      "pinned_sha256": "88ee546e5dff803b361db58902cd4ab98b14cdcbcb9abc4da4eed5c90e391539",
+      "pin_matches": false,
+      "blocked_reason": "Pinned binary predates official LinearPool repair; rebuild and validate before repinning."
+    },
+    "05c:DiskANN-PQ-Disk": {
+      "status": "ready",
+      "binary_path": "/home/kai3/coco/quantization_graph/baselines/diskann/target/release/qgraph05_diskann_port",
+      "actual_sha256": "daff1bfb8e7fce43fd5c4f8ca2651d7e21661efa927dce846e97f1ba88fcb77b",
+      "pinned_sha256": "10e7eab13ce9023665fb2314cf2d3b8c0aa502addbecd2a28d61cf94c35c729b",
+      "pin_matches": false,
+      "blocked_reason": null
+    },
+    "05c:AiSAQ-Disk": {
+      "status": "pending",
+      "binary_path": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/run_official_disk_baseline.py",
+      "actual_sha256": "1cb4dffd042642a34f43f7d489bf4063a4e951960dfc862054a233951aad2d4b",
+      "pinned_sha256": null,
+      "pin_matches": null,
+      "blocked_reason": "Official CLI integration; formal per-query artifact, memory accounting and acceptance validation are not yet complete."
+    },
+    "05c:Starling-Disk": {
+      "status": "pending",
+      "binary_path": "/home/kai3/coco/quantization_graph/experiments/05_disk_system_fair/run_official_disk_baseline.py",
+      "actual_sha256": "1cb4dffd042642a34f43f7d489bf4063a4e951960dfc862054a233951aad2d4b",
+      "pinned_sha256": null,
+      "pin_matches": null,
+      "blocked_reason": "Official CLI integration; formal per-query artifact, memory accounting and acceptance validation are not yet complete."
+    }
+  }
+}

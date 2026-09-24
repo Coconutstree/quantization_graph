@@ -1,4 +1,0 @@
-method,search_width,beam_width,recall_at_10,latency_us,io_requests,sectors_4k
-Ours-Disk,10,1,0.0,57307.472452521324,240.0,275.5
-Ours-Disk,20,1,0.0,70741.3274794817,320.5,363.0
-Ours-Disk,40,1,0.0,93015.57391881943,418.5,470.5

@@ -209,7 +209,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--out-root",
-        default="results/disk_environment/dataset_artifacts",
+        default="artifacts/dataset_manifests",
         help="Result root directory.",
     )
     args = parser.parse_args()

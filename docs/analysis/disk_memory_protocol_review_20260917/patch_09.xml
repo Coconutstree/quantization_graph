@@ -1,0 +1,6 @@
+<pre lang="text"><code>results/disk_environment/
+  01_quantizer_fair/&lt;dataset&gt;/&lt;protocol-id&gt;/&lt;run-id&gt;/{csv,logs,figures,manifests}/
+  02_diskann_fair/&lt;dataset&gt;/&lt;protocol-id&gt;/&lt;run-id&gt;/{csv,logs,figures,manifests}/
+  03_system_fair/&lt;dataset&gt;/&lt;protocol-id&gt;/&lt;run-id&gt;/{csv,logs,figures,manifests}/
+  .formal_runs/runs/&lt;run-id&gt;/
+  05_disk_system_fair/test_L_400_w_32/  # 保留历史诊断，不自动迁移</code></pre><p>后文 05A/05B/05C 输出表中的路径为旧相对命名，执行新版时统一在 &lt;dataset&gt; 后加入 &lt;protocol-id&gt;/&lt;run-id&gt;。原始日志和失败记录均保留；旧宽度点不能与新预算点拼成一条曲线。</p>

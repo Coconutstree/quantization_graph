@@ -1,0 +1,557 @@
+{
+  "schema_version": 1,
+  "date": "20260918",
+  "repository": "/home/kai3/coco/quantization_graph",
+  "prefix_mappings": {
+    "results": "results/archive/legacy_layout_20260918",
+    "results/graph": "artifacts/graphs",
+    "results/graph/query_cache_audit_20260911_agnews": "results/diagnostics/graph/query_cache_audit_20260911_agnews",
+    "results/graph/query_cache_warmup_audit_20260911": "results/diagnostics/graph/query_cache_warmup_audit_20260911",
+    "results/graph/reader_audit": "results/diagnostics/graph/reader_audit",
+    "results/agnews": "artifacts/indexes/legacy_aliases/agnews",
+    "results/gist": "artifacts/indexes/legacy_aliases/gist",
+    "results/dbpedia": "artifacts/indexes/legacy_aliases/dbpedia",
+    "results/sift10m": "artifacts/indexes/legacy_aliases/sift10m",
+    "results/msmarco": "artifacts/indexes/legacy_aliases/msmarco",
+    "results/memory_environment": "results/archive/memory_environment",
+    "results/disk_environment/.formal_runs": "results/archive/native_runs",
+    "results/disk_environment/.test_runs": "results/diagnostics/smoke_runs",
+    "results/disk_environment/06_adaptive_disk_ann": "results/archive/adaptive_disk_ann",
+    "results/disk_environment/dataset_artifacts": "artifacts/dataset_manifests",
+    "results/disk_environment/archive": "results/archive/previous_disk_runs",
+    "results/disk_environment/archive/05_disk_system_fair_legacy/hdd_raid_store": "artifacts/indexes/legacy_disk_store",
+    "results/disk_environment/01_quantizer_fair/agnews": "results/01_disk_quantizer/agnews/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/01_quantizer_fair/gist": "results/01_disk_quantizer/gist/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/02_diskann_fair/agnews": "results/02_disk_shared_graph/agnews/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/02_diskann_fair/gist": "results/02_disk_shared_graph/gist/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/agnews/csv/_query_splits": "artifacts/query_splits/agnews/shared",
+    "results/disk_environment/03_system_fair/agnews": "results/03_disk_system/agnews/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/bigann10m/csv/_query_splits": "artifacts/query_splits/bigann10m/shared",
+    "results/disk_environment/03_system_fair/bigann10m": "results/03_disk_system/bigann10m/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/dbpedia/csv/_query_splits": "artifacts/query_splits/dbpedia/shared",
+    "results/disk_environment/03_system_fair/dbpedia": "results/03_disk_system/dbpedia/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/deep1B/csv/_query_splits": "artifacts/query_splits/deep1B/shared",
+    "results/disk_environment/03_system_fair/deep1B": "results/03_disk_system/deep1B/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/gist/csv/_query_splits": "artifacts/query_splits/gist/shared",
+    "results/disk_environment/03_system_fair/gist": "results/03_disk_system/gist/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/03_system_fair/sift10m/csv/_query_splits": "artifacts/query_splits/sift10m/shared",
+    "results/disk_environment/03_system_fair/sift10m": "results/03_disk_system/sift10m/legacy_snapshot_20260918/raw/legacy_snapshot",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews": "results/03_disk_system/agnews/test_L_400_w_32/raw",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_references": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_references",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_repairs": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_repairs",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_history": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_history",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist": "results/03_disk_system/gist/test_L_400_w_32/raw",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/_history": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/_history",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/_references": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/_references",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/Starling-Disk/diagnostics": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/Starling-Disk/diagnostics",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia": "results/03_disk_system/dbpedia/test_L_400_w_32/raw",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_history": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_history",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_references": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_references",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_preflight": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_preflight",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/sift10m": "results/03_disk_system/sift10m/test_L_400_w_32/raw",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/_runtime": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32/plots": "results/diagnostics/03_disk_system/plots_test_L_400_w_32",
+    "results/disk_environment/05_disk_system_fair/test_L_400_w_32": "results/manifests/legacy_test_L_400_w_32/source_snapshot",
+    "results/disk_environment/05_disk_system_fair/locality_query_20260911_234136": "results/diagnostics/03_disk_system/locality_query_20260911_234136",
+    "results/disk_environment/05_disk_system_fair/locality_query_20260911_234449": "results/diagnostics/03_disk_system/locality_query_20260911_234449"
+  },
+  "moves": [
+    {
+      "old": "results/graph",
+      "new": "artifacts/graphs"
+    },
+    {
+      "old": "results/graph/query_cache_audit_20260911_agnews",
+      "new": "results/diagnostics/graph/query_cache_audit_20260911_agnews"
+    },
+    {
+      "old": "results/graph/query_cache_warmup_audit_20260911",
+      "new": "results/diagnostics/graph/query_cache_warmup_audit_20260911"
+    },
+    {
+      "old": "results/graph/reader_audit",
+      "new": "results/diagnostics/graph/reader_audit"
+    },
+    {
+      "old": "results/agnews",
+      "new": "artifacts/indexes/legacy_aliases/agnews"
+    },
+    {
+      "old": "results/gist",
+      "new": "artifacts/indexes/legacy_aliases/gist"
+    },
+    {
+      "old": "results/dbpedia",
+      "new": "artifacts/indexes/legacy_aliases/dbpedia"
+    },
+    {
+      "old": "results/sift10m",
+      "new": "artifacts/indexes/legacy_aliases/sift10m"
+    },
+    {
+      "old": "results/msmarco",
+      "new": "artifacts/indexes/legacy_aliases/msmarco"
+    },
+    {
+      "old": "results/memory_environment",
+      "new": "results/archive/memory_environment"
+    },
+    {
+      "old": "results/disk_environment/.formal_runs",
+      "new": "results/archive/native_runs"
+    },
+    {
+      "old": "results/disk_environment/.test_runs",
+      "new": "results/diagnostics/smoke_runs"
+    },
+    {
+      "old": "results/disk_environment/06_adaptive_disk_ann",
+      "new": "results/archive/adaptive_disk_ann"
+    },
+    {
+      "old": "results/disk_environment/dataset_artifacts",
+      "new": "artifacts/dataset_manifests"
+    },
+    {
+      "old": "results/disk_environment/archive",
+      "new": "results/archive/previous_disk_runs"
+    },
+    {
+      "old": "results/disk_environment/archive/05_disk_system_fair_legacy/hdd_raid_store",
+      "new": "artifacts/indexes/legacy_disk_store"
+    },
+    {
+      "old": "results/disk_environment/01_quantizer_fair/agnews",
+      "new": "results/01_disk_quantizer/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/01_quantizer_fair/gist",
+      "new": "results/01_disk_quantizer/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/02_diskann_fair/agnews",
+      "new": "results/02_disk_shared_graph/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/02_diskann_fair/gist",
+      "new": "results/02_disk_shared_graph/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/agnews/csv/_query_splits",
+      "new": "artifacts/query_splits/agnews/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/agnews",
+      "new": "results/03_disk_system/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/bigann10m/csv/_query_splits",
+      "new": "artifacts/query_splits/bigann10m/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/bigann10m",
+      "new": "results/03_disk_system/bigann10m/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/dbpedia/csv/_query_splits",
+      "new": "artifacts/query_splits/dbpedia/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/dbpedia",
+      "new": "results/03_disk_system/dbpedia/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/deep1B/csv/_query_splits",
+      "new": "artifacts/query_splits/deep1B/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/deep1B",
+      "new": "results/03_disk_system/deep1B/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/gist/csv/_query_splits",
+      "new": "artifacts/query_splits/gist/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/gist",
+      "new": "results/03_disk_system/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/sift10m/csv/_query_splits",
+      "new": "artifacts/query_splits/sift10m/shared"
+    },
+    {
+      "old": "results/disk_environment/03_system_fair/sift10m",
+      "new": "results/03_disk_system/sift10m/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews",
+      "new": "results/03_disk_system/agnews/test_L_400_w_32/raw"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_references",
+      "new": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_references"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_repairs",
+      "new": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_repairs"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/agnews/_history",
+      "new": "results/diagnostics/03_disk_system/agnews/test_L_400_w_32/_history"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist",
+      "new": "results/03_disk_system/gist/test_L_400_w_32/raw"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957",
+      "new": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/_history",
+      "new": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/_history"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/_references",
+      "new": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/_references"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/Starling-Disk/diagnostics",
+      "new": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/Starling-Disk/diagnostics"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia",
+      "new": "results/03_disk_system/dbpedia/test_L_400_w_32/raw"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_history",
+      "new": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_history"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_references",
+      "new": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_references"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/_preflight",
+      "new": "results/diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_preflight"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/sift10m",
+      "new": "results/03_disk_system/sift10m/test_L_400_w_32/raw"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/_runtime",
+      "new": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32/plots",
+      "new": "results/diagnostics/03_disk_system/plots_test_L_400_w_32"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/test_L_400_w_32",
+      "new": "results/manifests/legacy_test_L_400_w_32/source_snapshot"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/locality_query_20260911_234136",
+      "new": "results/diagnostics/03_disk_system/locality_query_20260911_234136"
+    },
+    {
+      "old": "results/disk_environment/05_disk_system_fair/locality_query_20260911_234449",
+      "new": "results/diagnostics/03_disk_system/locality_query_20260911_234449"
+    }
+  ],
+  "symlinks_rewritten": [
+    {
+      "path": "artifacts/indexes/legacy_aliases/agnews/indexes/02_diskann_fair/shared_graph",
+      "target": "../../../../../graphs/agnews/shared_graph"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/agnews/indexes/02_diskann_fair/Ours",
+      "target": "../../../../../graphs/agnews/Ours"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/gist/indexes/02_diskann_fair/shared_graph",
+      "target": "../../../../../graphs/gist/shared_graph"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/gist/indexes/02_diskann_fair/Ours",
+      "target": "../../../../../graphs/gist/Ours"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/dbpedia/indexes/02_diskann_fair/shared_graph",
+      "target": "../../../../../graphs/dbpedia/shared_graph"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/dbpedia/indexes/02_diskann_fair/Ours",
+      "target": "../../../../../graphs/dbpedia/Ours"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/sift10m/indexes/02_diskann_fair/shared_graph",
+      "target": "../../../../../graphs/sift10m/shared_graph"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/sift10m/indexes/02_diskann_fair/Ours",
+      "target": "../../../../../graphs/sift10m/Ours"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/msmarco/indexes/02_diskann_fair/shared_graph",
+      "target": "../../../../../graphs/msmarco/shared_graph"
+    },
+    {
+      "path": "artifacts/indexes/legacy_aliases/msmarco/indexes/02_diskann_fair/Ours",
+      "target": "../../../../../graphs/msmarco/Ours"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/05_disk_system_fair/agnews_acceptance_20260912",
+      "target": "../../../../diagnostics/03_disk_system/runtime_test_L_400_w_32/agnews_acceptance_20260912"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/05_disk_system_fair/single_test_w32_20260911",
+      "target": "../../../../diagnostics/03_disk_system/runtime_test_L_400_w_32/single_test_w32_20260911"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/agnews_acceptance_20260912/agnews",
+      "target": "../../../../03_disk_system/agnews/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/agnews_acceptance_20260912/exports",
+      "target": "../../../../manifests/legacy_test_L_400_w_32/source_snapshot/exports"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/agnews_acceptance_20260912/references",
+      "target": "../../agnews/test_L_400_w_32/_references"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/single_test_w32_20260911/gist",
+      "target": "../../../../03_disk_system/gist/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/single_test_w32_20260911/dbpedia",
+      "target": "../../../../03_disk_system/dbpedia/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/runtime_test_L_400_w_32/single_test_w32_20260911/sift10m",
+      "target": "../../../../03_disk_system/sift10m/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/diagnostics/03_disk_system/gist/test_L_400_w_32/Starling-Disk/diagnostics/w32_as4g_20260917/terminal.log",
+      "target": "../../../../../../../../work/starling_search_recovery_20260917/full_w32_as4g/05_search_disk_index.log"
+    }
+  ],
+  "verification": {
+    "regular_files": 6930,
+    "small_files_hashed": 6401,
+    "original_symlinks": 35,
+    "preexisting_broken_links": 0,
+    "newly_broken_links": [],
+    "errors": []
+  },
+  "compatibility_aliases": [
+    {
+      "path": "results/archive/legacy_layout_20260918/graph",
+      "target": "../../../artifacts/graphs"
+    },
+    {
+      "path": "artifacts/graphs/query_cache_audit_20260911_agnews",
+      "target": "../../results/diagnostics/graph/query_cache_audit_20260911_agnews"
+    },
+    {
+      "path": "artifacts/graphs/query_cache_warmup_audit_20260911",
+      "target": "../../results/diagnostics/graph/query_cache_warmup_audit_20260911"
+    },
+    {
+      "path": "artifacts/graphs/reader_audit",
+      "target": "../../results/diagnostics/graph/reader_audit"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/agnews",
+      "target": "../../../artifacts/indexes/legacy_aliases/agnews"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/gist",
+      "target": "../../../artifacts/indexes/legacy_aliases/gist"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/dbpedia",
+      "target": "../../../artifacts/indexes/legacy_aliases/dbpedia"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/sift10m",
+      "target": "../../../artifacts/indexes/legacy_aliases/sift10m"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/msmarco",
+      "target": "../../../artifacts/indexes/legacy_aliases/msmarco"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/memory_environment",
+      "target": "../memory_environment"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/.formal_runs",
+      "target": "../../native_runs"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/.test_runs",
+      "target": "../../../diagnostics/smoke_runs"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/06_adaptive_disk_ann",
+      "target": "../../adaptive_disk_ann"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/dataset_artifacts",
+      "target": "../../../../artifacts/dataset_manifests"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/archive",
+      "target": "../../previous_disk_runs"
+    },
+    {
+      "path": "results/archive/previous_disk_runs/05_disk_system_fair_legacy/hdd_raid_store",
+      "target": "../../../../artifacts/indexes/legacy_disk_store"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/01_quantizer_fair/agnews",
+      "target": "../../../../01_disk_quantizer/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/01_quantizer_fair/gist",
+      "target": "../../../../01_disk_quantizer/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/02_diskann_fair/agnews",
+      "target": "../../../../02_disk_shared_graph/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/02_diskann_fair/gist",
+      "target": "../../../../02_disk_shared_graph/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/agnews/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/agnews/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/agnews",
+      "target": "../../../../03_disk_system/agnews/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/bigann10m/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/bigann10m/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/bigann10m",
+      "target": "../../../../03_disk_system/bigann10m/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/dbpedia/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/dbpedia/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/dbpedia",
+      "target": "../../../../03_disk_system/dbpedia/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/deep1B/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/deep1B/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/deep1B",
+      "target": "../../../../03_disk_system/deep1B/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/gist/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/gist/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist",
+      "target": "../../../../03_disk_system/gist/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/03_disk_system/sift10m/legacy_snapshot_20260918/raw/legacy_snapshot/csv/_query_splits",
+      "target": "../../../../../../../artifacts/query_splits/sift10m/shared"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/sift10m",
+      "target": "../../../../03_disk_system/sift10m/legacy_snapshot_20260918/raw/legacy_snapshot"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/agnews",
+      "target": "../../../03_disk_system/agnews/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/03_disk_system/agnews/test_L_400_w_32/raw/_references",
+      "target": "../../../../diagnostics/03_disk_system/agnews/test_L_400_w_32/_references"
+    },
+    {
+      "path": "results/03_disk_system/agnews/test_L_400_w_32/raw/_repairs",
+      "target": "../../../../diagnostics/03_disk_system/agnews/test_L_400_w_32/_repairs"
+    },
+    {
+      "path": "results/03_disk_system/agnews/test_L_400_w_32/raw/_history",
+      "target": "../../../../diagnostics/03_disk_system/agnews/test_L_400_w_32/_history"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/gist",
+      "target": "../../../03_disk_system/gist/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/03_disk_system/gist/test_L_400_w_32/raw/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957",
+      "target": "../../../../diagnostics/03_disk_system/gist/test_L_400_w_32/OG-LVQ-DiskPort.failed_before_resume_1789142288202867957"
+    },
+    {
+      "path": "results/03_disk_system/gist/test_L_400_w_32/raw/_history",
+      "target": "../../../../diagnostics/03_disk_system/gist/test_L_400_w_32/_history"
+    },
+    {
+      "path": "results/03_disk_system/gist/test_L_400_w_32/raw/_references",
+      "target": "../../../../diagnostics/03_disk_system/gist/test_L_400_w_32/_references"
+    },
+    {
+      "path": "results/03_disk_system/gist/test_L_400_w_32/raw/Starling-Disk/diagnostics",
+      "target": "../../../../../diagnostics/03_disk_system/gist/test_L_400_w_32/Starling-Disk/diagnostics"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/dbpedia",
+      "target": "../../../03_disk_system/dbpedia/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/03_disk_system/dbpedia/test_L_400_w_32/raw/_history",
+      "target": "../../../../diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_history"
+    },
+    {
+      "path": "results/03_disk_system/dbpedia/test_L_400_w_32/raw/_references",
+      "target": "../../../../diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_references"
+    },
+    {
+      "path": "results/03_disk_system/dbpedia/test_L_400_w_32/raw/_preflight",
+      "target": "../../../../diagnostics/03_disk_system/dbpedia/test_L_400_w_32/_preflight"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/sift10m",
+      "target": "../../../03_disk_system/sift10m/test_L_400_w_32/raw"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/_runtime",
+      "target": "../../../diagnostics/03_disk_system/runtime_test_L_400_w_32"
+    },
+    {
+      "path": "results/manifests/legacy_test_L_400_w_32/source_snapshot/plots",
+      "target": "../../../diagnostics/03_disk_system/plots_test_L_400_w_32"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/05_disk_system_fair/test_L_400_w_32",
+      "target": "../../../../manifests/legacy_test_L_400_w_32/source_snapshot"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/05_disk_system_fair/locality_query_20260911_234136",
+      "target": "../../../../diagnostics/03_disk_system/locality_query_20260911_234136"
+    },
+    {
+      "path": "results/archive/legacy_layout_20260918/disk_environment/05_disk_system_fair/locality_query_20260911_234449",
+      "target": "../../../../diagnostics/03_disk_system/locality_query_20260911_234449"
+    }
+  ]
+}

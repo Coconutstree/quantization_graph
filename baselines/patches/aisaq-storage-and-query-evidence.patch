@@ -1,0 +1,115 @@
+diff --git a/apps/search_disk_index.cpp b/apps/search_disk_index.cpp
+index e514db6..fd1ecb2 100644
+--- a/apps/search_disk_index.cpp
++++ b/apps/search_disk_index.cpp
+@@ -1,3 +1,4 @@
++#include <cstdlib>
+ // Copyright (c) Microsoft Corporation. All rights reserved.
+ // Licensed under the MIT license.
+ 
+@@ -292,6 +293,27 @@ int search_disk_index(diskann::Metric &metric, const std::string &index_path_pre
+         auto stats = new diskann::QueryStats[query_num];
+ 
+         std::vector<uint64_t> query_result_ids_64(recall_at * query_num);
++    // 03 protocol: external validation queries, never a measured-query prefix.
++    if (const char* warm_file = std::getenv("QG03_WARMUP_BIN")) {
++      T* independent_warm = nullptr;
++      size_t independent_n = 0, independent_d = 0, independent_aligned = 0;
++      diskann::load_aligned_bin<T>(warm_file, independent_warm, independent_n,
++                                  independent_d, independent_aligned);
++      const char* count_text = std::getenv("QG03_WARMUP_COUNT");
++      const size_t independent_count = count_text ? std::stoull(count_text) : 100;
++      if (!independent_count || independent_count > independent_n || independent_d != query_dim)
++        throw std::runtime_error("independent warmup dimensions/count mismatch");
++      std::vector<uint64_t> independent_ids(independent_count * recall_at);
++      std::vector<float> independent_dists(independent_count * recall_at);
++#pragma omp parallel for schedule(dynamic, 1)
++      for (int64_t i = 0; i < static_cast<int64_t>(independent_count); ++i) {
++        _pFlashIndex->cached_beam_search(
++            independent_warm + i * independent_aligned, recall_at, L,
++            independent_ids.data() + i * recall_at, independent_dists.data() + i * recall_at,
++            optimized_beamwidth, use_reorder_data, nullptr, &aisaq_search_config);
++      }
++      diskann::aligned_free(independent_warm);
++    }
+         auto s = std::chrono::high_resolution_clock::now();
+ 
+ #pragma omp parallel for schedule(dynamic, 1)
+@@ -361,6 +383,28 @@ int search_disk_index(diskann::Metric &metric, const std::string &index_path_pre
+         }
+         else
+             diskann::cout << std::endl;
++        // Optional evidence export, strictly after the timed search loop.
++        if (const char* trace_prefix = std::getenv("QG05_OFFICIAL_TRACE_PREFIX")) {
++            std::ofstream trace(std::string(trace_prefix) + "_" + std::to_string(L) + ".jsonl");
++            trace << std::setprecision(17);
++            for (size_t qi = 0; qi < query_num; ++qi) {
++                const auto& qs = stats[qi];
++                trace << "{\"query_id\":" << qi << ",\"search_width\":" << L
++                      << ",\"search_wall_seconds\":" << diff.count()
++                      << ",\"latency_us\":" << qs.total_us
++                      << ",\"io_wait_us\":" << qs.io_us
++                      << ",\"io_requests\":" << qs.n_ios
++                      << ",\"native_n_4k\":" << qs.n_4k
++                      << ",\"native_n_8k\":" << qs.n_8k
++                      << ",\"native_n_12k\":" << qs.n_12k
++                      << ",\"native_read_size\":" << qs.read_size
++                      << ",\"distance_evaluations\":" << qs.n_cmps
++                      << ",\"search_hops\":" << qs.n_hops
++                      << ",\"cache_hits\":" << qs.n_cache_hits << "}\n";
++            }
++            trace.flush();
++            if (!trace) throw std::runtime_error("failed to write per-query search evidence");
++        }
+         delete[] stats;
+     }
+ 
+diff --git a/src/aisaq_pq_reader.cpp b/src/aisaq_pq_reader.cpp
+index 4109643..eccb57b 100644
+--- a/src/aisaq_pq_reader.cpp
++++ b/src/aisaq_pq_reader.cpp
+@@ -16,6 +16,7 @@
+ #include <sys/sysmacros.h>
+ #include <fcntl.h>
+ #include <sys/ioctl.h>
++#include <fstream>
+ #include <libaio.h>
+ #include <liburing.h>
+ 
+@@ -775,12 +776,24 @@ int aisaqPQReader::init_common(const char *pq_file_path, bool rearranged)
+     snprintf(device_path, sizeof(device_path), "/dev/block/%d:%d",
+              major(file_stat.st_dev), minor(file_stat.st_dev));
+     int fd = open(device_path, O_RDONLY);
+-    if (fd <= 0) {
+-        std::cerr << "failed to detect PQ vectors file block size" << std::endl;
+-        return -1;
++    const bool detected = fd >= 0 && ioctl(fd, BLKSSZGET, &m_block_size) == 0;
++    if (fd >= 0) {
++        close(fd);
++    }
++    if (!detected) {
++        // Containers may expose sysfs but not the backing block-device node.
++        // Read the same kernel logical block size; never guess an alignment.
++        const std::string sysfs_path = "/sys/dev/block/" +
++            std::to_string(major(file_stat.st_dev)) + ":" +
++            std::to_string(minor(file_stat.st_dev)) + "/queue/logical_block_size";
++        std::ifstream logical_size(sysfs_path);
++        if (!(logical_size >> m_block_size) || m_block_size < SECTOR_SIZE ||
++            (m_block_size & (m_block_size - 1)) != 0) {
++            std::cerr << "failed to detect PQ vectors file block size via device or sysfs" << std::endl;
++            return -1;
++        }
++        std::cout << "PQ logical block size from sysfs: " << m_block_size << std::endl;
+     }
+-    ioctl(fd, BLKSSZGET, &m_block_size);
+-    close(fd);
+ 
+     /* init m_num_vectors, m_pq_vector_size, m_rearranged_pq_page_size */
+     fd = open(pq_file_path, O_RDONLY);
+@@ -933,4 +946,4 @@ void aisaqPQReader::add_pending_io_completion_event(aisaqPQReaderContext &ctx, u
+     ctx.m_pending_io_completion_events_count++;
+ }
+ 
+-}
+\ No newline at end of file
++}

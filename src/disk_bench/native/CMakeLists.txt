@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(qgraph05_native_io LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_library(LIBAIO_LIBRARY aio REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(OpenMP REQUIRED)
+find_package(BLAS REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
+set(FAISS_ROOT "${REPO_ROOT}/baselines/faiss/upstream")
+set(FAISS_BUILD "${REPO_ROOT}/baselines/builds/faiss-cmake43")
+set(FAISS_LIB "${FAISS_BUILD}/faiss/libfaiss.a")
+set(SAQ_ROOT "${REPO_ROOT}/baselines/saq")
+set(LOCAL_DEPS "${REPO_ROOT}/baselines/deps/local")
+set(glog_DIR "${LOCAL_DEPS}/lib/cmake/glog")
+set(fmt_DIR "${LOCAL_DEPS}/lib/cmake/fmt")
+find_package(glog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(GFlags REQUIRED)
+
+add_library(qgraph05_direct_io STATIC direct_io.cpp)
+target_include_directories(qgraph05_direct_io PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+target_compile_options(qgraph05_direct_io PRIVATE -O3 -Wall -Wextra -Wpedantic)
+target_link_libraries(qgraph05_direct_io PUBLIC "${LIBAIO_LIBRARY}")
+
+add_executable(qgraph05_direct_io_test direct_io_test.cpp)
+target_compile_options(qgraph05_direct_io_test PRIVATE -O2 -Wall -Wextra -Wpedantic)
+target_link_libraries(qgraph05_direct_io_test PRIVATE qgraph05_direct_io)
+
+enable_testing()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+add_test(NAME qgraph05_direct_io_test COMMAND qgraph05_direct_io_test)
+add_subdirectory("${REPO_ROOT}/experiments/01_disk_quantizer/native" layer01)
+add_subdirectory("${REPO_ROOT}/experiments/03_disk_system/native" layer03)

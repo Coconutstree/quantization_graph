@@ -1,0 +1,1 @@
+<ul><li>先测真实内存余量：以独立 cgroup 覆盖索引加载、32 worker 工作区、预热及查询全过程，保存 memory.peak、memory.events 和真实 RSS。旧 resident_bytes 是混合口径，无法支持“还空约 1 GiB”或“增大缓存收益最高”的判断。缓存调整需在总预算内重新测量。</li></ul>

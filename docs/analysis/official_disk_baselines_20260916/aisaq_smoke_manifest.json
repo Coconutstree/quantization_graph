@@ -1,0 +1,120 @@
+{
+  "method": "AiSAQ-Disk",
+  "source_commit": "f0a48e984c685bd498e3c4f88386b47e0e4ab1ac",
+  "formal_ready": false,
+  "status": "done",
+  "commands": [
+    [
+      "/home/kai3/coco/quantization_graph/baselines/builds/aisaq/apps/build_disk_index",
+      "--data_type",
+      "float",
+      "--dist_fn",
+      "l2",
+      "--data_path",
+      "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/base.bin",
+      "--index_path_prefix",
+      "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/index",
+      "-R",
+      "16",
+      "-L",
+      "40",
+      "-B",
+      "7.62939453125e-06",
+      "-M",
+      "8",
+      "-T",
+      "1",
+      "--QD",
+      "8",
+      "--use_aisaq",
+      "--inline_pq",
+      "-1"
+    ],
+    [
+      "/home/kai3/coco/quantization_graph/baselines/builds/aisaq/apps/search_disk_index",
+      "--data_type",
+      "float",
+      "--dist_fn",
+      "l2",
+      "--index_path_prefix",
+      "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/index",
+      "--query_file",
+      "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/query.bin",
+      "--result_path",
+      "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/result",
+      "-K",
+      "10",
+      "-L",
+      "10",
+      "40",
+      "-W",
+      "4",
+      "-T",
+      "1",
+      "--num_nodes_to_cache",
+      "0",
+      "--use_aisaq",
+      "--pq_read_io_engine",
+      "aio",
+      "-V",
+      "1",
+      "--pq_cache_size",
+      "0",
+      "--pq_read_page_cache_size",
+      "0"
+    ]
+  ],
+  "source_patches": [
+    {
+      "path": "baselines/patches/aisaq-logical-block-size-sysfs.patch",
+      "sha256": "e4760a3fa868bb91babd4625e7288f51d8e7b3b51fd8e9184cd7b8f38fbbea55",
+      "scope": "Storage metadata only: query the same kernel logical block size via sysfs if /dev/block is unavailable."
+    }
+  ],
+  "parameters": {
+    "method": "AiSAQ-Disk",
+    "base": "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_inputs/base.fvecs",
+    "query": "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_inputs/query.fvecs",
+    "work_dir": "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs",
+    "execute": true,
+    "degree": 16,
+    "build_width": 40,
+    "build_memory_gib": 8,
+    "build_threads": 1,
+    "pq_bytes": 8,
+    "widths": [
+      10,
+      40
+    ],
+    "beam": 4,
+    "workers": 1,
+    "k": 10,
+    "node_cache": 0,
+    "inline_pq": -1,
+    "rearrange": false,
+    "vector_beam": 1,
+    "pq_cache": "0",
+    "pq_page_cache": "0",
+    "nav_sample": 0.01,
+    "nav_degree": 48,
+    "nav_build_width": 128,
+    "nav_width": 32,
+    "partition_iterations": 8,
+    "page_ratio": 1.0
+  },
+  "inputs": {
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_inputs/base.fvecs": "6a1763d40700ff45a3198b73ea83ec6d93fcd5f6fec033a9a6688cb8391206f1",
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_inputs/query.fvecs": "49d0d2b5eae0db73a995ce52d7c901ce44e2d42329ac65d13da13c8a309129ad"
+  },
+  "binaries": {
+    "/home/kai3/coco/quantization_graph/baselines/builds/aisaq/apps/build_disk_index": "5e551db7f16b8983697251663dc1db8d5d1603e309923c8184fab9a8ba195d0a",
+    "/home/kai3/coco/quantization_graph/baselines/builds/aisaq/apps/search_disk_index": "d5087285b587dee8cdd0100e6a64af31706d3bdfd4dd008557e810b75c2b795d"
+  },
+  "note": "Official CLI diagnostics. No enforced search DRAM bound or formal per-query artifact.",
+  "results": {
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/result_10_idx_uint32.bin": "9411fc466f628df9d6bdefb79c1dcb755c10aa5758495ca5f1d3a1909832b27b",
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/result_10_dists_float.bin": "9e51e3bf6b90c8e47fd9a293fa3e14501ad3449a5188e0aadfd3f79058591bd3",
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/result_40_idx_uint32.bin": "17c260fb507b467a440104366c74c043f6b51e41169ef8ce175438485bfb5754",
+    "/home/kai3/coco/quantization_graph/work/05_official_baseline_smoke_aisaq_sysfs/result_40_dists_float.bin": "2bf4b5666d5b9fe33da68bac88d5170b6e447488065dad3147c09c2c4d2baf42"
+  }
+}

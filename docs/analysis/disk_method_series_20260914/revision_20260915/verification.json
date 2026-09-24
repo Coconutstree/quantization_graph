@@ -1,0 +1,50 @@
+[
+  {
+    "key": "02_diskann",
+    "verified": true,
+    "headings": [
+      "第一部分：论文中的 DiskANN 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "revision_id": 7,
+    "img": 2,
+    "latex": 5,
+    "table": 3
+  },
+  {
+    "key": "03_symphonyqg",
+    "verified": true,
+    "headings": [
+      "第一部分：论文中的 SymphonyQG 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "revision_id": 10,
+    "img": 2,
+    "latex": 6,
+    "table": 2
+  },
+  {
+    "key": "04_og_lvq",
+    "verified": true,
+    "headings": [
+      "第一部分：论文中的 LVQ 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "revision_id": 7,
+    "img": 2,
+    "latex": 7,
+    "table": 2
+  },
+  {
+    "key": "05_glass_nsg",
+    "verified": true,
+    "headings": [
+      "第一部分：论文中的 NSG 方法",
+      "第二部分：我们的磁盘实验改了什么"
+    ],
+    "revision_id": 8,
+    "img": 2,
+    "latex": 4,
+    "table": 2
+  }
+]

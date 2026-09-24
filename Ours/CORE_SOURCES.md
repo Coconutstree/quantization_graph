@@ -1,12 +1,11 @@
-# Ours -- source map (references the repository root)
+# Ours source map
 
-| layer | authoritative location | role |
-|---|---|---|
-| Algorithm core | `Ours/core/hnswlib/space_rabitq.h`, `Ours/core/hnswlib/vamana_index.h` | ExRaBitQ4 codec/distance kernels; Vamana build/search with 4-bit symmetric distances (vendored from `hnsw_rabitq`, see `Ours/NOTICE.md`) |
-| Framework | `baselines/diskann/` | DiskANN3 Rust crates (provider / graph / search / prune) |
-| Ours-DiskANN integration | `experiments/02_diskann_fair/` | method implementation: native bridge + DiskANN3 provider runner (`--methods Ours --max-degree M`) |
-| 03 adapter | `experiments/03_system_fair/adapters/ours_adapter.py` | feeds Ours M32/M64 rows into the 03 comparison |
-| Method entry | `Ours/experiments/run_ours.py` | unified CLI that runs Ours-DiskANN and archives logs to `Ours/logs/<dataset>/` |
+| Role | Source |
+|---|---|
+| Quantization and Vamana | `Ours/core/hnswlib/` |
+| Graph construction and Rust bridge | `src/graph_core/` |
+| Disk search and I/O | `experiments/02_disk_shared_graph/native/`, `src/disk_bench/native/` |
+| Disk experiment entry points | `experiments/01_disk_quantizer/`, `experiments/02_disk_shared_graph/`, `experiments/03_disk_system/` |
+| Framework | `baselines/diskann/` |
 
-The algorithm core is vendored under `Ours/core/hnswlib/`; licenses and
-locked commits are recorded in `Ours/NOTICE.md`.
+The old `legacy/ours_experiments/run_ours.py` drives a historical resident runner; it is not the public disk experiment entry. See the root README for disk reproduction.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch Faiss at the pinned commit and build the static library used by
-# experiments/01_quantizer_fair. Expected paths (see that CMakeLists):
+# legacy/01_quantizer_fair. Expected paths (see that CMakeLists):
 #   baselines/faiss/upstream            (source tree)
 #   baselines/builds/faiss-cmake43      (build tree with faiss/libfaiss.a)
 set -euo pipefail

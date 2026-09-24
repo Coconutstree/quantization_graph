@@ -1,0 +1,16 @@
+{
+  "updated_doc": "https://my.feishu.cn/docx/BpvBdhAILonRVkxT0Jicnwf4nfH",
+  "base_revision": 52,
+  "final_revision": 78,
+  "agnews_reviewed_revision": 316,
+  "agnews_doc_modified": false,
+  "checks": {
+    "body_matches_planned": true,
+    "all_26_edits_verified": true,
+    "table_contents_match": true,
+    "heading_contents_match": true
+  },
+  "tables": 21,
+  "experiment_code_modified": false,
+  "experiments_run": false
+}

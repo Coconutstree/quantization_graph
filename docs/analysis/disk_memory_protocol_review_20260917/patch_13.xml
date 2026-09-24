@@ -1,0 +1,1 @@
+<p>05B 的四级消融应使用同一、支持各开关的物理布局。05C Ours 则冻结当前 locality 配置：图与主码共页、独立 residual.pages、BFS 物理排列和 ID→slot 映射；DB1 筛选后按需取主码，最终用浮点 query 加 residual4 重排。若研究 locality 收益，单列普通布局与 locality 的对照，注明排列、共置、残差分离同时变化，不把全部收益归给单一因素。</p>

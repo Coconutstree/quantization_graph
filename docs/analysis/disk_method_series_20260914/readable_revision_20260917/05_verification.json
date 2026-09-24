@@ -1,0 +1,23 @@
+{
+  "document_id": "HXtcd7yGUoY7xTxWSI6cl2ydnHd",
+  "url": "https://my.feishu.cn/docx/HXtcd7yGUoY7xTxWSI6cl2ydnHd",
+  "revision_before": 13,
+  "revision_after": 17,
+  "body_text_matches_local": true,
+  "image_block_ids_and_tokens_preserved": [
+    [
+      "doxcnPTbxeav1NIvHE1b6sEytmd",
+      "FRrXbFoBMoPgLKxE225cJYdBnVh"
+    ],
+    [
+      "doxcnu1oPoTZeZ35v9GlFkTEGid",
+      "MtC1bahN2oCOR6xZ0hfcsrgvnRc"
+    ]
+  ],
+  "top_level_parts": [
+    "第一部分：论文中的 NSG 怎么做",
+    "第二部分：我们的磁盘实验改了什么"
+  ],
+  "tables": 2,
+  "old_text_blocks_deleted": 33
+}

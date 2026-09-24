@@ -1,0 +1,13 @@
+{
+  "source": "results/03_disk_system/gist/tables/recall_qps_summary.csv",
+  "sha256": "d420d86cee2d4e40ec6df44abf290a86970917bd6578c1cd923f68f7285785eb",
+  "input_rows": 36,
+  "plotted_rows": 36,
+  "excluded_rows": 0,
+  "backend": "matplotlib",
+  "size_mm": [
+    89,
+    78
+  ],
+  "script": "scripts/plot_gist_formal_recall_qps.py"
+}

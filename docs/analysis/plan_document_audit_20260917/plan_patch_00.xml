@@ -1,0 +1,1 @@
+<p>主对比明确包含四个完整磁盘系统：Ours-Disk、DiskANN-PQ-Disk、Starling-Disk 和 AiSAQ-Disk。固定相同数据、硬件、查询负载和 32 个查询 worker，每个正式配置只运行一次。Ours 主实验强制 2 GiB 内存上限；三个 baseline 使用各自原生内存、量化和缓存配置，不要求预算或用量与 Ours 相等。所有方法报告实际峰值 RSS、磁盘开销和匹配 Recall@10 的性能。05A/05B 保留组件实验，05C 承担四系统主对比；05A resident 单列为计算参考，Ours 内存扫描单列为补充。Starling/AiSAQ 的配置和支持矩阵见第 7.1—7.4 节。</p>

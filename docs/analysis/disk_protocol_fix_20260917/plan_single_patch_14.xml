@@ -1,0 +1,1 @@
+<p>这些问题通过新版总预算、原生实现准入、固定设备与预热、同 recall 比较及单次结果的严格溯源分别处理，不能仅靠把 2 GiB 改成 4 GiB 解决。AGNews 当前 Starling 页容量支持问题仍单独记录。详细本地核验：docs/analysis/disk_memory_protocol_review_20260917/AGNEWS_CONFIG_AUDIT.md。用户随后授权修代码与文档，已对 AGNews 原文逐块更正，保留三张历史图片；写入证据见 docs/analysis/disk_protocol_fix_20260917/。</p>

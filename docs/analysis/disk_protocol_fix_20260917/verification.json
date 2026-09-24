@@ -1,0 +1,40 @@
+{
+  "agnews": {
+    "before_revision": 316,
+    "after_revision": 350,
+    "edits_verified": 34,
+    "images_before": 3,
+    "images_after": 3,
+    "images_unchanged": true
+  },
+  "plan": {
+    "before_revision": 78,
+    "after_revision": 104,
+    "edits_verified": 26,
+    "images_before": 0,
+    "images_after": 0,
+    "images_unchanged": true
+  },
+  "source_sha256": {
+    "memory_runner.py": "80146a95436f6bb29a1d1e2dc98221671b1c321de8053597082a9053af7785b0",
+    "protocol.py": "fc786299e1024cf5eb2626ecbf53a311c550858ee5e3f0968cbdfc321ddc0bde",
+    "native_contract.py": "711bd6fc937eed4bd52f6813d0e3ce17130b992ff25f2968afdff3cbb8ebc89c",
+    "orchestrator.py": "7eb559d6b76b1de576145135767ac356be85ec6394dac651d778020e7302af57",
+    "plot_05_disk_suite.py": "92878fbc7880e80e6c008b86ab319d5359fc0790e839be2f8b7fdf1751cdf51a",
+    "run_official_disk_baseline.py": "1cb4dffd042642a34f43f7d489bf4063a4e951960dfc862054a233951aad2d4b",
+    "native/glass_disk_port.cpp": "7d0e9f11afacbb6f23e804e896def640e5d493ff34c7cfb2c9923f603e743fb7",
+    "native/symphonyqg_disk_port.cpp": "9cc7152c055651710842eca812a80735dfeda7377da529a86578f3973a00aae8",
+    "native/og_lvq_disk_port.cpp": "e50da344c2c1a5d57e85755b697fe06d46f98dd9aa4cce795b1554fa39623aac",
+    "tests/test_measured_protocol.py": "192883d3e114dad01f1ddbebd96427e118e7e5499f8c6e5d960a302cac597791",
+    "tests/test_native_timing.py": "76061ea97a219c929703ee75ea3cdd0ac6ffbe58fd7f367c47f4b4dcd6e4607f"
+  },
+  "full_experiments_run": false,
+  "live_cgroup_oom_test": "skipped: no writable delegated cgroup",
+  "cgroup_environment": {
+    "status": "blocked_environment",
+    "reason": "[Errno 30] Read-only file system: '/sys/fs/cgroup/qgraph05-7b7a7215876243c2b5188fc1ef11f18d'"
+  },
+  "formal_repeats": 1,
+  "result_statistic": "single_run",
+  "cross_run_median_iqr_cv": false
+}

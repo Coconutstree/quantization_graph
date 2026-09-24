@@ -1,0 +1,10 @@
+{
+  "compiler": "Tectonic 0.17.0",
+  "binary": "work/latex/bin/tectonic",
+  "source": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz",
+  "binary_sha256": "a98aa59ad5c1df39a6c9e56cbfc5088f2b11d6c179c0130b97998e4bd46a46da",
+  "template": "acmart v1.83 (2022), Tectonic default bundle",
+  "successful_cached_build": true,
+  "pdf": "paper/sigmod_draft/main.pdf",
+  "pages": 8
+}

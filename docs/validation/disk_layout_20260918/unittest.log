@@ -1,0 +1,48 @@
+............s.....................[Glass export] loading base for tiny
+[Glass export] building official NSG graph
+Start building NSG with params R=64 L=400 C=164
+AffineCalibrator calibration done, min = -0.972780, max = 0.989010, dif = 1.961790
+Start building NN-Descent with params K=64 S=10 R=100 L=114 niter=10
+NNDescent iter: [1/10], recall: 0.772344, cost: 0.01s
+NNDescent iter: [2/10], recall: 0.918281, cost: 0.01s
+NNDescent iter: [3/10], recall: 0.990469, cost: 0.01s
+NNDescent iter: [4/10], recall: 0.999531, cost: 0.02s
+NNDescent iter: [5/10], recall: 1.000625, cost: 0.02s
+NNDescent iter: [6/10], recall: 1.000625, cost: 0.03s
+NNDescent iter: [7/10], recall: 1.000625, cost: 0.04s
+NNDescent iter: [8/10], recall: 1.000625, cost: 0.05s
+NNDescent iter: [9/10], recall: 1.000625, cost: 0.06s
+NNDescent iter: [10/10], recall: 1.000625, cost: 0.07s
+NNDescent cost: 0.30s
+Indexing. 256 items
+[2K100 % completed, 21759 vectors/s, elapsed 0.01s
+0 of points are attached
+NSG building cost: 0.32s
+Degree Statistics: Range = 64, Max = 44, Min = 4, Avg = 21.531250
+[Glass export] training SQ4U and encoding base
+AffineCalibrator calibration done, min = -0.972780, max = 0.989010, dif = 1.961790
+[Glass export] writing graph pages
+[Glass export] writing SQ4U code pages
+[Glass export] wrote disk index: "/tmp/qgraph05_glass_disk_gkaw1hra/nvme/index"
+[query] warmup completed: 0 queries
+Glass-NSG-DiskPort search done
+.[SymphonyQG search] start width=20 workers=1
+Setting entry_point to 65
+	Vectors Copied
+Supplementing edges...
+Supplementing finished...
+Saving quantized graph to /tmp/qgraph05_symphonyqg_disk_m1i2_r9x/nvme/index/official_qg.index
+	Quantized graph saved!
+[query] warmup completed: 0 queries
+[SymphonyQG search] completed width=20
+SymphonyQG-DiskPort search done
+.......PASS Glass-NSG-DiskPort O_DIRECT native integration recall=0.950 bytes/query=66560
+PASS SymphonyQG-DiskPort O_DIRECT native integration recall=0.650 bytes/query=103424
+{"method": "DiskANN-PQ-Disk", "vectors": 512, "queries": 64, "workers": 32, "query_order": "shuffled", "recall_matches_result_ids": true, "process_peak_rss_bytes": 160337920, "budget_verified": false, "formal_ready": false, "binary_sha256": "dbca8e26704e592f245b12ad2ae956a2e52f45ce71c9e2f1bdda878b4f7b4734"}
+.{"method": "Ours-Disk", "vectors": 512, "queries": 64, "workers": 32, "query_order": "shuffled", "recall_matches_result_ids": true, "process_peak_rss_bytes": 218165248, "budget_verified": false, "formal_ready": false, "binary_sha256": "a4f8e40603c9f56dbd19616d15ba21d975c62cc70b895d21fc90ab1034f58f7e"}
+.{"method": "PQ-DiskANN-Disk", "vectors": 512, "queries": 64, "workers": 32, "query_order": "shuffled", "recall_matches_result_ids": true, "process_peak_rss_bytes": 209391616, "budget_verified": false, "formal_ready": false, "binary_sha256": "a4f8e40603c9f56dbd19616d15ba21d975c62cc70b895d21fc90ab1034f58f7e"}
+.
+----------------------------------------------------------------------
+Ran 45 tests in 6.670s
+
+OK (skipped=1)

@@ -12,13 +12,13 @@ METHODS="${METHODS:-Ours-Disk}"
 WORKERS="${WORKERS:-1}"
 LOG="logs/05c_gist_curve_diskenv_${RUN_ID}.log"
 
-mkdir -p logs "$DISK_ROOT" "$OUT_ROOT" results/disk_environment/03_system_fair/gist/csv results/disk_environment/03_system_fair/gist/logs results/disk_environment/03_system_fair/gist/figures
+mkdir -p logs "$DISK_ROOT" "$OUT_ROOT" results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist/csv results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist/logs results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist/figures
 
 {
   date
   echo "RUN_ID=$RUN_ID"
   echo "OUT_ROOT=$OUT_ROOT"
-  echo "PUBLISH_ROOT=results/disk_environment"
+  echo "PUBLISH_ROOT=results/archive/legacy_layout_20260918/disk_environment"
   echo "DISK_ROOT=$DISK_ROOT"
   echo "DISK_PROFILE=$DISK_PROFILE"
   echo "METHODS=$METHODS"
@@ -26,11 +26,11 @@ mkdir -p logs "$DISK_ROOT" "$OUT_ROOT" results/disk_environment/03_system_fair/g
   echo "QG05_FAST_WIDTHS=$WIDTHS"
   echo "VAL_QUERIES=$VAL_QUERIES"
 
-  QG05_FAST=1 QG05_FAST_WIDTHS="$WIDTHS"     python3 experiments/05_disk_system_fair/run_disk_suite.py       --phase run       --layers 05c       --datasets gist       --methods "$METHODS"       --workers "$WORKERS"       --repeats 1       --val-queries "$VAL_QUERIES"       --disk-root "$DISK_ROOT"       --disk-profile "$DISK_PROFILE"       --ports "$PORTS"       --out-root "$OUT_ROOT"       --run-id "$RUN_ID"
+  QG05_FAST=1 QG05_FAST_WIDTHS="$WIDTHS"     python3 src/disk_bench/run_disk_suite.py       --phase run       --layers 05c       --datasets gist       --methods "$METHODS"       --workers "$WORKERS"       --repeats 1       --val-queries "$VAL_QUERIES"       --disk-root "$DISK_ROOT"       --disk-profile "$DISK_PROFILE"       --ports "$PORTS"       --out-root "$OUT_ROOT"       --run-id "$RUN_ID"
 
-  QG05_FAST=1     python3 experiments/05_disk_system_fair/run_disk_suite.py       --phase plot       --layers 05c       --datasets gist       --methods "$METHODS"       --out-root "$OUT_ROOT"       --run-id "$RUN_ID"
+  QG05_FAST=1     python3 src/disk_bench/run_disk_suite.py       --phase plot       --layers 05c       --datasets gist       --methods "$METHODS"       --out-root "$OUT_ROOT"       --run-id "$RUN_ID"
 
   date
   echo "DONE_RUN: $OUT_ROOT/runs/$RUN_ID"
-  echo "DONE_PUBLISH: results/disk_environment/03_system_fair/gist"
+  echo "DONE_PUBLISH: results/archive/legacy_layout_20260918/disk_environment/03_system_fair/gist"
 } 2>&1 | tee "$LOG"

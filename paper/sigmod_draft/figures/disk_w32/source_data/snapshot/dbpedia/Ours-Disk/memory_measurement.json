@@ -1,0 +1,31 @@
+{
+  "command_sha256": "33524167e433a6b4a627f36e090cf220ea02c4178da830c3d1a801cf89cc1b45",
+  "binary_sha256": "a64dfc64e5f351aa48e5d929d8413143935aa0b6079046402d3a04a2f826c92c",
+  "rlimit_as_bytes": 2147483648,
+  "scope": "whole_user_process_including_inputs_libraries_stacks_allocator",
+  "excludes": [
+    "kernel_memory",
+    "device_controller_cache"
+  ],
+  "category_attribution_complete": false,
+  "environment": {
+    "MALLOC_ARENA_MAX": "2",
+    "OMP_DYNAMIC": "FALSE",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "QG05_MEASURE_WHOLE_PROCESS": "1"
+  },
+  "reference_only": false,
+  "started_unix": 1789214406.9080842,
+  "pid": 1618928,
+  "exit_code": 0,
+  "finished_unix": 1789235493.3433962,
+  "kernel_wait4_peak_rss_bytes": 747388928,
+  "sampled_high_water_bytes": {
+    "VmPeak": 954310656,
+    "VmHWM": 747388928,
+    "VmSwap": 0
+  },
+  "hard_limit_verified": true,
+  "user_address_space_budget_passed": true
+}

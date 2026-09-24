@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "query_comparisons": 39200,
+  "reference_artifact_sha256": "e6ee533f5648d32fc76d1f9638f2438b1c0a6e3fdb2afa3525f2f0e4a4d58757",
+  "disk_artifact_sha256": "436b09bfa39dba9798d7e7dad19d87ce5350009d57235d5d4ce626fc9fc36569",
+  "compared_fields": [
+    "result_ids",
+    "recall_at_10",
+    "visited_nodes",
+    "distance_evaluations"
+  ],
+  "mismatch_count": 0,
+  "first_mismatches": [],
+  "scope": "same_search_kernel_mmap_vs_direct_io_not_independent_algorithm"
+}

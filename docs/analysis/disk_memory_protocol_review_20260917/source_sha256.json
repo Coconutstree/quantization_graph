@@ -1,0 +1,10 @@
+{
+  "experiments/05_disk_system_fair/orchestrator.py": "6a3005b0d616276f048c891251fe0fe66f0e88c548461bdcb9c9481b3d33712b",
+  "experiments/05_disk_system_fair/native_contract.py": "c328c447a0911960df37ac15f46de53ebb4d9d1af9ceb9f4a589b70cb4a798d3",
+  "experiments/05_disk_system_fair/native_rust/src/ours_port.rs": "c7211851a2be08bf1614982e06e0bf4be4a91e23daa5c433f26593c05a9084be",
+  "experiments/05_disk_system_fair/run_starling_existing_layout.py": "9e47f598fd973b8360ff0a6d9e5db5ff612e5d098964b42c33dafd610f3989e8",
+  "docs/analysis/starling_memory_recovery_20260917/README.md": "dbb742285db1f6c72fd997bbc79c95631cf8c4a6ddf05abd7fee12c0898b2b3a",
+  "docs/analysis/disk_fairness_audit_20260915/README.md": "6ae68c6c41b6c9c1173eca526e3cd16e1f1708d29ae5afb8c556616d5946a8d7",
+  "docs/analysis/og_lvq_official_parity_audit_20260915.md": "722c8f8459f4f0591179e3b72409386be707760a1369a27af9717a503936efdd",
+  "data/sift10m/dataset_manifest.json": "024fd015613785c8a113a21ee5e4766f89a1bba33050c18c6a329962f9f94c79"
+}

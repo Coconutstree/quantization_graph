@@ -1,0 +1,185 @@
+[
+  {
+    "path": "results/disk_environment/01_quantizer_fair/agnews/csv/formal_test_rows.csv",
+    "rows": 328,
+    "values": {
+      "run_id": [
+        "formal_diskenv_20260826_071928_05a"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "1"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "MISSING"
+      ]
+    }
+  },
+  {
+    "path": "results/disk_environment/01_quantizer_fair/gist/csv/formal_test_rows.csv",
+    "rows": 328,
+    "values": {
+      "run_id": [
+        "formal_diskenv_20260826_071928_05a"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "1"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "MISSING"
+      ]
+    }
+  },
+  {
+    "path": "results/disk_environment/02_diskann_fair/agnews/csv/formal_test_rows.csv",
+    "rows": 400,
+    "values": {
+      "run_id": [
+        "fix_w32_diskpayload_symphony_20260831_140957",
+        "formal_diskenv_20260826_114755_bc_agnews"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "16",
+        "32"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0",
+        "0.0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "2.0"
+      ]
+    }
+  },
+  {
+    "path": "results/disk_environment/02_diskann_fair/gist/csv/formal_test_rows.csv",
+    "rows": 160,
+    "values": {
+      "run_id": [
+        "formal_diskenv_20260826_114755_bc_gist"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "32"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "2.0"
+      ]
+    }
+  },
+  {
+    "path": "results/disk_environment/03_system_fair/agnews/csv/formal_test_rows.csv",
+    "rows": 120,
+    "values": {
+      "run_id": [
+        "agnews_05c_rerun_20260901_152210"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "32"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "2.0"
+      ]
+    }
+  },
+  {
+    "path": "results/disk_environment/03_system_fair/gist/csv/formal_test_rows.csv",
+    "rows": 83,
+    "values": {
+      "run_id": [
+        "formal_diskenv_20260826_114755_bc_gist"
+      ],
+      "formal_ready": [
+        "True"
+      ],
+      "memory_accounting_complete": [
+        "MISSING"
+      ],
+      "workers": [
+        "32"
+      ],
+      "query_split": [
+        "MISSING"
+      ],
+      "repeat_id": [
+        "0"
+      ],
+      "cache_policy": [
+        "MISSING"
+      ],
+      "search_dram_budget_gib": [
+        "2.0"
+      ]
+    }
+  }
+]

@@ -16,4 +16,4 @@ dependencies = ["numpy>=1.24"]
 plot = ["matplotlib>=3.7"]
 
 [tool.setuptools]
-packages = ["Ours", "Ours.experiments", "Ours.tests"]
+packages = ["Ours", "Ours.tests"]

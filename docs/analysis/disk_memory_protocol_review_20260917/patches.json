@@ -1,0 +1,157 @@
+[
+  {
+    "command": "block_replace",
+    "block_id": "doxcnt0WzJXuQFB5E0vIbhQPSzc",
+    "reason": "澄清预算对象、保留原五次重复、区分方案与完成状态",
+    "file": "patch_00.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnCkpr9YpxM5AVQoVSDoU0lf",
+    "reason": "准入按方法配置、预算分开，避免一方法阻塞所有实验",
+    "file": "patch_01.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnwiXypha9F49eJ7Axc08uWm",
+    "reason": "修正混用的大小口径并保存实际头部核验",
+    "file": "patch_02.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnRr0svohA2cxvQQaDZRVfif",
+    "reason": "不把原文归一化描述当作本次已验证结论",
+    "file": "patch_03.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcncoDNU8ImFB5vfeMF0ng7pc",
+    "reason": "以总内存控制替代记账即限额，保留原重复和划分",
+    "file": "patch_04.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnBUUtVzQhks9v4Eq2JJozVh",
+    "reason": "移除对原生系统强行统一调度和虚构计数的风险",
+    "file": "patch_05.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnWj3HUh0bIDiAN3AK553Hzg",
+    "reason": "运行ID体现限制机制、预算和实验层",
+    "file": "patch_06.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnVp3lsnnWupYxmGpXILmlFf",
+    "reason": "目录不是验收证明",
+    "file": "patch_07.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnpzElqCzvTNwWmUARq35Fph",
+    "reason": "保留原根目录，增加协议与run隔离",
+    "file": "patch_08.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnjo5cqqmPuj1jZxNG0AuvYc",
+    "reason": "明确后续输出表路径的新版解释",
+    "file": "patch_09.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnL5PiPtEWIYNIpwMaRV83yf",
+    "reason": "核验实际locality开关约束，纠正纯消融归因",
+    "file": "patch_10.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn2wRBHACd5Ci2r13JtcVqrd",
+    "reason": "统一新预算，保留05B实验对象",
+    "file": "patch_11.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnuAZjADGJyopGWngt8nKgNh",
+    "reason": "修正缓存无限命中和页合并范围描述",
+    "file": "patch_12.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnhSv8beIy1wZqZfM4dQrfVH",
+    "reason": "区分机制消融和完整系统布局",
+    "file": "patch_13.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnaFE9OAam1yC1PaZZ5ABslg",
+    "reason": "主baseline与已确认方案一致",
+    "file": "patch_14.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnFyPKIVQktJFoXB8Klkpn5b",
+    "reason": "增加资源扫描与支持范围，不强行补齐四方法",
+    "file": "patch_15.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnwbeYANeFxseTK6eSSybpdg",
+    "reason": "设计可审计的内存字段，区分未知和零",
+    "file": "patch_16.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnoKJy9e0OjLrm677cYCyDHb",
+    "reason": "明确调参与预算曲线解释",
+    "file": "patch_17.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnNohq0GBIuMpdGTgDTCsFUd",
+    "reason": "移除旧固定2GiB与强制同搜索宽度",
+    "file": "patch_18.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnJ4RXM9d7q6HOzxgIupMvck",
+    "reason": "约束执行证据取代自报内存和手写formal标记",
+    "file": "patch_19.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn3m4oWmWRqGzhc0MddLMqWe",
+    "reason": "保留五次统计要求，纠正重复epoch等同独立样本",
+    "file": "patch_20.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnN7DFBSZCLgCVZ5DH5CqPQe",
+    "reason": "失败不阻塞其他方法，历史索引可复用、性能不可改标签",
+    "file": "patch_21.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn7JyxEF8XBsLGGEYXsIW9qT",
+    "reason": "保留历史审计同时消除过期状态的当前含义",
+    "file": "patch_22.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnIZlICKDL18qHAuuerop6td",
+    "reason": "用本次证据更新旧后台任务陈述",
+    "file": "patch_23.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnHMSGTJLnK1jVw4mob7BiVe",
+    "reason": "避免一个方法不支持即禁止整个数据集",
+    "file": "patch_24.xml"
+  },
+  {
+    "command": "append",
+    "reason": "补充本次核验、内存协议、执行验收与论文依据",
+    "file": "patch_25.xml"
+  }
+]

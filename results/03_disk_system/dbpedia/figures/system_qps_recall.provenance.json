@@ -1,0 +1,13 @@
+{
+  "source": "results/03_disk_system/dbpedia/tables/recall_qps_summary.csv",
+  "sha256": "3141d81f9c2742edd406b00e7de0fc5e11823a1cae2af5e766ce537c31165705",
+  "input_rows": 36,
+  "plotted_rows": 36,
+  "excluded_rows": 0,
+  "backend": "matplotlib",
+  "size_mm": [
+    89,
+    78
+  ],
+  "script": "scripts/plot_gist_formal_recall_qps.py"
+}

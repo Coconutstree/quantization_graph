@@ -1,0 +1,100 @@
+{
+  "documents": 5,
+  "images": 13,
+  "equations": 41,
+  "local_validation": "passed",
+  "feishu": "published_and_verified",
+  "uploaded": true,
+  "verification": [
+    {
+      "key": "01_ours",
+      "full_text_matches": true,
+      "img": 4,
+      "latex": 17,
+      "table": 5
+    },
+    {
+      "key": "02_diskann",
+      "full_text_matches": true,
+      "img": 2,
+      "latex": 3,
+      "table": 2
+    },
+    {
+      "key": "03_symphonyqg",
+      "full_text_matches": true,
+      "img": 2,
+      "latex": 3,
+      "table": 2
+    },
+    {
+      "key": "04_og_lvq",
+      "full_text_matches": true,
+      "img": 2,
+      "latex": 4,
+      "table": 1
+    },
+    {
+      "key": "05_glass_nsg",
+      "full_text_matches": true,
+      "img": 2,
+      "latex": 3,
+      "table": 2
+    }
+  ],
+  "note": "DiskANN first create returned network EOF without ID; one retry succeeded. Search/list scopes unavailable, so any server-side artifact from the first failed transport is not independently discoverable.",
+  "latest_revision": "2026-09-15",
+  "baseline_structure": "paper method first; concise disk modifications second",
+  "baseline_verification": [
+    {
+      "key": "02_diskann",
+      "verified": true,
+      "headings": [
+        "第一部分：论文中的 DiskANN 方法",
+        "第二部分：我们的磁盘实验改了什么"
+      ],
+      "revision_id": 7,
+      "img": 2,
+      "latex": 5,
+      "table": 3
+    },
+    {
+      "key": "03_symphonyqg",
+      "verified": true,
+      "headings": [
+        "第一部分：论文中的 SymphonyQG 方法",
+        "第二部分：我们的磁盘实验改了什么"
+      ],
+      "revision_id": 10,
+      "img": 2,
+      "latex": 6,
+      "table": 2
+    },
+    {
+      "key": "04_og_lvq",
+      "verified": true,
+      "headings": [
+        "第一部分：论文中的 LVQ 方法",
+        "第二部分：我们的磁盘实验改了什么"
+      ],
+      "revision_id": 7,
+      "img": 2,
+      "latex": 7,
+      "table": 2
+    },
+    {
+      "key": "05_glass_nsg",
+      "verified": true,
+      "headings": [
+        "第一部分：论文中的 NSG 方法",
+        "第二部分：我们的磁盘实验改了什么"
+      ],
+      "revision_id": 8,
+      "img": 2,
+      "latex": 4,
+      "table": 2
+    }
+  ],
+  "ours_unchanged": true,
+  "fastscan_section_verified": true
+}

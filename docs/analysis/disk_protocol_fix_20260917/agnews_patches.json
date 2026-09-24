@@ -1,0 +1,132 @@
+[
+  {
+    "command": "block_replace",
+    "block_id": "doxcnu15pcrz4mKKOLOpjN0rDDg",
+    "file": "agnews_patch_00.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnXeoK3zdRb2Neqyd9h8I8Uc",
+    "file": "agnews_patch_01.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnrKcCBlydUM5fQDAOn9GO8e",
+    "file": "agnews_patch_02.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnYsRRputzrJcGRvEfXVLBtF",
+    "file": "agnews_patch_03.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnTfY0EX0Xe2Od6Xg22lxRud",
+    "file": "agnews_patch_04.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcny4Px7oF4x6e08m9fvt5VTd",
+    "file": "agnews_patch_05.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnDNtvaXxQp2lOImqhbwHn6f",
+    "file": "agnews_patch_06.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn4aiTJFbRcL0TLY7SKvUrKh",
+    "file": "agnews_patch_07.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnkuZ6UJcAxHNHC66e20uHcd",
+    "file": "agnews_patch_08.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnRbpSMrKNVP4lnBe1kFgl8d",
+    "file": "agnews_patch_09.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnDZuhLxMo53RQQB5KOrJZbh",
+    "file": "agnews_patch_10.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnCUHHUn29PljEiMIFqMPEab",
+    "file": "agnews_patch_11.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn86bIAbeq1VTSXZgivDcgKg",
+    "file": "agnews_patch_12.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnimDfwE7NQfy7Aca7wxIaqh",
+    "file": "agnews_patch_13.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcneYMzIndupBvn4F75P261gc",
+    "file": "agnews_patch_14.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn3rwn71xJUmZiim3s56oUke",
+    "file": "agnews_patch_15.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcncXflAJm4KgSGpSxl2DDemd",
+    "file": "agnews_patch_16.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnTc4Hf4oLGPnaaO7TJ07HQf",
+    "file": "agnews_patch_17.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn6hxnomThE9AZiGKLPHWBAc",
+    "file": "agnews_patch_18.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnvgHhCb94f6sHG5eALDi0Ng",
+    "file": "agnews_patch_19.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcn4HE5nnLahtPbrCWjPzsbGe",
+    "file": "agnews_patch_20.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnhtS3h30nfRUtqrYMYbeSx3",
+    "file": "agnews_patch_21.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcng0c59gUmAS0SFT3v7Kcbpe",
+    "file": "agnews_patch_22.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcnNpF43xG2CxJaIV82MP4Wle",
+    "file": "agnews_patch_23.xml"
+  },
+  {
+    "command": "block_replace",
+    "block_id": "doxcngFeGNuxOCHZjh66klRe1Bb",
+    "file": "agnews_patch_24.xml"
+  },
+  {
+    "command": "append",
+    "block_id": null,
+    "file": "agnews_patch_25.xml"
+  }
+]

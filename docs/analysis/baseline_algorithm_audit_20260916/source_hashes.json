@@ -1,0 +1,12 @@
+{
+  "baselines/DEPENDENCY_LOCK.json": "513fec09aba1a368af4f3f8bdf2dc5520b3bffbc4674547583c71ad978bc8d9f",
+  "baselines/pyglass/glass/neighbor.hpp": "4b7682f2413368b1673a397e5f3fc901c7c03644c235d2cd851762a975cdcfd7",
+  "baselines/pyglass/glass/searcher/graph_searcher.hpp": "1e2b5351487356ff9dac655daa2274acfbea4a930ea828b6591c1ea7c65ee97e",
+  "baselines/symphonyqg/symqglib/qg/qg.hpp": "6d13e185540e49f726ad34cdf644b1534a9c8ca24e54e956d58f5c9ce202fa83",
+  "baselines/svs/python/svs/include/svs/quantization/lvq/lvq.h": "14770a721915e3e485faa72b1b945eb5e26542d9e33f6a9b4da3704428d28f0e",
+  "experiments/05_disk_system_fair/native/glass_disk_port.cpp": "10812200f05615d41d1733ee8730d01eb7a3c14a9b06374ce2f9b225b1693ace",
+  "experiments/05_disk_system_fair/tests/audit_glass_official_search.cpp": "15a82ac4122a66cd6d9486bcd712e5b8d9bddaf65e63c1bdcc74c1a293428ef7",
+  "experiments/05_disk_system_fair/native/symphonyqg_search_test.cpp": "23abd71433ac285480ef6014acaf432bd73756bff583d7ca0a2af6dde88c7579",
+  "experiments/05_disk_system_fair/native/og_lvq_disk_port.cpp": "902a95f1f66fa19cd2b2d640f45e4abc20c4f7dc77e7065b97301be0486f930a",
+  "experiments/05_disk_system_fair/native_diskann/src/main.rs": "db3954fef89360e2b1f26b5c41a01556a39c8b9f46ee6569e2a5a89376160732"
+}

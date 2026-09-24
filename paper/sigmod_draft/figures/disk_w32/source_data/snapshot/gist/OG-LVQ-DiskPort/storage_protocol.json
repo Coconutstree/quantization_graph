@@ -1,0 +1,56 @@
+{
+  "protocol": "fixed_query_warmup_v1",
+  "warmup_queries": 100,
+  "workers": 32,
+  "cache_mode": "c0",
+  "input_snapshot": {
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/gist/csv/_query_splits/test_query.fvecs": {
+      "size": 3075200,
+      "mtime_ns": 1788829073155497575,
+      "inode": 40803126661
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/gist/csv/_query_splits/test_gt.ivecs": {
+      "size": 323200,
+      "mtime_ns": 1788829073155497575,
+      "inode": 40803127175
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/05_disk_system_fair/test_L_400_w_32/gist/optimized_order.u32": {
+      "size": 3200,
+      "mtime_ns": 1789185472385700277,
+      "inode": 36522848264
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/disk_03_graph_build_reuse_20260910_gist/manifests/inputs/05c_gist.json": {
+      "size": 891,
+      "mtime_ns": 1788970853238441267,
+      "inode": 54725137094
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/OG-LVQ-DiskPort/hybrid_disk/graph.pages": {
+      "size": 273068032,
+      "mtime_ns": 1788970727585270075,
+      "inode": 58006844682
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/OG-LVQ-DiskPort/hybrid_disk/lvq4.pages": {
+      "size": 585146368,
+      "mtime_ns": 1788970728465250213,
+      "inode": 58006844683
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/OG-LVQ-DiskPort/hybrid_disk/centroids.f32": {
+      "size": 3856,
+      "mtime_ns": 1788970730293208954,
+      "inode": 58006911829
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/OG-LVQ-DiskPort/hybrid_disk/index.meta": {
+      "size": 182,
+      "mtime_ns": 1788970730301208774,
+      "inode": 58006911830
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/gist/OG-LVQ-DiskPort/hybrid_disk/reuse_audit.json": {
+      "size": 2491,
+      "mtime_ns": 1788970731149189634,
+      "inode": 58006911831
+    }
+  },
+  "no_other_native_search_at_start": true,
+  "device_cache_controlled": false,
+  "cold_storage_claim": false
+}

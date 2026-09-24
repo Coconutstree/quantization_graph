@@ -83,6 +83,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     GraphTurboConfig graph_turbo_config_{};
     std::shared_ptr<const RouteCodeStorage> route_code_storage_;
     std::vector<uint32_t> route_dims_;
+    std::vector<float> adaptive_route_mean_;
+    std::vector<float> adaptive_route_components_;
+    size_t adaptive_route_input_dim_{0};
     bool graph_turbo_topology_frozen_{false};
     const float *route_oracle_vectors_{nullptr};
     size_t route_oracle_count_{0};
@@ -519,9 +522,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             config.prefetch_distance == 0) {
             throw std::invalid_argument("invalid Graph-Turbo configuration");
         }
+        const size_t route_width = config.route_dim ? config.route_dim : config.route_bits;
         if (config.mode == GraphTurboMode::RoutePriority &&
             (!route_code_storage_ || route_code_storage_->size() != cur_element_count ||
-             route_dims_.size() != config.route_bits)) {
+             (config.route_dim == 0 && route_dims_.size() != config.route_bits) ||
+             (config.route_dim != 0 && (!route_code_storage_->isAdaptive() ||
+                route_code_storage_->isAdaptive() && route_width == 0)))) {
             throw std::runtime_error("route_priority requires matching route codes and dimensions");
         }
         if ((config.short_shadow || config.two_bit_shadow || config.paper_shadow ||
@@ -559,11 +565,25 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     void setRouteCodeStorage(
         std::shared_ptr<const RouteCodeStorage> storage,
         std::vector<uint32_t> route_dims) {
-        if (!storage || storage->size() != cur_element_count || route_dims.empty() || route_dims.size() > 32) {
+        if (!storage || storage->size() != cur_element_count ||
+            ((!storage->isAdaptive()) && route_dims.empty()) || route_dims.size() > 32) {
             throw std::invalid_argument("route-code storage does not match graph");
         }
         route_code_storage_ = std::move(storage);
         route_dims_ = std::move(route_dims);
+    }
+
+    void setAdaptiveRouteProjection(std::vector<float> mean,
+                                    std::vector<float> components,
+                                    size_t input_dim,
+                                    size_t route_dim) {
+        if (!route_code_storage_ || !route_code_storage_->isAdaptive() ||
+            input_dim == 0 || route_dim == 0 || mean.size() != input_dim ||
+            components.size() != input_dim * route_dim)
+            throw std::invalid_argument("invalid adaptive route projection");
+        adaptive_route_mean_ = std::move(mean);
+        adaptive_route_components_ = std::move(components);
+        adaptive_route_input_dim_ = input_dim;
     }
 
     void clearRouteCodeStorage() {
@@ -934,6 +954,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             std::vector<uint16_t> original_pos;
             std::vector<dist_t> distances;
             std::vector<uint8_t> scores;
+            std::vector<float> adaptive_scores;
             std::vector<uint16_t> order;
             std::vector<const void *> data_points;
             std::vector<PaperPruneEstimate<dist_t>> paper_estimates;
@@ -948,12 +969,25 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             turbo_scratch.order.resize(maxM0_);
             turbo_scratch.data_points.resize(maxM0_);
             turbo_scratch.paper_estimates.resize(maxM0_);
+            turbo_scratch.adaptive_scores.resize(maxM0_);
         }
         uint32_t query_route_code = 0;
+        std::vector<float> adaptive_query_route;
+        const bool adaptive_route = graph_turbo_config_.mode == GraphTurboMode::RoutePriority &&
+            graph_turbo_config_.route_dim != 0;
         if (graph_turbo_config_.mode == GraphTurboMode::RoutePriority &&
-            !space_->compute_query_route_code(query_context, route_dims_, &query_route_code)) {
+            (!adaptive_route && !space_->compute_query_route_code(query_context, route_dims_, &query_route_code))) {
             visited_list_pool_->releaseVisitedList(vl);
             throw std::runtime_error("space cannot compute a K=1 route code");
+        }
+        if (adaptive_route &&
+            (!route_code_storage_ || !route_code_storage_->isAdaptive() ||
+             adaptive_route_mean_.empty() ||
+             !space_->compute_query_adaptive_route(query_context, adaptive_route_mean_.data(),
+                adaptive_route_components_.data(), adaptive_route_input_dim_,
+                graph_turbo_config_.route_dim, &adaptive_query_route))) {
+            visited_list_pool_->releaseVisitedList(vl);
+            throw std::runtime_error("adaptive route projection is not configured");
         }
 
         dist_t lowerBound;
@@ -1300,6 +1334,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     const auto route_start = query_metrics ? std::chrono::steady_clock::now()
                                                            : std::chrono::steady_clock::time_point{};
                     for (size_t i = 0; i < compact_count; ++i) {
+                        if (adaptive_route) {
+                            turbo_scratch.adaptive_scores[i] = route_code_storage_->asymmetricScore(
+                                turbo_scratch.ids[i], adaptive_query_route.data(),
+                                graph_turbo_config_.route_dim);
+                            continue;
+                        }
                         const uint32_t code = route_code_storage_->code(turbo_scratch.ids[i]);
 #if defined(__GNUC__) || defined(__clang__)
                         turbo_scratch.scores[i] = static_cast<uint8_t>(__builtin_popcount(query_route_code ^ code));
@@ -1320,8 +1360,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     for (size_t i = 1; i < compact_count; ++i) {
                         const uint16_t value = turbo_scratch.order[i];
                         size_t pos = i;
-                        while (pos > 0 && turbo_scratch.scores[value] <
-                               turbo_scratch.scores[turbo_scratch.order[pos - 1]]) {
+                        while (pos > 0 && (adaptive_route
+                            ? turbo_scratch.adaptive_scores[value] <
+                              turbo_scratch.adaptive_scores[turbo_scratch.order[pos - 1]]
+                            : turbo_scratch.scores[value] <
+                              turbo_scratch.scores[turbo_scratch.order[pos - 1]])) {
                             turbo_scratch.order[pos] = turbo_scratch.order[pos - 1];
                             --pos;
                         }

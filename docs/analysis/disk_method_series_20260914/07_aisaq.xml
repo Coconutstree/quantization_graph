@@ -1,0 +1,50 @@
+<title>AiSAQ 逐步拆解：邻居 PQ 内联、按需读码与 DRAM 开销</title>
+<p>面向已了解向量距离、PQ 和图近邻搜索的研究人员。沿用本系列模板：第一部分先讲原方法的全流程、符号、分步机制、存储查询与误差边界；第二部分说明本地接入和验证状态。公式以 L2 为例。核对日期：2026-09-17；本文没有运行新的性能实验。</p>
+<h1 seq="auto">论文原始设计与官方版本扩展</h1>
+<h2 seq="auto">先看问题、全流程与符号</h2>
+<p>DiskANN 通常让全库 PQ 码驻留 DRAM：读到节点 u 的邻接 ID 后，直接从内存取邻居 v 的 PQ 码来估计距离。AiSAQ 将这份随数据库规模增长的全量码从强制驻留内存中移走。原始全内联设计把邻居的 PQ 码放进 u 的磁盘记录，读取 u 时就能给邻居打分。它用磁盘存储冗余换取更低的常驻内存需求。</p>
+<p>DRAM-free 指不要求全库 PQ 码驻留，不等于程序零内存。码本、入口数据、visited、候选队列和 I/O 缓冲仍占内存。当前官方版本进一步允许部分内联、独立 PQ 按需读取、重排和缓存；这些扩展单独说明，不追溯归入 2024 年原论文的每项贡献。</p>
+<p>原始设计来源：<a href="https://arxiv.org/abs/2404.06004">AiSAQ: All-in-Storage ANNS with Product Quantization for DRAM-free Information Retrieval</a></p>
+<table><thead><tr><th><p>符号</p></th><th><p>类型与含义</p></th></tr></thead><tbody><tr><td><p>N，D；x_u，q</p></td><td><p>节点数、原维数；节点 u 的向量、查询向量</p></td></tr><tr><td><p>N⁺(u)，R</p></td><td><p>u 的出邻居集合、最大图度数</p></td></tr><tr><td><p>m，K；c_j,a；k_j(v)</p></td><td><p>PQ 子空间数、中心数、子中心与邻居编码编号</p></td></tr><tr><td><p>I，Snode，P</p></td><td><p>每节点内联 PQ 数、节点记录字节、I/O 页字节</p></td></tr><tr><td><p>L，W，V</p></td><td><p>候选宽度、搜索 beam、vector beamwidth</p></td></tr><tr><td><p>T，Cstatic，Cpage</p></td><td><p>查询线程数、共享静态 PQ 缓存、每线程 PQ 页缓存</p></td></tr></tbody></table>
+<img path="@./docs/analysis/disk_method_series_20260914/figures/07_aisaq_flow.png" caption="AiSAQ 原始全内联：邻居的 PQ 随当前节点读取" width="1400"/>
+<h2 seq="auto">步骤 1：图与量化器各自负责什么</h2>
+<p>官方实现基于 DiskANN 的构建与搜索框架。离线建立可导航图，按子空间训练 PQ 码本，并将数据库向量编码成中心编号。AiSAQ 的核心不是换一种距离公式，而是改变评分所需 PQ 数据的存放位置及获取方式。</p>
+<p><latex>k_j(v)=\arg\min_{0\le a&lt;K}\|x_v^{(j)}-c_{j,a}\|_2^2,\qquad b_{\rm code}=m\quad(K=256).</latex></p>
+<p>m=32 表示每个向量有 32 字节 PQ 码，不是每维 32 bit。共享码本另算；实际训练的平移/旋转等预处理应在编码与 query 侧一致。本文公式只展开标准 L2 ADC 主线。</p>
+<p>固定实现依据：<a href="https://github.com/KioxiaAmerica/aisaq-diskann/blob/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac/README.md">AiSAQ 官方功能与继承的 DiskANN 构建框架</a></p>
+<h2 seq="auto">步骤 2：原始全内联记录怎样组织</h2>
+<p>展开 u 时真正需要的是各个邻居 v 的 PQ 编码。因此全内联记录在 u 的向量和邻接表之外，附上邻居 PQ。若许多节点都指向同一个 v，v 的短码会出现在多个记录中；这些是用于评分的编码副本，不是复制多个完整原向量。</p>
+<p><latex>\mathrm{record}(u)=[x_u\mid N^+(u)\mid\{\mathrm{PQ}(v):v\in N^+(u)\}].</latex></p>
+<p><latex>S_{\rm node}\approx 4D+4(R+1)+Im+H,\qquad 0\le I\le R.</latex></p>
+<p>这里使用 FP32 和固定最大度数作教学估算，H 表示版本相关字段、原始 ID 等额外元数据；文件头、对齐和页填充另计。原始全内联为 I=R。教学例：D=128、R=64、m=32 时，主要字段为 512+260+2048=2820 字节；当 D=1024 时为 4096+260+2048=6404 字节，已经跨越 4 KiB。内联节省取 PQ 的额外请求，不保证每节点只读一页。</p>
+<p>全内联 PQ 副本的主要字节量约为 NRm，准确值取决于记录填充和实际度数；独立 PQ 文件等其他索引文件仍须计入磁盘总量，不能把这个估算当成整个索引大小。</p>
+<p>代码定位：<a href="https://github.com/KioxiaAmerica/aisaq-diskann/blob/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac/src/pq_flash_index.cpp">AiSAQ 记录元数据、内联码解析与查询</a></p>
+<h2 seq="auto">步骤 3：query 查表与搜索推进</h2>
+<p><latex>T_j(a)=\|q^{(j)}-c_{j,a}\|_2^2,\qquad \widehat d^2(q,x_v)=\sum_{j=1}^{m}T_j(k_j(v)).</latex></p>
+<p>输入是浮点 query、码本和入口信息。query 先构造距离表，再选择待扩展节点并读取记录。读回 u 后，对 u 的存储向量评分，同时对新邻居去重；使用邻居 PQ 码查表，更新候选池，决定下一步读谁。未启用 disk-PQ 时，u 的原向量可直接做精确 L2；启用磁盘压缩时不能把该距离统称为 exact。</p>
+<p>最终结果从已评估集合选出。全内联避免了“发现邻居后，再为其 PQ 单独读盘”的依赖，但候选仍按近似距离推进。即使已读节点的距离精确，也不保证找到全库精确 top-k。</p>
+<h2 seq="auto">步骤 4：当前官方版本的部分内联与按需 PQ</h2>
+<table><thead><tr><th><p>配置</p></th><th><p>PQ 从哪里来</p></th><th><p>主要取舍</p></th></tr></thead><tbody><tr><td><p>I=R，全内联</p></td><td><p>邻居 PQ 随 u 的节点记录读回</p></td><td><p>较少额外 PQ 请求，较大节点记录和复制开销</p></td></tr><tr><td><p>0&lt;I&lt;R，部分内联</p></td><td><p>部分随节点读取，其余从独立 PQ 存储取得</p></td><td><p>在节点膨胀与额外读取之间折中</p></td></tr><tr><td><p>I=0，无内联</p></td><td><p>邻居 PQ 按需从存储或缓存取得</p></td><td><p>记录更小，但候选评分依赖 PQ 读取</p></td></tr><tr><td><p>I=-1，构建自动选择</p></td><td><p>由官方构建器计算不增加索引文件大小的内联数量</p></td><td><p>不等于固定 0，也不等于全内联</p></td></tr></tbody></table>
+<p>非内联码的读取可以利用共享静态 PQ 缓存；官方还提供重排后的按页读取与每线程 LRU 页缓存。rearrange 为向量重新分配内部 ID、改善 PQ 读取局部性，返回时恢复原 ID。全内联时官方忽略 rearrange，因为不需要通过它优化常规邻居 PQ 的独立读取。</p>
+<img path="@./docs/analysis/disk_method_series_20260914/figures/07_aisaq_storage.png" caption="AiSAQ：内联、按需读取与内存边界" width="1400"/>
+<p>官方扩展依据：<a href="https://github.com/KioxiaAmerica/aisaq-diskann/blob/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac/workflows/AiSAQ_index.md">AiSAQ 构建与搜索参数说明</a></p>
+<h2 seq="auto">步骤 5：并发读取、入口与缓存</h2>
+<p>当前官方提供 vector_beamwidth，要求 V≤W，用于控制一组搜索推进中的节点数量并组织 PQ 读取并发。它不等于查询线程数。PQ 读取后端可选 aio 或 uring；该选项控制 PQ reader，不能据此声称全部节点 I/O 都切换为同一种后端。</p>
+<p>官方支持额外入口点：加载阶段保留入口 ID 及其 PQ 码，再由 query 评分选择起点。这与 Starling 的采样内存导航图不同，不能把两者都画成同一张 RAM 图。</p>
+<p>静态 PQ 缓存是共享的；动态 PQ 读页缓存按线程设置，官方说明上限为每线程 32 MiB，并要求索引启用 rearrange。节点缓存是另一个对象。全内联分支不会利用静态 PQ 缓存来读取普通邻居码，因为码已在节点记录里。</p>
+<h2 seq="auto">真正的内存账目与参数含义</h2>
+<p><latex>M_{\rm search}\approx M_{\rm codebook}+M_{\rm entry}+C_{\rm static}+C_{\rm node}+T(C_{\rm page}+M_{\rm scratch})+M_{\rm other}.</latex></p>
+<p>该式表达的是不再强制含 Nm 的全库 PQ 驻留项；不意味着任意配置的总内存与 N 完全无关。缓存比例、visited、元数据、过滤配置和分配器都会影响实际峰值。32 threads × 4 MiB/线程，仅 PQ 页缓存容量就是 128 MiB，管理开销另计。</p>
+<table><thead><tr><th><p>参数</p></th><th><p>含义与单位</p></th></tr></thead><tbody><tr><td><p>--use_aisaq</p></td><td><p>构建和搜索都显式开启；省略搜索开关可走全 PQ 驻留的非 AiSAQ 模式</p></td></tr><tr><td><p>--QD</p></td><td><p>显式 PQ 码字节数；指定后 -B 不再决定码长</p></td></tr><tr><td><p>--inline_pq</p></td><td><p>内联邻居 PQ 个数；-1 自动选择，默认 R</p></td></tr><tr><td><p>--pq_cache_size</p></td><td><p>共享静态 PQ 缓存；支持 B/K/M/G/%；无后缀按向量数解释</p></td></tr><tr><td><p>--pq_read_page_cache_size</p></td><td><p>每线程 PQ 页缓存；无后缀按字节解释；需 rearrange</p></td></tr><tr><td><p>--num_nodes_to_cache</p></td><td><p>节点缓存数量，与 PQ 缓存分别核算</p></td></tr><tr><td><p>-M / -B</p></td><td><p>构建预算 / PQ 配置相关预算，不是全进程搜索内存硬上限</p></td></tr></tbody></table>
+<h2 seq="auto">误差、代价与容易混淆的结论</h2>
+<p>相同 PQ 码与 query 查表下，改变码的存放位置不会直接改变单次 ADC 公式；但 beam、入口、缓存和读取组织的配置可能改变搜索推进，不能只凭公式相同就断言结果和性能完全等价。内联降低独立取码需求，同时增加磁盘记录和可能的跨页读取；是否划算取决于维度、图度数、PQ 码长与设备。</p>
+<p>在百万向量、32 B/PQ 的教学规模中，全库短码约 30.5 MiB。此时可以比较完整系统，但不能只凭该规模证明超大规模驻留瓶颈。研究结论应由不同总预算或更大规模的实测支持。</p>
+<h1 seq="auto">我们的磁盘接入、验证状态与执行顺序</h1>
+<p>本地固定 AiSAQ 提交 f0a48e984c685bd498e3c4f88386b47e0e4ab1ac。外层 runner 将 fvecs 转为官方 bin，分别调用官方 build_disk_index 和 search_disk_index，两处都加 use_aisaq。PQ 码长通过 QD 显式设置，不借用 ours 的图、量化器或搜索循环。</p>
+<table><thead><tr><th><p>环节</p></th><th><p>当前接入与边界</p></th></tr></thead><tbody><tr><td><p>构建</p></td><td><p>官方图/PQ、inline_pq，按配置启用 rearrange</p></td></tr><tr><td><p>查询</p></td><td><p>官方 AiSAQ 模式，PQ reader 使用 aio，V 与缓存参数显式传入</p></td></tr><tr><td><p>默认值</p></td><td><p>runner 的 inline_pq=-1、PQ caches=0；不同于官方全内联默认</p></td></tr><tr><td><p>兼容补丁</p></td><td><p>设备扇区查询在 /dev/block 缺失时从同设备 sysfs 取 logical_block_size</p></td></tr><tr><td><p>功能验证</p></td><td><p>1024 条 64 维向量、16 queries、L=10/40；ID 与距离检查通过</p></td></tr><tr><td><p>正式状态</p></td><td><p>目标数据、总资源约束、缓存预热和计时一致性仍需验收</p></td></tr></tbody></table>
+<p>兼容补丁不修改搜索、建图或编码公式，但源码有差异，必须披露。正式主实验优先使用无补丁版本；若只能使用兼容版本，应验证行为及相关环境影响，不能称为完全未修改的官方程序。</p>
+<p>当前小样本验证显示 top-10 无重复、ID 合法，返回距离通过原始 FP32 数据的 float64 L2² 重算检查。它没有证明 GIST、AGNews、DBpedia 三套目标规模已完成正式运行，也没有产生与 ours 公平可比的新 QPS 曲线。</p>
+<p>实际执行顺序：冻结源码与补丁 → 核验数据和维度 → 官方构建并记录真实布局 → 加载码本/入口/配置缓存 → query 查表 → 读取节点与必要的非内联 PQ → 更新候选及结果 → 统一评估。外部资源限制须与其他方法相同；不能把 QD、缓存容量或 -B 单独当成总 DRAM 上限。</p>
+<p>教学复习：展开 u 要给邻居 v 打分；AiSAQ 把 v 的 PQ 放到读取 u 时可取得的位置，或通过独立 PQ 读取补齐。Starling 重点提高每页节点的利用率，AiSAQ 重点消除全库 PQ 强制驻留；两者解决的问题不同。</p>
+<p>本地协议与补丁：docs/plans/OFFICIAL_DISK_BASELINES.md；docs/plans/DISK_BASELINE_FAIR_COMPARISON_20260916.md；baselines/patches/aisaq-logical-block-size-sysfs.patch</p>
+<p>固定代码：<a href="https://github.com/KioxiaAmerica/aisaq-diskann/tree/f0a48e984c685bd498e3c4f88386b47e0e4ab1ac">AiSAQ 官方版本</a></p>

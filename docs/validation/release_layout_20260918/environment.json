@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "python": "3.13.12 | packaged by Anaconda, Inc. | (main, Feb 24 2026, 16:13:31) [GCC 14.3.0]",
+  "platform": "Linux-5.15.0-142-generic-x86_64-with-glibc2.35",
+  "machine": "x86_64",
+  "os_release": "PRETTY_NAME=\"Ubuntu 22.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"22.04\"\nVERSION=\"22.04.4 LTS (Jammy Jellyfish)\"\nVERSION_CODENAME=jammy\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=jammy\n",
+  "packages": {
+    "numpy": "2.4.4",
+    "h5py": "3.14.0",
+    "matplotlib": "3.10.8",
+    "pybind11": "3.0.4",
+    "scipy": "1.17.1",
+    "tqdm": "4.67.3",
+    "glass": "2.1.0",
+    "scalable-vs": "0.4.0",
+    "pypdf": "6.16.1",
+    "cmake": "4.4.2"
+  },
+  "tools": {
+    "g++-11": {
+      "returncode": 0,
+      "output": "g++-11 (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+    },
+    "g++": {
+      "returncode": 0,
+      "output": "g++ (Ubuntu 9.5.0-1ubuntu1~22.04) 9.5.0\nCopyright (C) 2019 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+    },
+    "cmake": {
+      "returncode": 0,
+      "output": "cmake version 4.4.2\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake)."
+    },
+    "ninja": {
+      "returncode": 0,
+      "output": "1.13.0.git.kitware.jobserver-pipe-1"
+    },
+    "cargo": {
+      "returncode": 0,
+      "output": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+    },
+    "rustc": {
+      "returncode": 0,
+      "output": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "numactl": {
+      "available": false
+    }
+  },
+  "cpu": {
+    "returncode": 0,
+    "output": "Architecture:                         x86_64\nCPU op-mode(s):                       32-bit, 64-bit\nAddress sizes:                        46 bits physical, 48 bits virtual\nByte Order:                           Little Endian\nCPU(s):                               160\nOn-line CPU(s) list:                  0-159\nVendor ID:                            GenuineIntel\nModel name:                           Intel(R) Xeon(R) Gold 6248 CPU @ 2.50GHz\nCPU family:                           6\nModel:                                85\nThread(s) per core:                   2\nCore(s) per socket:                   20\nSocket(s):                            4\nStepping:                             7\nCPU max MHz:                          3900.0000\nCPU min MHz:                          1000.0000\nBogoMIPS:                             5000.00\nFlags:                                fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 cdp_l3 invpcid_single intel_ppin ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm mpx rdt_a avx512f avx512dq rdseed adx smap clflushopt clwb intel_pt avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local dtherm ida arat pln pts pku ospke avx512_vnni md_clear flush_l1d arch_capabilities\nVirtualization:                       VT-x\nL1d cache:                            2.5 MiB (80 instances)\nL1i cache:                            2.5 MiB (80 instances)\nL2 cache:                             80 MiB (80 instances)\nL3 cache:                             110 MiB (4 instances)\nNUMA node(s):                         4\nNUMA node0 CPU(s):                    0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88,92,96,100,104,108,112,116,120,124,128,132,136,140,144,148,152,156\nNUMA node1 CPU(s):                    1,5,9,13,17,21,25,29,33,37,41,45,49,53,57,61,65,69,73,77,81,85,89,93,97,101,105,109,113,117,121,125,129,133,137,141,145,149,153,157\nNUMA node2 CPU(s):                    2,6,10,14,18,22,26,30,34,38,42,46,50,54,58,62,66,70,74,78,82,86,90,94,98,102,106,110,114,118,122,126,130,134,138,142,146,150,154,158\nNUMA node3 CPU(s):                    3,7,11,15,19,23,27,31,35,39,43,47,51,55,59,63,67,71,75,79,83,87,91,95,99,103,107,111,115,119,123,127,131,135,139,143,147,151,155,159\nVulnerability Gather data sampling:   Mitigation; Microcode\nVulnerability Itlb multihit:          KVM: Mitigation: VMX disabled\nVulnerability L1tf:                   Not affected\nVulnerability Mds:                    Not affected\nVulnerability Meltdown:               Not affected\nVulnerability Mmio stale data:        Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Reg file data sampling: Not affected\nVulnerability Retbleed:               Mitigation; Enhanced IBRS\nVulnerability Spec rstack overflow:   Not affected\nVulnerability Spec store bypass:      Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:             Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:             Mitigation; Enhanced / Automatic IBRS; IBPB conditional; RSB filling; PBRSB-eIBRS SW sequence; BHI SW loop, KVM SW loop\nVulnerability Srbds:                  Not affected\nVulnerability Tsx async abort:        Mitigation; TSX disabled"
+  },
+  "git_head": {
+    "returncode": 0,
+    "output": "7b8e792ecdf2965903bc55b4d892f76cac825306"
+  },
+  "git_dirty": true,
+  "scope": "Observed environment; not evidence of a clean-machine installation or formal benchmark."
+}

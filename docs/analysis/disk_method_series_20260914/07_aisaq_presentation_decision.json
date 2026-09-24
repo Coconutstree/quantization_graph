@@ -1,0 +1,1 @@
+{"audience":"了解图近邻搜索、需要理解磁盘方法的研究人员","reader_task":"按既有SAQ与DiskANN模板理解AiSAQ原始设计、官方扩展、内存账目和本地接入","genre_contract":"router.knowledge","adapter":null,"presentation_mode":"normal","visual_plan":{"reason":"沿用既有系列的原创流程图和存储图，解释邻居PQ随节点读取与按需读取的区别","blocks":[{"type":"img","min_count":2,"purpose":"原方法全流程和内联/按需PQ的存储边界"}]}}

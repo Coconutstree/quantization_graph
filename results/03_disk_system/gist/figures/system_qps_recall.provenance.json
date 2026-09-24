@@ -1,0 +1,35 @@
+{
+  "source": "results/03_disk_system/gist/tables/recall_qps_summary.csv",
+  "sha256": "a8d4ab9b5a76e155836ffffd94e9bed3f189ad0b28b663830a501c1bba5ebab8",
+  "input_rows": 36,
+  "plotted_rows_main_figure": 27,
+  "plotted_rows_companion_si": 36,
+  "rows_not_drawn_in_main_figure": {
+    "count": 9,
+    "method": "Glass-NSG-DiskPort",
+    "reason": "recall 49.0-79.6% lies outside the 80-100% main-figure window; kept in SI and source data"
+  },
+  "excluded_from_dataset": 0,
+  "backend": "python/matplotlib (nature-figure skill)",
+  "size_mm": [
+    180,
+    72
+  ],
+  "panels": {
+    "a": "Recall@10 vs QPS, Ours vs DiskANN (linear QPS, tightened)",
+    "b": "Ours/DiskANN QPS ratio at fixed recall gates",
+    "c": "Ours, DiskANN and SymphonyQG (linear QPS)",
+    "si": "all four disk systems on a log QPS axis (separate file, same points)"
+  },
+  "interpolation": "none",
+  "smoothing": "none",
+  "pareto_filtering": "none",
+  "script": "scripts/plot_gist_formal_recall_qps.py",
+  "matched_recall_ratios_first_width_reaching_gate": {
+    "90%": 1.0589061922761331,
+    "93%": 1.1116540027569604,
+    "95%": 1.7326086310841584,
+    "97%": 2.085419804533349,
+    "98%": 1.723938198879463
+  }
+}

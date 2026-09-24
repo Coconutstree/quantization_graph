@@ -1,0 +1,1 @@
+<ul><li>再做设备与并发实验：记录真实 HDD/RAID/NVMe、调度器、NUMA、CPU affinity、AIO/beam 设置以及运行期 IOPS/带宽。旧数据不足以证明“62 MB/s、32 线程已打满”；排序、预取或提高队列深度的收益需独立测量。</li></ul>

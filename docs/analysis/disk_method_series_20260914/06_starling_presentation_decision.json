@@ -1,0 +1,1 @@
+{"audience":"了解图近邻搜索、需要理解磁盘方法的研究人员","reader_task":"按既有SAQ与DiskANN模板理解Starling原方法、参数及本地复现边界","genre_contract":"router.knowledge","adapter":null,"presentation_mode":"normal","visual_plan":{"reason":"沿用既有系列的流程图和存储图，分别解释查询依赖和DRAM/SSD边界；复用本地绘图样式生成原创示意图","blocks":[{"type":"img","min_count":2,"purpose":"全流程和内存磁盘布局"}]}}

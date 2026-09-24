@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-21",
+  "scope": "synthetic correctness and admission regression only; no full dataset or hardware preflight completed",
+  "protocol": "separate_native_reference_exact_trace_v1",
+  "checks_passed": 65,
+  "checks_skipped": 1,
+  "synthetic_fixture_cleaned": true,
+  "source_sha256": {
+    "src/disk_bench/admission.py": "8b8fdf26e930bca24138eb8b6e1cc6a6dce028bc714045944b1e057f86c470b3",
+    "src/disk_bench/native_contract.py": "76a4815d985a6227db20b4d4841c27b6bdfc964f39b64645d0c9807564a8ac47",
+    "src/disk_bench/orchestrator.py": "01a173b17ea37b81a541e6393f9d06ce4944d85227325e88d461413d96c0e207",
+    "src/disk_bench/tests/test_formal_admission.py": "5da772469dc39f1c8323378dfd289a686ed99a2f3796cad49154bcaed66ed580"
+  },
+  "native_sha256": {
+    "src/graph_core/target/release/qgraph05_shared_graph_port": "fac51dddb22cba5b7e2bc216149deb0e3555dd535f7a2a0dee4fe9c4b0fb2c8f",
+    "baselines/diskann/target/release/qgraph05_diskann_port": "001e4ae19b16f4fbbb8ed958b98f5b47fb8d97b166223467976dab59db18704e"
+  },
+  "native_checks": [
+    {
+      "method": "DiskANN-PQ-Disk",
+      "route": "official_pq",
+      "base_count": 512,
+      "dimension": 256,
+      "queries": 8,
+      "widths": [
+        20,
+        40
+      ],
+      "workers": 16,
+      "budget_bytes": 2147483648,
+      "observed_peak_rss_bytes": 56315904,
+      "parity_comparisons": 16,
+      "admission_pipeline_passed": true
+    },
+    {
+      "method": "Ours-Disk",
+      "route": "full1bit",
+      "base_count": 512,
+      "dimension": 256,
+      "queries": 8,
+      "widths": [
+        20,
+        40
+      ],
+      "workers": 16,
+      "budget_bytes": 2147483648,
+      "observed_peak_rss_bytes": 133083136,
+      "parity_comparisons": 16,
+      "admission_pipeline_passed": true
+    },
+    {
+      "method": "Ours-Disk",
+      "route": "pca1bit",
+      "base_count": 8192,
+      "dimension": 256,
+      "queries": 8,
+      "widths": [
+        20,
+        40
+      ],
+      "workers": 16,
+      "budget_bytes": 236504831,
+      "observed_peak_rss_bytes": 163405824,
+      "parity_comparisons": 16,
+      "admission_pipeline_passed": true
+    }
+  ]
+}

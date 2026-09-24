@@ -1,0 +1,1 @@
+<p>每个 operating point 的 5 次独立运行报告 median 与 IQR；可另外报告方法明确的置信区间。CV&gt;5% 触发环境检查，所有尝试保留，不择优删掉高波动运行。AGNews/GIST 当前 800 条 test query，p99 仅作诊断；只有原生提供且查询样本量足以解释的延迟分位数才进入主表。增加重复 query epoch 可延长吞吐测量，但不会增加独立查询数量，不能据此宣称 p99 代表性提高。MSMARCO 等 extension 的尾延迟需求在运行前另行确定，不能看过 test 后再调整划分。</p>

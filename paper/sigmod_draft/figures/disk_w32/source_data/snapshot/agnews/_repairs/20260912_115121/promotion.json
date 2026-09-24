@@ -1,0 +1,12 @@
+{
+  "replaced_widths": [
+    540,
+    580
+  ],
+  "reason": "migration interference",
+  "previous_result_sha256": "f9c981e1c8fc94dafefe5e1a11041f46b87cb310171b072c15ae8cadf779e801",
+  "replacement_result_sha256": "3d2a461add89e8fb6a029b7d66fb42e1b2290108a0d0280162b09bb530c29d5c",
+  "replacement_command_sha256": "4bd2db013a735d98a592105e42cf88dbb0579a9272aaf6825522c168e4066715",
+  "parity_passed": true,
+  "formal_ready": false
+}

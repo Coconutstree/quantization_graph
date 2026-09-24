@@ -1,0 +1,1 @@
+<p>历史构建记录口径：构图耗时取各 from-scratch build record 的 build_time_ms，导出耗时取对应 .build_stats.json；reused_graph 不算从零构建。表中记录只有在 source graph、配置与导出索引的 hash 链一致时才能合并为该查询索引的总构建成本；本次未重跑构建，也未补齐所有对应关系。</p>

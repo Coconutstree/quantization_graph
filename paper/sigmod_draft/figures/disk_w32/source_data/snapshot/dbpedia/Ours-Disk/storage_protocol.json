@@ -1,0 +1,86 @@
+{
+  "protocol": "fixed_query_warmup_v1",
+  "warmup_queries": 100,
+  "workers": 32,
+  "cache_mode": "c0",
+  "input_snapshot": {
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/dbpedia/csv/_query_splits/test_query.fvecs": {
+      "size": 55332000,
+      "mtime_ns": 1788829073283494696,
+      "inode": 47248513252
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/03_system_fair/dbpedia/csv/_query_splits/test_gt.ivecs": {
+      "size": 3636000,
+      "mtime_ns": 1788829073291494516,
+      "inode": 47249383990
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/05_disk_system_fair/test_L_400_w_32/dbpedia/optimized_order.u32": {
+      "size": 36000,
+      "mtime_ns": 1789214350024076355,
+      "inode": 42960452255
+    },
+    "/home/kai3/coco/quantization_graph/results/disk_environment/.formal_runs/runs/disk_03_graph_build_reuse_20260910_dbpedia/manifests/inputs/05c_dbpedia.json": {
+      "size": 910,
+      "mtime_ns": 1788973455563856504,
+      "inode": 6442451955
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/shared_graph.pages": {
+      "size": 337924096,
+      "mtime_ns": 1788973457943802892,
+      "inode": 10743833989
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/ours_quantizer.bin": {
+      "size": 6212,
+      "mtime_ns": 1788974378971129177,
+      "inode": 10743833990
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/ours_db1_sidecar.bin": {
+      "size": 273240024,
+      "mtime_ns": 1788974379099126316,
+      "inode": 10743884160
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/ours_full4_residual.pages": {
+      "size": 4055040000,
+      "mtime_ns": 1788974381207079212,
+      "inode": 10743884161
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/resident_codes.marker": {
+      "size": 82,
+      "mtime_ns": 1788974381323076620,
+      "inode": 10743884162
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/disk_root/05_disk_system_fair/05C_disk_system_fair/dbpedia/Ours-Disk/hybrid_disk/index.meta": {
+      "size": 479,
+      "mtime_ns": 1788974381323076620,
+      "inode": 10743884163
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/dbpedia_bfs_split_20260912_115121/slot_to_id.u32": {
+      "size": 3960000,
+      "mtime_ns": 1789214373047558987,
+      "inode": 2215032529
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/dbpedia_bfs_split_20260912_115121/id_to_slot.u32": {
+      "size": 3960000,
+      "mtime_ns": 1789214373051558897,
+      "inode": 2215032530
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/dbpedia_bfs_split_20260912_115121/graph_compact.pages": {
+      "size": 2027520000,
+      "mtime_ns": 1789214378639433331,
+      "inode": 2215032531
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/dbpedia_bfs_split_20260912_115121/residual.pages": {
+      "size": 1351680000,
+      "mtime_ns": 1789214382091355761,
+      "inode": 2215032532
+    },
+    "/home/kai3/coco/quantization_graph/work/05_disk_system_fair/experimental_layouts/dbpedia_bfs_split_20260912_115121/manifest.json": {
+      "size": 2223,
+      "mtime_ns": 1789214406810800284,
+      "inode": 2215032533
+    }
+  },
+  "no_other_native_search_at_start": true,
+  "device_cache_controlled": false,
+  "cold_storage_claim": false
+}

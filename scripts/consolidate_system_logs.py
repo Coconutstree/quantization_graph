@@ -2,7 +2,7 @@
 """Consolidate per-search-parameter raw logs into ONE unified log per method.
 
 The unified log lives at
-``results/disk_environment/03_system_fair/<dataset>/logs/<method>/<method>.log`` and contains a
+``results/archive/legacy_layout_20260918/disk_environment/03_system_fair/<dataset>/logs/<method>/<method>.log`` and contains a
 header with build time / memory / config plus one block per search parameter.
 The original per-parameter files are preserved under ``<method>/_per_param/``.
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 if "systemfair" not in sys.modules:
     _pkg = types.ModuleType("systemfair")
-    _pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "experiments" / "03_system_fair")]
+    _pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "legacy" / "03_system_fair")]
     sys.modules["systemfair"] = _pkg
 
 from systemfair.pareto_builder import read_csv  # noqa: E402
@@ -50,7 +50,7 @@ def native_lines(per_param_file: Path, method_log: Path) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True)
-    ap.add_argument("--out-root", default="results/disk_environment")
+    ap.add_argument("--out-root", default="results/archive/legacy_layout_20260918/disk_environment")
     ap.add_argument("--suite", default="03_system_fair")
     args = ap.parse_args()
 

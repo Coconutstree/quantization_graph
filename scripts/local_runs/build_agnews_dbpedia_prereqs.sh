@@ -9,8 +9,8 @@ export CPLUS_INCLUDE_PATH="$REPO/baselines/deps/local/usr/include:${CPLUS_INCLUD
 LOG="$REPO/logs/prereqs_agnews_dbpedia.log"
 log() { echo "[prereq] $*" >> "$LOG"; echo "[prereq] $*"; }
 
-BIN01_CAND="$REPO/build/formal_local/01_quantizer_fair/faiss_hard_negative_candidates"
-BIN02="$REPO/experiments/02_diskann_fair/target/release/run_diskann_fair"
+BIN01_CAND="$REPO/build/disk/01_disk_quantizer/faiss_hard_negative_candidates"
+BIN02="$REPO/src/graph_core/target/release/run_diskann_fair"
 
 step_candidates() {
   local ds="$1"
@@ -56,15 +56,15 @@ step_saq() {
 step_graphs() {
   local ds="$1"
   log "== $ds: 02 shared + Ours graphs =="
-  local shared="$REPO/results/$ds/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
-  local ours="$REPO/results/$ds/indexes/02_diskann_fair/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
-  local legacy_ours="$REPO/results/disk_environment/02_diskann_fair/$ds/indexes/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
+  local shared="$REPO/artifacts/indexes/legacy_aliases/$ds/indexes/02_diskann_fair/shared_graph/diskann_fp32_R64_Lbuild400_alpha1.2_seed20260813.graph.bin"
+  local ours="$REPO/artifacts/indexes/legacy_aliases/$ds/indexes/02_diskann_fair/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
+  local legacy_ours="$REPO/results/archive/legacy_layout_20260918/disk_environment/02_diskann_fair/$ds/indexes/Ours/${ds}_Ours_R64_Lbuild400.graph.bin"
   if [[ ! -f "$shared" ]]; then
     "$BIN02" --dataset "$ds" --methods PQ --shared-graph --max-degree 64 --build-beam 400 \
       --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 --refine-passes 1 \
       --build-prune-cap 256 --build-early-stop-hops 2 \
-      --query-path "results/disk_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
-      --gt-path "results/disk_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_shared_graph.log" 2>&1
+      --query-path "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
+      --gt-path "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_shared_graph.log" 2>&1
     local rc=$?
     if [[ $rc -ne 0 ]]; then log "$ds shared graph FAILED rc=$rc"; return $rc; fi
     log "$ds shared graph done"
@@ -75,8 +75,8 @@ step_graphs() {
     "$BIN02" --dataset "$ds" --methods Ours --max-degree 64 --build-beam 400 \
       --query-coarse-codec int8 --out-root results --repeats 1 --threads 32 --refine-passes 1 \
       --build-prune-cap 256 --build-early-stop-hops 2 \
-      --query-path "results/disk_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
-      --gt-path "results/disk_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_ours_graph.log" 2>&1
+      --query-path "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/csv/_query_splits/test_query.fvecs" \
+      --gt-path "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/csv/_query_splits/test_gt.ivecs" > "logs/prereq_${ds}_ours_graph.log" 2>&1
     local rc=$?
     if [[ $rc -ne 0 ]]; then log "$ds Ours graph FAILED rc=$rc"; return $rc; fi
     log "$ds Ours graph done"
@@ -88,17 +88,17 @@ step_graphs() {
 step_oglvq() {
   local ds="$1" valq="$2"
   log "== $ds: 03 OG-LVQ index (LVQ4_R64_W400) =="
-  local idx="$REPO/results/disk_environment/03_system_fair/$ds/indexes/OG-LVQ/LVQ4_R64_W400"
+  local idx="$REPO/results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/indexes/OG-LVQ/LVQ4_R64_W400"
   if [[ -d "$idx" ]]; then
     log "$ds OG-LVQ index exists; skip"
     return 0
   fi
-  mkdir -p "results/disk_environment/03_system_fair/$ds/csv/tuning"
+  mkdir -p "results/archive/legacy_layout_20260918/disk_environment/03_system_fair/$ds/csv/tuning"
   python3 - "$ds" <<PYCFG
 import json, sys
 from pathlib import Path
 ds = sys.argv[1]
-tuning = Path(f"results/disk_environment/03_system_fair/{ds}/csv/tuning")
+tuning = Path(f"results/archive/legacy_layout_20260918/disk_environment/03_system_fair/{ds}/csv/tuning")
 tuning.mkdir(parents=True, exist_ok=True)
 cfg = {
     "config_id": "LVQ4_R64_W400",
@@ -108,7 +108,7 @@ cfg = {
 (tuning / "OG-LVQ_selected_config.json").write_text(json.dumps({"method": "OG-LVQ", "selected_config": cfg, "status": "ok", "recall_target": 0.95, "fixed": True}, indent=2) + "\n")
 print("fixed OG-LVQ config written")
 PYCFG
-  python3 -u experiments/03_system_fair/run_system_fair.py \
+  python3 -u legacy/03_system_fair/run_system_fair.py \
     --dataset "$ds" --systems OG-LVQ --run --repeats 1 --threads 32 --val-queries "$valq" --out-root results > "logs/prereq_${ds}_oglvq.log" 2>&1
   local rc=$?
   if [[ $rc -ne 0 ]]; then log "$ds OG-LVQ FAILED rc=$rc"; return $rc; fi
